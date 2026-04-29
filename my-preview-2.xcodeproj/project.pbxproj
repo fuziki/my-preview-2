@@ -8,6 +8,8 @@
 
 /* Begin PBXFileReference section */
 		47D00D6B2FA2085100F217FE /* my-preview-2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "my-preview-2.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		47D00D842FA2085200F217FE /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
+		47D00D852FA2085200F217FE /* Local.xcconfig.template */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig.template; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -45,6 +47,7 @@
 		47D00D622FA2085100F217FE = {
 			isa = PBXGroup;
 			children = (
+				47D00D832FA2085200F217FE /* Config */,
 				47D00D6D2FA2085100F217FE /* my-preview-2 */,
 				47D00D6C2FA2085100F217FE /* Products */,
 			);
@@ -56,6 +59,15 @@
 				47D00D6B2FA2085100F217FE /* my-preview-2.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		47D00D832FA2085200F217FE /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				47D00D842FA2085200F217FE /* Local.xcconfig */,
+				47D00D852FA2085200F217FE /* Local.xcconfig.template */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -140,6 +152,7 @@
 /* Begin XCBuildConfiguration section */
 		47D00D7F2FA2085200F217FE /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 47D00D842FA2085200F217FE /* Local.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -147,6 +160,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "my-preview-2/Info.plist";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "写真を iOS フォトライブラリに保存するために使用します。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -156,7 +170,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.my-preview-2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -170,6 +183,7 @@
 		};
 		47D00D802FA2085200F217FE /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 47D00D842FA2085200F217FE /* Local.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -177,6 +191,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "my-preview-2/Info.plist";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "写真を iOS フォトライブラリに保存するために使用します。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -186,7 +201,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "org.my-preview-2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
