@@ -85,3 +85,5 @@ fastlane/*.env
 iOSInjectionProject/
 
 .DS_Store
+reference
+CLAUDE.md
