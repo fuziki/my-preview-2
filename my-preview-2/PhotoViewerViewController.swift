@@ -6,6 +6,7 @@ final class PhotoViewerViewController: UIViewController {
 
     private let viewModel: PhotoViewerViewModel
     private var lastLayoutSize: CGSize = .zero
+    private var displayedImage: UIImage?
 
     // MARK: - Views
 
@@ -25,21 +26,44 @@ final class PhotoViewerViewController: UIViewController {
         return iv
     }()
 
-    private let overlayView: PassthroughView = {
-        let view = PassthroughView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-
-    private let topBarBlur: UIVisualEffectView = {
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
+    // Floating glass containers (added above scrollView — no hitTest override needed)
+    private let closeBlur: UIVisualEffectView = {
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
+        blur.layer.cornerRadius = 22
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        blur.layer.borderWidth = 0.5
+        blur.clipsToBounds = true
         return blur
     }()
 
-    private let bottomBarBlur: UIVisualEffectView = {
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
+    private let prevBlur: UIVisualEffectView = {
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
+        blur.layer.cornerRadius = 22
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        blur.layer.borderWidth = 0.5
+        blur.clipsToBounds = true
+        return blur
+    }()
+
+    private let nextBlur: UIVisualEffectView = {
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        blur.translatesAutoresizingMaskIntoConstraints = false
+        blur.layer.cornerRadius = 22
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        blur.layer.borderWidth = 0.5
+        blur.clipsToBounds = true
+        return blur
+    }()
+
+    private let infoBlur: UIVisualEffectView = {
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        blur.translatesAutoresizingMaskIntoConstraints = false
+        blur.layer.cornerRadius = 20
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        blur.layer.borderWidth = 0.5
+        blur.clipsToBounds = true
         return blur
     }()
 
@@ -136,7 +160,8 @@ final class PhotoViewerViewController: UIViewController {
         updateSaveButton(status: viewModel.saveStatus)
         updateOverlayVisibility(visible: viewModel.isOverlayVisible)
 
-        if let image = viewModel.currentImage {
+        if let image = viewModel.currentImage, image !== displayedImage {
+            displayedImage = image
             updateImage(image)
         }
     }
@@ -156,65 +181,71 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     private func setupOverlay() {
-        view.addSubview(overlayView)
-        NSLayoutConstraint.activate([
-            overlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            overlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlayView.topAnchor.constraint(equalTo: view.topAnchor),
-            overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
+        // Each floating element is added directly to view above scrollView.
+        // Touches pass naturally to scrollView in uncovered areas — no hitTest override needed.
 
-        // Top bar
-        overlayView.addSubview(topBarBlur)
+        // Close button: top-left floating circle
+        view.addSubview(closeBlur)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
-        topBarBlur.contentView.addSubview(closeButton)
+        closeBlur.contentView.addSubview(closeButton)
         NSLayoutConstraint.activate([
-            topBarBlur.leadingAnchor.constraint(equalTo: overlayView.leadingAnchor),
-            topBarBlur.trailingAnchor.constraint(equalTo: overlayView.trailingAnchor),
-            topBarBlur.topAnchor.constraint(equalTo: overlayView.topAnchor),
-            topBarBlur.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 44),
-            closeButton.leadingAnchor.constraint(equalTo: topBarBlur.leadingAnchor, constant: 8),
-            closeButton.bottomAnchor.constraint(equalTo: topBarBlur.bottomAnchor, constant: -8),
+            closeBlur.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeBlur.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            closeBlur.widthAnchor.constraint(equalToConstant: 44),
+            closeBlur.heightAnchor.constraint(equalToConstant: 44),
+            closeButton.centerXAnchor.constraint(equalTo: closeBlur.contentView.centerXAnchor),
+            closeButton.centerYAnchor.constraint(equalTo: closeBlur.contentView.centerYAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: 44),
             closeButton.heightAnchor.constraint(equalToConstant: 44),
         ])
 
-        // Bottom bar
-        overlayView.addSubview(bottomBarBlur)
-
-        // Center stack (filename + save)
-        let centerStack = UIStackView(arrangedSubviews: [fileNameLabel, saveButton])
-        centerStack.axis = .vertical
-        centerStack.alignment = .center
-        centerStack.spacing = 4
-        centerStack.translatesAutoresizingMaskIntoConstraints = false
-
+        // Prev button: bottom-left floating circle
+        view.addSubview(prevBlur)
         prevButton.translatesAutoresizingMaskIntoConstraints = false
-        nextButton.translatesAutoresizingMaskIntoConstraints = false
-        bottomBarBlur.contentView.addSubview(prevButton)
-        bottomBarBlur.contentView.addSubview(nextButton)
-        bottomBarBlur.contentView.addSubview(centerStack)
-
+        prevBlur.contentView.addSubview(prevButton)
         NSLayoutConstraint.activate([
-            bottomBarBlur.leadingAnchor.constraint(equalTo: overlayView.leadingAnchor),
-            bottomBarBlur.trailingAnchor.constraint(equalTo: overlayView.trailingAnchor),
-            bottomBarBlur.bottomAnchor.constraint(equalTo: overlayView.bottomAnchor),
-            bottomBarBlur.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -72),
-
-            prevButton.leadingAnchor.constraint(equalTo: bottomBarBlur.contentView.leadingAnchor, constant: 16),
-            prevButton.centerYAnchor.constraint(equalTo: bottomBarBlur.contentView.centerYAnchor),
+            prevBlur.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            prevBlur.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            prevBlur.widthAnchor.constraint(equalToConstant: 44),
+            prevBlur.heightAnchor.constraint(equalToConstant: 44),
+            prevButton.centerXAnchor.constraint(equalTo: prevBlur.contentView.centerXAnchor),
+            prevButton.centerYAnchor.constraint(equalTo: prevBlur.contentView.centerYAnchor),
             prevButton.widthAnchor.constraint(equalToConstant: 44),
             prevButton.heightAnchor.constraint(equalToConstant: 44),
+        ])
 
-            nextButton.trailingAnchor.constraint(equalTo: bottomBarBlur.contentView.trailingAnchor, constant: -16),
-            nextButton.centerYAnchor.constraint(equalTo: bottomBarBlur.contentView.centerYAnchor),
+        // Next button: bottom-right floating circle
+        view.addSubview(nextBlur)
+        nextButton.translatesAutoresizingMaskIntoConstraints = false
+        nextBlur.contentView.addSubview(nextButton)
+        NSLayoutConstraint.activate([
+            nextBlur.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            nextBlur.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            nextBlur.widthAnchor.constraint(equalToConstant: 44),
+            nextBlur.heightAnchor.constraint(equalToConstant: 44),
+            nextButton.centerXAnchor.constraint(equalTo: nextBlur.contentView.centerXAnchor),
+            nextButton.centerYAnchor.constraint(equalTo: nextBlur.contentView.centerYAnchor),
             nextButton.widthAnchor.constraint(equalToConstant: 44),
             nextButton.heightAnchor.constraint(equalToConstant: 44),
+        ])
 
-            centerStack.centerXAnchor.constraint(equalTo: bottomBarBlur.contentView.centerXAnchor),
-            centerStack.centerYAnchor.constraint(equalTo: bottomBarBlur.contentView.centerYAnchor),
-            centerStack.leadingAnchor.constraint(greaterThanOrEqualTo: prevButton.trailingAnchor, constant: 8),
-            centerStack.trailingAnchor.constraint(lessThanOrEqualTo: nextButton.leadingAnchor, constant: -8),
+        // Info pill: bottom-center floating (filename + save)
+        view.addSubview(infoBlur)
+        let infoStack = UIStackView(arrangedSubviews: [fileNameLabel, saveButton])
+        infoStack.axis = .vertical
+        infoStack.alignment = .center
+        infoStack.spacing = 2
+        infoStack.translatesAutoresizingMaskIntoConstraints = false
+        infoBlur.contentView.addSubview(infoStack)
+        NSLayoutConstraint.activate([
+            infoBlur.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            infoBlur.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            infoBlur.leadingAnchor.constraint(greaterThanOrEqualTo: prevBlur.trailingAnchor, constant: 8),
+            infoBlur.trailingAnchor.constraint(lessThanOrEqualTo: nextBlur.leadingAnchor, constant: -8),
+            infoStack.topAnchor.constraint(equalTo: infoBlur.contentView.topAnchor, constant: 10),
+            infoStack.bottomAnchor.constraint(equalTo: infoBlur.contentView.bottomAnchor, constant: -10),
+            infoStack.leadingAnchor.constraint(equalTo: infoBlur.contentView.leadingAnchor, constant: 16),
+            infoStack.trailingAnchor.constraint(equalTo: infoBlur.contentView.trailingAnchor, constant: -16),
         ])
     }
 
@@ -235,6 +266,14 @@ final class PhotoViewerViewController: UIViewController {
         prevButton.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
         nextButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
         saveButton.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
+
+        // Prevent UIKit from automatically dimming the save button when disabled.
+        // The glass background makes white text at ~30% opacity nearly invisible.
+        saveButton.configurationUpdateHandler = { button in
+            var config = button.configuration
+            config?.baseForegroundColor = .white
+            button.configuration = config
+        }
     }
 
     // MARK: - Image Display
@@ -325,7 +364,11 @@ final class PhotoViewerViewController: UIViewController {
 
     private func updateOverlayVisibility(visible: Bool) {
         UIView.animate(withDuration: 0.2) {
-            self.overlayView.alpha = visible ? 1 : 0
+            let alpha: CGFloat = visible ? 1 : 0
+            self.closeBlur.alpha = alpha
+            self.prevBlur.alpha = alpha
+            self.nextBlur.alpha = alpha
+            self.infoBlur.alpha = alpha
         }
         setNeedsStatusBarAppearanceUpdate()
     }
@@ -385,17 +428,6 @@ final class PhotoViewerViewController: UIViewController {
         let width = scrollView.bounds.width / scale
         let height = scrollView.bounds.height / scale
         return CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
-    }
-}
-
-// MARK: - PassthroughView
-
-/// A UIView that lets touches pass through to views behind it when no subview claims the touch.
-/// Without this, the overlay would intercept ALL touches (including pinch-to-zoom on the scroll view).
-private final class PassthroughView: UIView {
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        let hit = super.hitTest(point, with: event)
-        return hit == self ? nil : hit
     }
 }
 
