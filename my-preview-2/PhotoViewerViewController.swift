@@ -25,8 +25,8 @@ final class PhotoViewerViewController: UIViewController {
         return iv
     }()
 
-    private let overlayView: UIView = {
-        let view = UIView()
+    private let overlayView: PassthroughView = {
+        let view = PassthroughView()
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
@@ -250,6 +250,13 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     private func resetZoom(for image: UIImage) {
+        // Must reset to zoomScale=1 before modifying imageView.frame.
+        // Setting frame while a non-identity transform is active is undefined behavior (Apple docs).
+        scrollView.minimumZoomScale = 1.0
+        scrollView.maximumZoomScale = 1.0
+        scrollView.zoomScale = 1.0
+        scrollView.contentInset = .zero
+
         imageView.frame = CGRect(origin: .zero, size: image.size)
         scrollView.contentSize = image.size
 
@@ -262,16 +269,26 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     private func updateZoomForSameOrientation(for image: UIImage) {
-        let currentZoom = scrollView.zoomScale
+        let prevMinScale = scrollView.minimumZoomScale
+        let zoomRatio = prevMinScale > 0 ? scrollView.zoomScale / prevMinScale : 1.0
+
+        // Must reset to zoomScale=1 before modifying imageView.frame (same reason as resetZoom).
+        scrollView.minimumZoomScale = 1.0
+        scrollView.maximumZoomScale = 1.0
+        scrollView.zoomScale = 1.0
+        scrollView.contentInset = .zero
+
         imageView.frame = CGRect(origin: .zero, size: image.size)
         scrollView.contentSize = image.size
 
         let scale = aspectFitScale(for: image)
         scrollView.minimumZoomScale = scale
         scrollView.maximumZoomScale = max(1.0, scale)
-        // Maintain current zoom, clamped to new valid range
-        scrollView.zoomScale = min(max(currentZoom, scale), max(1.0, scale))
+        // Restore zoom proportional to previous fit level, clamped to new valid range
+        let targetZoom = min(max(scale * zoomRatio, scale), max(1.0, scale))
+        scrollView.zoomScale = targetZoom
 
+        centerImageView()
         clampContentOffset()
     }
 
@@ -282,19 +299,25 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     private func centerImageView() {
+        // Use contentInset for centering — never modify imageView.frame directly while UIScrollView
+        // has a zoom transform applied (doing so is undefined behavior per Apple docs).
         let boundsSize = scrollView.bounds.size
-        var frame = imageView.frame
-        frame.origin.x = frame.width < boundsSize.width ? (boundsSize.width - frame.width) / 2 : 0
-        frame.origin.y = frame.height < boundsSize.height ? (boundsSize.height - frame.height) / 2 : 0
-        imageView.frame = frame
+        let contentSize = scrollView.contentSize
+        let offsetX = max((boundsSize.width - contentSize.width) / 2, 0)
+        let offsetY = max((boundsSize.height - contentSize.height) / 2, 0)
+        scrollView.contentInset = UIEdgeInsets(top: offsetY, left: offsetX, bottom: offsetY, right: offsetX)
     }
 
     private func clampContentOffset() {
-        let maxX = max(0, scrollView.contentSize.width - scrollView.bounds.width)
-        let maxY = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        // Account for contentInset when clamping (inset shifts the valid offset range).
+        let inset = scrollView.contentInset
+        let minX = -inset.left
+        let minY = -inset.top
+        let maxX = max(minX, scrollView.contentSize.width - scrollView.bounds.width)
+        let maxY = max(minY, scrollView.contentSize.height - scrollView.bounds.height)
         var offset = scrollView.contentOffset
-        offset.x = min(max(offset.x, 0), maxX)
-        offset.y = min(max(offset.y, 0), maxY)
+        offset.x = min(max(offset.x, minX), maxX)
+        offset.y = min(max(offset.y, minY), maxY)
         scrollView.setContentOffset(offset, animated: false)
     }
 
@@ -362,6 +385,17 @@ final class PhotoViewerViewController: UIViewController {
         let width = scrollView.bounds.width / scale
         let height = scrollView.bounds.height / scale
         return CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
+    }
+}
+
+// MARK: - PassthroughView
+
+/// A UIView that lets touches pass through to views behind it when no subview claims the touch.
+/// Without this, the overlay would intercept ALL touches (including pinch-to-zoom on the scroll view).
+private final class PassthroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit == self ? nil : hit
     }
 }
 

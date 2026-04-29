@@ -1,13 +1,16 @@
 import UIKit
 import UniformTypeIdentifiers
 
+nonisolated enum Section: Hashable, Sendable {
+    case main
+}
+
 final class FileBrowserViewController: UIViewController {
 
     // MARK: - Properties
 
     private let viewModel = FileBrowserViewModel()
-    // Use URL as item identifier (non-actor-isolated Hashable, from Foundation)
-    private var dataSource: UICollectionViewDiffableDataSource<String, FileItem.ID>!
+    private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
 
     // MARK: - Views
 
@@ -110,7 +113,7 @@ final class FileBrowserViewController: UIViewController {
             cell.contentConfiguration = config
         }
 
-        dataSource = UICollectionViewDiffableDataSource<String, FileItem.ID>(
+        dataSource = UICollectionViewDiffableDataSource<Section, FileItem.ID>(
             collectionView: collectionView
         ) { [weak self] collectionView, indexPath, id in
             guard let item = self?.viewModel.items.first(where: { $0.id == id }) else { return nil }
@@ -119,9 +122,9 @@ final class FileBrowserViewController: UIViewController {
     }
 
     private func applySnapshot() {
-        var snapshot = NSDiffableDataSourceSnapshot<String, FileItem.ID>()
-        snapshot.appendSections(["main"])
-        snapshot.appendItems(viewModel.items.map(\.id), toSection: "main")
+        var snapshot = NSDiffableDataSourceSnapshot<Section, FileItem.ID>()
+        snapshot.appendSections([.main])
+        snapshot.appendItems(viewModel.items.map(\.id), toSection: .main)
         dataSource.apply(snapshot, animatingDifferences: true)
     }
 
