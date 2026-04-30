@@ -27,7 +27,7 @@ final class PhotoViewerViewController: UIViewController {
     }()
 
     private let loadingIndicator: UIActivityIndicatorView = {
-        let indicator = UIActivityIndicatorView(style: .large)
+        let indicator = UIActivityIndicatorView(style: .medium)
         indicator.translatesAutoresizingMaskIntoConstraints = false
         indicator.color = .white
         indicator.hidesWhenStopped = true
@@ -65,10 +65,29 @@ final class PhotoViewerViewController: UIViewController {
         return blur
     }()
 
-    private let infoBlur: UIVisualEffectView = {
+    private let fileNameBlur: UIVisualEffectView = {
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
-        blur.layer.cornerRadius = 20
+        blur.layer.cornerRadius = 16
+        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
+        blur.layer.borderWidth = 0.5
+        blur.clipsToBounds = true
+        return blur
+    }()
+
+    private let thumbnailImageView: UIImageView = {
+        let iv = UIImageView()
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.contentMode = .scaleAspectFit
+        return iv
+    }()
+
+    private var thumbnailSizeConstraints: [NSLayoutConstraint] = []
+
+    private let saveBlur: UIVisualEffectView = {
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        blur.translatesAutoresizingMaskIntoConstraints = false
+        blur.layer.cornerRadius = 22
         blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
         blur.layer.borderWidth = 0.5
         blur.clipsToBounds = true
@@ -102,20 +121,21 @@ final class PhotoViewerViewController: UIViewController {
         label.font = .preferredFont(forTextStyle: .callout)
         label.lineBreakMode = .byTruncatingMiddle
         label.numberOfLines = 1
-        label.textAlignment = .center
+        label.textAlignment = .left
         return label
     }()
 
     private let saveButton: UIButton = {
         var config = UIButton.Configuration.borderless()
         config.title = "↓ 保存"
-        config.baseForegroundColor = .white
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var updated = attributes
-            updated.font = UIFont.preferredFont(forTextStyle: .footnote)
+            updated.foregroundColor = .white
             return updated
         }
-        return UIButton(configuration: config)
+        let button = UIButton(configuration: config)
+        return button
     }()
 
     // MARK: - Init
@@ -135,7 +155,6 @@ final class PhotoViewerViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         setupScrollView()
-        setupLoading()
         setupOverlay()
         setupGestures()
         setupActions()
@@ -167,24 +186,27 @@ final class PhotoViewerViewController: UIViewController {
         nextButton.isEnabled = viewModel.canGoNext
         nextButton.tintColor = viewModel.canGoNext ? .white : .systemGray
         updateSaveButton(status: viewModel.saveStatus)
-        updateOverlayVisibility(visible: viewModel.isOverlayVisible)
         viewModel.isLoading ? loadingIndicator.startAnimating() : loadingIndicator.stopAnimating()
+        updateOverlayVisibility(visible: viewModel.isOverlayVisible)
 
         if let image = viewModel.currentImage, image !== displayedImage {
             displayedImage = image
+            NSLayoutConstraint.deactivate(thumbnailSizeConstraints)
+            let maxSide: CGFloat = 80
+            let ratio = image.size.width / image.size.height
+            let w = ratio >= 1 ? maxSide : maxSide * ratio
+            let h = ratio >= 1 ? maxSide / ratio : maxSide
+            thumbnailSizeConstraints = [
+                thumbnailImageView.widthAnchor.constraint(equalToConstant: w),
+                thumbnailImageView.heightAnchor.constraint(equalToConstant: h),
+            ]
+            NSLayoutConstraint.activate(thumbnailSizeConstraints)
+            thumbnailImageView.image = image
             updateImage(image)
         }
     }
 
     // MARK: - Setup
-
-    private func setupLoading() {
-        view.addSubview(loadingIndicator)
-        NSLayoutConstraint.activate([
-            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-        ])
-    }
 
     private func setupScrollView() {
         scrollView.delegate = self
@@ -247,23 +269,48 @@ final class PhotoViewerViewController: UIViewController {
             nextButton.heightAnchor.constraint(equalToConstant: 44),
         ])
 
-        // Info pill: bottom-center floating (filename + save)
-        view.addSubview(infoBlur)
-        let infoStack = UIStackView(arrangedSubviews: [fileNameLabel, saveButton])
-        infoStack.axis = .vertical
-        infoStack.alignment = .center
-        infoStack.spacing = 2
-        infoStack.translatesAutoresizingMaskIntoConstraints = false
-        infoBlur.contentView.addSubview(infoStack)
+        // File name label: top-right floating pill (pinned to right edge)
+        view.addSubview(fileNameBlur)
+        fileNameLabel.translatesAutoresizingMaskIntoConstraints = false
+        fileNameBlur.contentView.addSubview(fileNameLabel)
         NSLayoutConstraint.activate([
-            infoBlur.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            infoBlur.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            infoBlur.leadingAnchor.constraint(greaterThanOrEqualTo: prevBlur.trailingAnchor, constant: 8),
-            infoBlur.trailingAnchor.constraint(lessThanOrEqualTo: nextBlur.leadingAnchor, constant: -8),
-            infoStack.topAnchor.constraint(equalTo: infoBlur.contentView.topAnchor, constant: 10),
-            infoStack.bottomAnchor.constraint(equalTo: infoBlur.contentView.bottomAnchor, constant: -10),
-            infoStack.leadingAnchor.constraint(equalTo: infoBlur.contentView.leadingAnchor, constant: 16),
-            infoStack.trailingAnchor.constraint(equalTo: infoBlur.contentView.trailingAnchor, constant: -16),
+            fileNameBlur.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            fileNameBlur.leadingAnchor.constraint(greaterThanOrEqualTo: closeBlur.trailingAnchor, constant: 8),
+            fileNameBlur.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            fileNameBlur.heightAnchor.constraint(equalToConstant: 44),
+            fileNameLabel.centerYAnchor.constraint(equalTo: fileNameBlur.contentView.centerYAnchor),
+            fileNameLabel.leadingAnchor.constraint(equalTo: fileNameBlur.contentView.leadingAnchor, constant: 14),
+            fileNameLabel.trailingAnchor.constraint(equalTo: fileNameBlur.contentView.trailingAnchor, constant: -14),
+        ])
+
+        // Thumbnail: below file name label, right-aligned, sized by aspect ratio
+        view.addSubview(thumbnailImageView)
+        NSLayoutConstraint.activate([
+            thumbnailImageView.topAnchor.constraint(equalTo: fileNameBlur.bottomAnchor, constant: 8),
+            thumbnailImageView.trailingAnchor.constraint(equalTo: fileNameBlur.trailingAnchor),
+        ])
+
+        // Save button: bottom-center capsule
+        view.addSubview(saveBlur)
+        saveButton.translatesAutoresizingMaskIntoConstraints = false
+        saveBlur.contentView.addSubview(saveButton)
+        NSLayoutConstraint.activate([
+            saveBlur.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            saveBlur.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            saveBlur.leadingAnchor.constraint(greaterThanOrEqualTo: prevBlur.trailingAnchor, constant: 8),
+            saveBlur.trailingAnchor.constraint(lessThanOrEqualTo: nextBlur.leadingAnchor, constant: -8),
+            saveBlur.heightAnchor.constraint(equalToConstant: 44),
+            saveButton.topAnchor.constraint(equalTo: saveBlur.contentView.topAnchor),
+            saveButton.bottomAnchor.constraint(equalTo: saveBlur.contentView.bottomAnchor),
+            saveButton.leadingAnchor.constraint(equalTo: saveBlur.contentView.leadingAnchor),
+            saveButton.trailingAnchor.constraint(equalTo: saveBlur.contentView.trailingAnchor),
+        ])
+
+        // Loading indicator: above save button
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: saveBlur.centerXAnchor),
+            loadingIndicator.bottomAnchor.constraint(equalTo: saveBlur.topAnchor, constant: -8),
         ])
     }
 
@@ -386,7 +433,9 @@ final class PhotoViewerViewController: UIViewController {
             self.closeBlur.alpha = alpha
             self.prevBlur.alpha = alpha
             self.nextBlur.alpha = alpha
-            self.infoBlur.alpha = alpha
+            self.fileNameBlur.alpha = alpha
+            self.thumbnailImageView.alpha = alpha
+            self.saveBlur.alpha = alpha
         }
         setNeedsStatusBarAppearanceUpdate()
     }
