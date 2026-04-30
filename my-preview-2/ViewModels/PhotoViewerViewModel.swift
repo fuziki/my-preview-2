@@ -2,9 +2,18 @@ import Foundation
 import UIKit
 import Observation
 import Photos
+import ImageIO
 
 enum SaveStatus {
     case idle, saving, success, failure
+}
+
+struct ExifInfo {
+    let iso: String?
+    let focalLength: String?
+    let exposureValue: String?
+    let fNumber: String?
+    let shutterSpeed: String?
 }
 
 enum ImageOrientation {
@@ -24,6 +33,7 @@ final class PhotoViewerViewModel {
     private(set) var currentImage: UIImage? = nil
     private(set) var previousOrientation: ImageOrientation? = nil
     private(set) var isLoading: Bool = false
+    private(set) var exifInfo: ExifInfo? = nil
     var saveStatus: SaveStatus = .idle
     var isOverlayVisible: Bool = true
 
@@ -40,11 +50,49 @@ final class PhotoViewerViewModel {
     func loadCurrentImage() async {
         let url = currentURL
         isLoading = true
-        currentImage = await Task.detached(priority: .userInitiated) {
-            guard let data = try? Data(contentsOf: url) else { return nil as UIImage? }
-            return UIImage(data: data)
+        let result = await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: url) else { return (nil as UIImage?, nil as ExifInfo?) }
+            return (UIImage(data: data), Self.extractExif(from: data))
         }.value
+        currentImage = result.0
+        exifInfo = result.1
         isLoading = false
+    }
+
+    private static func extractExif(from data: Data) -> ExifInfo? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+              let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] else {
+            return nil
+        }
+
+        let iso: String? = {
+            guard let array = exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int],
+                  let value = array.first else { return nil }
+            return "ISO \(value)"
+        }()
+
+        let focalLength: String? = {
+            guard let fl = exif[kCGImagePropertyExifFocalLength as String] as? Double else { return nil }
+            return String(format: "%.0fmm", fl)
+        }()
+
+        let exposureValue: String? = {
+            guard let ev = exif[kCGImagePropertyExifExposureBiasValue as String] as? Double else { return nil }
+            return ev == 0 ? "±0EV" : String(format: "%+.1fEV", ev)
+        }()
+
+        let fNumber: String? = {
+            guard let fn = exif[kCGImagePropertyExifFNumber as String] as? Double else { return nil }
+            return String(format: "f/%.1f", fn)
+        }()
+
+        let shutterSpeed: String? = {
+            guard let et = exif[kCGImagePropertyExifExposureTime as String] as? Double, et > 0 else { return nil }
+            return et >= 1.0 ? String(format: "%.0fs", et) : "1/\(Int(round(1.0 / et)))s"
+        }()
+
+        return ExifInfo(iso: iso, focalLength: focalLength, exposureValue: exposureValue, fNumber: fNumber, shutterSpeed: shutterSpeed)
     }
 
     func navigatePrevious() async {
