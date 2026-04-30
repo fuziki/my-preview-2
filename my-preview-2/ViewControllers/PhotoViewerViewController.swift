@@ -6,6 +6,7 @@ final class PhotoViewerViewController: UIViewController {
 
     private let viewModel: PhotoViewerViewModel
     private var displayedImage: UIImage?
+    private var autoNavigationTask: Task<Void, Never>?
 
     // MARK: - Views
 
@@ -250,6 +251,14 @@ final class PhotoViewerViewController: UIViewController {
         nextButtonView.button.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
         saveButtonView.button.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
 
+        let prevLongPress = UILongPressGestureRecognizer(target: self, action: #selector(prevLongPressed(_:)))
+        prevLongPress.minimumPressDuration = 1.0
+        prevButtonView.button.addGestureRecognizer(prevLongPress)
+
+        let nextLongPress = UILongPressGestureRecognizer(target: self, action: #selector(nextLongPressed(_:)))
+        nextLongPress.minimumPressDuration = 1.0
+        nextButtonView.button.addGestureRecognizer(nextLongPress)
+
         // Prevent UIKit from automatically dimming the save button when disabled.
         // The glass background makes white text at ~30% opacity nearly invisible.
         saveButtonView.button.configurationUpdateHandler = { button in
@@ -309,6 +318,51 @@ final class PhotoViewerViewController: UIViewController {
 
     @objc private func saveTapped() {
         Task { await viewModel.save() }
+    }
+
+    @objc private func prevLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .began:
+            startAutoNavigation(forward: false)
+        case .ended, .cancelled, .failed:
+            stopAutoNavigation()
+        default:
+            break
+        }
+    }
+
+    @objc private func nextLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .began:
+            startAutoNavigation(forward: true)
+        case .ended, .cancelled, .failed:
+            stopAutoNavigation()
+        default:
+            break
+        }
+    }
+
+    private func startAutoNavigation(forward: Bool) {
+        stopAutoNavigation()
+        autoNavigationTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                if forward {
+                    guard viewModel.canGoNext else { break }
+                    await viewModel.navigateNext()
+                } else {
+                    guard viewModel.canGoPrevious else { break }
+                    await viewModel.navigatePrevious()
+                }
+                guard !Task.isCancelled else { break }
+                try? await Task.sleep(for: .seconds(0.12))
+            }
+        }
+    }
+
+    private func stopAutoNavigation() {
+        autoNavigationTask?.cancel()
+        autoNavigationTask = nil
     }
 
     @objc private func handleSingleTap() {
