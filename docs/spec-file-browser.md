@@ -1,9 +1,8 @@
-# ファイルブラウザ画面の挙動仕様（UIKit 版）
+# ファイルブラウザ画面の仕様
 
 ## 画面概要
 
 アプリのメイン画面。ユーザーが選択したフォルダ内の JPEG 画像を `UICollectionView` でリスト表示する。
-リストには **JPEG 画像のみ** を表示する（フォルダ・その他のファイルは非表示）。
 サブフォルダ内への画面遷移は行わない。フォルダの変更はフローティングボタンから `UIDocumentPickerViewController` を介してのみ行う。
 
 **クラス名：** `FileBrowserViewController`
@@ -26,28 +25,40 @@ final class FileBrowserViewModel {
 
 **ViewModel のメソッド：**
 
-| メソッド                         | 処理                                                                       |
-|----------------------------------|----------------------------------------------------------------------------|
-| `selectFolder(_ url: URL) async` | セキュリティスコープを取得し `loadItems()` を呼ぶ。前の権限を先に解放する |
-| `loadItems() async`              | `rootURL` 配下の JPEG 画像を読み込み `items` を更新する                   |
+| メソッド                         | 処理                                                                                          |
+|----------------------------------|-----------------------------------------------------------------------------------------------|
+| `selectFolder(_ url: URL) async` | 前のセキュリティスコープを解放し、新しいスコープを取得後に `loadItems()` を呼ぶ               |
+| `loadItems() async`              | `rootURL` 配下の JPEG 画像をバックグラウンドで列挙・ソートし `items` をメインスレッドで更新する |
 
 ### FileBrowserViewController の updateProperties
 
-`FileBrowserViewController` は `updateProperties()` をオーバーライドし、`viewModel` のプロパティ変化を UI に反映する。
+`FileBrowserViewController` は `updateProperties()` をオーバーライドし、`viewModel.hasFolder` の変化を UI に反映する。
 
 ```swift
 override func updateProperties() {
     super.updateProperties()
-    // viewModel プロパティへのアクセスがここで追跡される
     let hasFolder = viewModel.hasFolder
     collectionView.isHidden = !hasFolder
     emptyStateView.isHidden = hasFolder
 }
 ```
 
-`items` の変更については、`updateProperties()` の外で `UICollectionViewDiffableDataSource` の `apply()` を呼び、差分更新する。`items` の変更を `observe` するには、`withObservationTracking` を用いるか、専用の監視タスクで `items` の変化を検知して `apply()` を呼ぶ。
+### items の変化の監視
 
-`viewModel` の `@Observable` プロパティが変化すると、システムが自動的に `setNeedsUpdateProperties()` を呼び出し、次のランループで `updateProperties()` が実行される。
+`viewModel.items` の変化は `updateProperties()` の外で `withObservationTracking` を用いて監視し、変化のたびに DiffableDataSource の `apply()` を呼んで差分更新する。変化後は `withObservationTracking` を再登録して継続的に監視する。
+
+```swift
+private func startObservingItems() {
+    withObservationTracking {
+        _ = viewModel.items
+    } onChange: { [weak self] in
+        Task { @MainActor [weak self] in
+            self?.applySnapshot()
+            self?.startObservingItems()
+        }
+    }
+}
+```
 
 ---
 
@@ -55,10 +66,9 @@ override func updateProperties() {
 
 ### フォルダ未選択時（空状態）
 
-- 画面中央に `EmptyStateView` を表示する。
-  - ストレージアイコン（`UIImageView`、`externaldrive` システムアイコン）
+- 画面全体に `EmptyStateView` を表示する。
+  - ストレージアイコン（`externaldrive` システムアイコン）
   - 「フォルダを選択してください」テキスト（`UILabel`）
-  - ボタン類は表示しない。
 - `UICollectionView` は非表示にする。
 - ナビゲーションタイトルは「My Preview」（固定）。
 - フローティングボタンは空状態でも常に表示する。
@@ -75,41 +85,38 @@ override func updateProperties() {
 
 ```
 UINavigationController
-  └── FileBrowserViewController（唯一の画面）
+  └── FileBrowserViewController（唯一の ViewController）
 ```
 
 - `FileBrowserViewController` が `UINavigationController` のルートとなる。
 - サブフォルダへの遷移は行わないため、`UINavigationController` のプッシュ遷移は使用しない。
-- セキュリティスコープドアクセス権限は `FileBrowserViewModel` が一元管理する。
 
 ---
 
 ## ナビゲーションバー
 
-- ナビゲーションバーにはタイトル「My Preview」のみ表示する。
+- タイトル「My Preview」のみ表示する。
 - `UIBarButtonItem` は配置しない。
 
 ---
 
 ## フローティングボタン（フォルダを開く）
 
-- Safe Area 内の **左下隅** に固定配置するフローティングボタン（`UIButton`）を設置する。
-- アイコン：`folder.badge.plus`（または `folder` 系のシステムアイコン）
-- **iOS 26 の Liquid Glass エフェクト**（`UIGlassEffect` / `GlassEffectView` 相当）を適用する。
-  - 背景に半透明のガラス調マテリアルエフェクトを適用する。
-  - ボタン形状は円形またはカプセル形とする。
+- Safe Area 内の **左下隅** に固定配置するフローティングボタンを設置する。
+- アイコン：`folder` システムアイコン
+- **iOS 26 の Liquid Glass エフェクト**（`UIButton.Configuration.prominentGlass()`）を適用する。
+- サイズ：56 × 56pt（円形）
 - 制約（Auto Layout）：
   - `leading` = `view.safeAreaLayoutGuide.leadingAnchor` + 16pt
-  - `bottom` = `view.safeAreaLayoutGuide.bottomAnchor` - 16pt
-  - 幅・高さ：56 × 56pt（円形）
+  - `bottom` = `view.safeAreaLayoutGuide.bottomAnchor` + `folderButtonSize`（56pt）
 - タップすると `UIDocumentPickerViewController` を表示する。
 - 空状態・フォルダ選択後を問わず、常に表示する。
 
 ### フローティングボタンとリストのかぶり対策
 
-- `FileBrowserViewController` の `additionalSafeAreaInsets.bottom` を `ボタン高さ (56pt) + 上下マージン (16pt × 2) = 88pt` 以上に設定する。
+- `FileBrowserViewController` の `additionalSafeAreaInsets.bottom` を `folderButtonSize + 32`（88pt）に設定する。
 - `UICollectionView` の `contentInsetAdjustmentBehavior = .automatic` により、拡張された Safe Area が自動的にスクロール領域に反映される。
-- これにより `contentInset.bottom` を手動管理することなく、リストの最下部アイテムがフローティングボタンの上方に収まる。
+- これにより `contentInset.bottom` を手動管理することなく、リスト末尾のアイテムがフローティングボタンの上方に収まる。
 
 ---
 
@@ -118,7 +125,7 @@ UINavigationController
 - `UIDocumentPickerViewController` を使用する。
   - `forOpeningContentTypes: [.folder]`
   - `allowsMultipleSelection = false`
-- フォルダを選択すると ViewController 側で `Task { await viewModel.selectFolder(url) }` を呼ぶ。
+- フォルダを選択すると `documentPicker(_:didPickDocumentsAt:)` が呼ばれ、`Task { await viewModel.selectFolder(url) }` を実行する。
 - 既にフォルダが選択済みの場合でも、新しいフォルダを選択し直せる。
 - 前のフォルダへのセキュリティスコープ解放は `FileBrowserViewModel.selectFolder()` 内で行う。
 
@@ -134,19 +141,20 @@ UINavigationController
 
 - `UICollectionLayoutListConfiguration` を使用してリストレイアウトを構築する。
   - `appearance: .plain`（プレーンスタイル）
-  - セパレーターラインを標準表示する。
-- `UICollectionView` は `view` の全面に配置する（Safe Area を突き抜けて edge-to-edge）。
-  - `contentInsetAdjustmentBehavior = .automatic`（ナビゲーションバー下から開始）
+  - セパレーターラインを標準表示する（`showsSeparators = true`）
+- `UICollectionView` は `view` の全面に配置する（edge-to-edge）。
+  - `contentInsetAdjustmentBehavior = .automatic`
 
 ### データソース
 
-- `UICollectionViewDiffableDataSource<Section, FileItem>` を使用する。
-  - セクションは単一（`Section.main`）。
-- `viewModel.items` の変化を検知したら `NSDiffableDataSourceSnapshot` を生成し `apply()` で差分更新する。
+- `UICollectionViewDiffableDataSource<Section, FileItem.ID>` を使用する。
+  - セクション型 `Section` は `nonisolated enum`、値は単一（`.main`）。
+  - 識別子は `FileItem.ID`（`UUID`）を使用する。
+- `viewModel.items` の変化を検知したら `NSDiffableDataSourceSnapshot` を生成し `apply(animatingDifferences: true)` で差分更新する。
 
 ### セル（UICollectionViewListCell）
 
-- `UICollectionViewListCell` をカスタム設定して使用する。
+- `UICollectionViewListCell` を `CellRegistration` で使用する。
 - `defaultContentConfiguration()` で取得した `contentConfiguration` に以下を設定する：
   - `image`：`photo` システムアイコン（`tintColor = .systemBlue`）
   - `text`：ファイル名（1 行、`lineBreakMode = .byTruncatingMiddle`）
@@ -154,8 +162,9 @@ UINavigationController
 ### タップ処理
 
 - `UICollectionViewDelegate` の `collectionView(_:didSelectItemAt:)` で処理する。
-- 選択状態のハイライトを残さないよう `deselectItem(at:animated:)` を即座に呼ぶ。
-- `viewModel.items` から全 URL リストを取得し、タップしたアイテムの URL を初期表示 URL として `PhotoViewerInput` を生成する。
+- `deselectItem(at:animated:)` を即座に呼んでハイライト状態を解除する。
+- `dataSource.itemIdentifier(for:indexPath)` で `FileItem.ID` を取得し、`viewModel.items` から対応する URL を特定する。
+- `viewModel.items` から全 URL リストを取得して `PhotoViewerInput` を生成する。
 - `PhotoViewerViewController` を生成し `modalPresentationStyle = .fullScreen` でモーダル表示する。
 
 ---
@@ -183,4 +192,25 @@ func loadItems() async {
 ```
 
 - `Task.detached` でバックグラウンドスレッドでファイル列挙・フィルター・ソートを実行する。
+- 列挙オプションは `.skipsHiddenFiles`（隠しファイルを除外）。
+- 拡張子フィルターは `.jpg`、`.jpeg`（`pathExtension.lowercased()` で大文字小文字を問わない）。
+- ソートは `localizedStandardCompare`（ロケール対応昇順）。
 - 結果は `MainActor.run` でメインスレッドに戻してから `items` を更新する。
+
+---
+
+## フォルダ選択処理（ViewModel の `selectFolder(_ url: URL) async`）
+
+```swift
+func selectFolder(_ url: URL) async {
+    rootURL?.stopAccessingSecurityScopedResource()
+    guard url.startAccessingSecurityScopedResource() else { return }
+    rootURL = url
+    hasFolder = true
+    await loadItems()
+}
+```
+
+- 既存の `rootURL` がある場合は先にセキュリティスコープを解放する。
+- 新しい URL のセキュリティスコープ取得に失敗した場合は処理を中断する。
+- `hasFolder = true` に更新後、`loadItems()` を呼んでファイルリストを取得する。
