@@ -17,13 +17,13 @@ extension UIImage {
     }
 }
 
-@MainActor
 @Observable
 final class PhotoViewerViewModel {
     private(set) var currentIndex: Int
     private(set) var allURLs: [URL]
     private(set) var currentImage: UIImage? = nil
     private(set) var previousOrientation: ImageOrientation? = nil
+    private(set) var isLoading: Bool = false
     var saveStatus: SaveStatus = .idle
     var isOverlayVisible: Bool = true
 
@@ -39,29 +39,28 @@ final class PhotoViewerViewModel {
 
     func loadCurrentImage() async {
         let url = currentURL
-        let image = await Task.detached(priority: .userInitiated) {
+        isLoading = true
+        currentImage = await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: url) else { return nil as UIImage? }
             return UIImage(data: data)
         }.value
-        await MainActor.run {
-            self.currentImage = image
-        }
+        isLoading = false
     }
 
-    func navigatePrevious() {
+    func navigatePrevious() async {
         guard canGoPrevious else { return }
         previousOrientation = currentImage?.photoOrientation
         currentIndex -= 1
         saveStatus = .idle
-        Task { await loadCurrentImage() }
+        await loadCurrentImage()
     }
 
-    func navigateNext() {
+    func navigateNext() async {
         guard canGoNext else { return }
         previousOrientation = currentImage?.photoOrientation
         currentIndex += 1
         saveStatus = .idle
-        Task { await loadCurrentImage() }
+        await loadCurrentImage()
     }
 
     func save() async {

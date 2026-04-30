@@ -2,16 +2,6 @@ import UIKit
 
 final class EmptyStateView: UIView {
 
-    private let iconView: UIImageView = {
-        let config = UIImage.SymbolConfiguration(pointSize: 52, weight: .thin)
-        let image = UIImage(systemName: "externaldrive", withConfiguration: config)
-        let imageView = UIImageView(image: image)
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.tintColor = .secondaryLabel
-        imageView.contentMode = .scaleAspectFit
-        return imageView
-    }()
-
     private let label: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -42,7 +32,6 @@ final class EmptyStateView: UIView {
     }
 
     private func setupViews() {
-        stackView.addArrangedSubview(iconView)
         stackView.addArrangedSubview(label)
         addSubview(stackView)
 

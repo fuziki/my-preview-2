@@ -26,6 +26,14 @@ final class PhotoViewerViewController: UIViewController {
         return iv
     }()
 
+    private let loadingIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.color = .white
+        indicator.hidesWhenStopped = true
+        return indicator
+    }()
+
     // Floating glass containers (added above scrollView — no hitTest override needed)
     private let closeBlur: UIVisualEffectView = {
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
@@ -127,6 +135,7 @@ final class PhotoViewerViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
         setupScrollView()
+        setupLoading()
         setupOverlay()
         setupGestures()
         setupActions()
@@ -159,6 +168,7 @@ final class PhotoViewerViewController: UIViewController {
         nextButton.tintColor = viewModel.canGoNext ? .white : .systemGray
         updateSaveButton(status: viewModel.saveStatus)
         updateOverlayVisibility(visible: viewModel.isOverlayVisible)
+        viewModel.isLoading ? loadingIndicator.startAnimating() : loadingIndicator.stopAnimating()
 
         if let image = viewModel.currentImage, image !== displayedImage {
             displayedImage = image
@@ -167,6 +177,14 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     // MARK: - Setup
+
+    private func setupLoading() {
+        view.addSubview(loadingIndicator)
+        NSLayoutConstraint.activate([
+            loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
 
     private func setupScrollView() {
         scrollView.delegate = self
@@ -399,11 +417,11 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     @objc private func prevTapped() {
-        viewModel.navigatePrevious()
+        Task { await viewModel.navigatePrevious() }
     }
 
     @objc private func nextTapped() {
-        viewModel.navigateNext()
+        Task { await viewModel.navigateNext() }
     }
 
     @objc private func saveTapped() {

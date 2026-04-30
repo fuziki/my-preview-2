@@ -7,6 +7,8 @@ nonisolated enum Section: Hashable, Sendable {
 
 final class FileBrowserViewController: UIViewController {
 
+    private let folderButtonSize: CGFloat = 56
+
     // MARK: - Properties
 
     private let viewModel = FileBrowserViewModel()
@@ -32,16 +34,10 @@ final class FileBrowserViewController: UIViewController {
     }()
 
     private lazy var folderButton: UIButton = {
-        var config = UIButton.Configuration.borderless()
-        config.image = UIImage(
-            systemName: "folder.badge.plus",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-        )
-        config.baseForegroundColor = .label
+        var config = UIButton.Configuration.prominentGlass()
         let button = UIButton(configuration: config)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.layer.cornerRadius = 28
-        button.clipsToBounds = true
+        button.setImage(UIImage(systemName: "folder"), for: .normal)
         button.addTarget(self, action: #selector(openFolderPicker), for: .touchUpInside)
         return button
     }()
@@ -51,7 +47,7 @@ final class FileBrowserViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "My Preview"
-        additionalSafeAreaInsets.bottom = 88
+        additionalSafeAreaInsets.bottom = folderButtonSize + 32
         setupViews()
         configureDataSource()
         applySnapshot()
@@ -81,24 +77,12 @@ final class FileBrowserViewController: UIViewController {
             emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        // Folder button with glass effect
-        let glassView = UIVisualEffectView(effect: UIGlassEffect())
-        glassView.translatesAutoresizingMaskIntoConstraints = false
-        glassView.isUserInteractionEnabled = false
-        folderButton.insertSubview(glassView, at: 0)
-        NSLayoutConstraint.activate([
-            glassView.leadingAnchor.constraint(equalTo: folderButton.leadingAnchor),
-            glassView.trailingAnchor.constraint(equalTo: folderButton.trailingAnchor),
-            glassView.topAnchor.constraint(equalTo: folderButton.topAnchor),
-            glassView.bottomAnchor.constraint(equalTo: folderButton.bottomAnchor),
-        ])
-
         view.addSubview(folderButton)
         NSLayoutConstraint.activate([
             folderButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            folderButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-            folderButton.widthAnchor.constraint(equalToConstant: 56),
-            folderButton.heightAnchor.constraint(equalToConstant: 56),
+            folderButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: folderButtonSize),
+            folderButton.widthAnchor.constraint(equalToConstant: folderButtonSize),
+            folderButton.heightAnchor.constraint(equalToConstant: folderButtonSize),
         ])
     }
 
