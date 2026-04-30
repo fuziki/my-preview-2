@@ -5,6 +5,7 @@ import Observation
 final class FileBrowserViewModel {
     private(set) var items: [FileItem] = []
     private(set) var hasFolder: Bool = false
+    private(set) var isLoading: Bool = false
     private var rootURL: URL? = nil
 
     func selectFolder(_ url: URL) async {
@@ -17,6 +18,7 @@ final class FileBrowserViewModel {
 
     func loadItems() async {
         guard let url = rootURL else { return }
+        isLoading = true
         let loaded = await Task.detached(priority: .userInitiated) {
             let contents = try? FileManager.default.contentsOfDirectory(
                 at: url,
@@ -30,6 +32,7 @@ final class FileBrowserViewModel {
         }.value
         await MainActor.run {
             self.items = loaded
+            self.isLoading = false
         }
     }
 }

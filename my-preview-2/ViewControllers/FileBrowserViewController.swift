@@ -13,6 +13,12 @@ final class FileBrowserViewController: UIViewController {
 
     private let viewModel = FileBrowserViewModel()
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
+    private var lastKnownHasFolder: Bool = false
+
+    // MARK: - Folder Button Constraints
+
+    private var folderButtonTrailingConstraint: NSLayoutConstraint!
+    private var folderButtonWidthConstraint: NSLayoutConstraint!
 
     // MARK: - Views
 
@@ -35,10 +41,24 @@ final class FileBrowserViewController: UIViewController {
 
     private lazy var folderButton: UIButton = {
         var config = UIButton.Configuration.prominentGlass()
+        config.image = UIImage(systemName: "folder")
+        config.title = "フォルダを開く"
+        config.imagePlacement = .leading
+        config.imagePadding = 8
         let button = UIButton(configuration: config)
         button.translatesAutoresizingMaskIntoConstraints = false
-        button.setImage(UIImage(systemName: "folder"), for: .normal)
         button.addTarget(self, action: #selector(openFolderPicker), for: .touchUpInside)
+        return button
+    }()
+
+    private lazy var jumpToBottomButton: UIButton = {
+        var config = UIButton.Configuration.glass()
+        config.image = UIImage(systemName: "chevron.down")
+        config.cornerStyle = .large
+        let button = UIButton(configuration: config)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.alpha = 0
+        button.addTarget(self, action: #selector(jumpToBottom), for: .touchUpInside)
         return button
     }()
 
@@ -77,12 +97,32 @@ final class FileBrowserViewController: UIViewController {
             emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
+        // Folder button with switchable constraints
         view.addSubview(folderButton)
+
+        let trailingConstraint = folderButton.trailingAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16
+        )
+        let widthConstraint = folderButton.widthAnchor.constraint(equalToConstant: folderButtonSize)
+        widthConstraint.isActive = false
+
         NSLayoutConstraint.activate([
             folderButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            trailingConstraint,
             folderButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: folderButtonSize),
-            folderButton.widthAnchor.constraint(equalToConstant: folderButtonSize),
             folderButton.heightAnchor.constraint(equalToConstant: folderButtonSize),
+        ])
+
+        folderButtonTrailingConstraint = trailingConstraint
+        folderButtonWidthConstraint = widthConstraint
+
+        // Jump to bottom button (right side, same vertical position as folderButton)
+        view.addSubview(jumpToBottomButton)
+        NSLayoutConstraint.activate([
+            jumpToBottomButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            jumpToBottomButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: folderButtonSize),
+            jumpToBottomButton.widthAnchor.constraint(equalToConstant: folderButtonSize),
+            jumpToBottomButton.heightAnchor.constraint(equalToConstant: folderButtonSize),
         ])
     }
 
@@ -117,11 +157,67 @@ final class FileBrowserViewController: UIViewController {
     private func startObservingItems() {
         withObservationTracking {
             _ = viewModel.items
+            _ = viewModel.hasFolder
+            _ = viewModel.isLoading
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.applySnapshot()
-                self?.startObservingItems()
+                guard let self else { return }
+                let hasFolder = self.viewModel.hasFolder
+                let hasFolderChanged = hasFolder != self.lastKnownHasFolder
+                self.lastKnownHasFolder = hasFolder
+                self.applySnapshot()
+                self.updateEmptyState()
+                if hasFolderChanged {
+                    self.animateFolderButton(hasFolder: hasFolder)
+                }
+                self.startObservingItems()
             }
+        }
+    }
+
+    // MARK: - UI Updates
+
+    private func updateEmptyState() {
+        let hasFolder = viewModel.hasFolder
+        let isLoading = viewModel.isLoading
+        let hasItems = !viewModel.items.isEmpty
+
+        let showList = hasFolder && !isLoading && hasItems
+        collectionView.isHidden = !showList
+        emptyStateView.isHidden = showList
+
+        if !hasFolder {
+            emptyStateView.configure(state: .noFolder)
+        } else if isLoading {
+            emptyStateView.configure(state: .loading)
+        } else {
+            emptyStateView.configure(state: .noPhotos)
+        }
+    }
+
+    private func animateFolderButton(hasFolder: Bool) {
+        if hasFolder {
+            var config = UIButton.Configuration.prominentGlass()
+            config.image = UIImage(systemName: "folder")
+            folderButton.configuration = config
+
+            folderButtonTrailingConstraint.isActive = false
+            folderButtonWidthConstraint.isActive = true
+        } else {
+            var config = UIButton.Configuration.prominentGlass()
+            config.image = UIImage(systemName: "folder")
+            config.title = "フォルダを開く"
+            config.imagePlacement = .leading
+            config.imagePadding = 8
+            folderButton.configuration = config
+
+            folderButtonWidthConstraint.isActive = false
+            folderButtonTrailingConstraint.isActive = true
+        }
+
+        UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5, options: []) {
+            self.view.layoutIfNeeded()
+            self.jumpToBottomButton.alpha = hasFolder ? 1 : 0
         }
     }
 
@@ -129,9 +225,7 @@ final class FileBrowserViewController: UIViewController {
 
     override func updateProperties() {
         super.updateProperties()
-        let hasFolder = viewModel.hasFolder
-        collectionView.isHidden = !hasFolder
-        emptyStateView.isHidden = hasFolder
+        updateEmptyState()
     }
 
     // MARK: - Actions
@@ -141,6 +235,14 @@ final class FileBrowserViewController: UIViewController {
         picker.allowsMultipleSelection = false
         picker.delegate = self
         present(picker, animated: true)
+    }
+
+    @objc private func jumpToBottom() {
+        let lastSection = collectionView.numberOfSections - 1
+        guard lastSection >= 0 else { return }
+        let lastItem = collectionView.numberOfItems(inSection: lastSection) - 1
+        guard lastItem >= 0 else { return }
+        collectionView.scrollToItem(at: IndexPath(item: lastItem, section: lastSection), at: .bottom, animated: true)
     }
 }
 

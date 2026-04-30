@@ -2,14 +2,26 @@ import UIKit
 
 final class EmptyStateView: UIView {
 
+    enum State {
+        case noFolder
+        case loading
+        case noPhotos
+    }
+
     private let label: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "フォルダを選択してください"
         label.textColor = .secondaryLabel
         label.font = .preferredFont(forTextStyle: .body)
         label.textAlignment = .center
         return label
+    }()
+
+    private let activityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .medium)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        indicator.hidesWhenStopped = true
+        return indicator
     }()
 
     private let stackView: UIStackView = {
@@ -32,6 +44,7 @@ final class EmptyStateView: UIView {
     }
 
     private func setupViews() {
+        stackView.addArrangedSubview(activityIndicator)
         stackView.addArrangedSubview(label)
         addSubview(stackView)
 
@@ -41,5 +54,21 @@ final class EmptyStateView: UIView {
             stackView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 32),
             stackView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -32),
         ])
+
+        configure(state: .noFolder)
+    }
+
+    func configure(state: State) {
+        switch state {
+        case .noFolder:
+            activityIndicator.stopAnimating()
+            label.text = "フォルダを選択してください"
+        case .loading:
+            activityIndicator.startAnimating()
+            label.text = "読み込み中..."
+        case .noPhotos:
+            activityIndicator.stopAnimating()
+            label.text = "このフォルダには写真が含まれていません"
+        }
     }
 }

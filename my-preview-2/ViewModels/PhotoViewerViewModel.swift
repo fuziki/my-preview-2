@@ -52,7 +52,7 @@ final class PhotoViewerViewModel {
         isLoading = true
         let result = await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: url) else { return (nil as UIImage?, nil as ExifInfo?) }
-            return (UIImage(data: data), Self.extractExif(from: data))
+            return (UIImage(data: data), await Self.extractExif(from: data))
         }.value
         currentImage = result.0
         exifInfo = result.1
