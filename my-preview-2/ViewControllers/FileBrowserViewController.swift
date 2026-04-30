@@ -2,7 +2,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 nonisolated enum Section: Hashable, Sendable {
-    case main
+    case date(String) // "yyyy-MM-dd" key used for sorting
 }
 
 final class FileBrowserViewController: UIViewController {
@@ -15,6 +15,23 @@ final class FileBrowserViewController: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
     private var lastKnownHasFolder: Bool = false
 
+    // MARK: - Date Formatters
+
+    private lazy var sectionKeyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private lazy var sectionDisplayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ja_JP")
+        f.dateStyle = .long
+        f.timeStyle = .none
+        return f
+    }()
+
     // MARK: - Folder Button Constraints
 
     private var folderButtonTrailingConstraint: NSLayoutConstraint!
@@ -23,9 +40,26 @@ final class FileBrowserViewController: UIViewController {
     // MARK: - Views
 
     private lazy var collectionView: UICollectionView = {
-        var config = UICollectionLayoutListConfiguration(appearance: .plain)
-        config.showsSeparators = true
-        let layout = UICollectionViewCompositionalLayout.list(using: config)
+        let layout = UICollectionViewCompositionalLayout { _, layoutEnvironment in
+            var listConfig = UICollectionLayoutListConfiguration(appearance: .plain)
+            listConfig.showsSeparators = true
+            let section = NSCollectionLayoutSection.list(using: listConfig, layoutEnvironment: layoutEnvironment)
+
+            // Sticky section header
+            let headerSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .estimated(44)
+            )
+            let header = NSCollectionLayoutBoundarySupplementaryItem(
+                layoutSize: headerSize,
+                elementKind: UICollectionView.elementKindSectionHeader,
+                alignment: .top
+            )
+            header.pinToVisibleBounds = true
+            section.boundarySupplementaryItems = [header]
+
+            return section
+        }
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.contentInsetAdjustmentBehavior = .automatic
@@ -137,19 +171,61 @@ final class FileBrowserViewController: UIViewController {
             cell.contentConfiguration = config
         }
 
+        let headerRegistration = UICollectionView.SupplementaryRegistration<SectionHeaderView>(
+            elementKind: UICollectionView.elementKindSectionHeader
+        ) { [weak self] headerView, _, indexPath in
+            guard let self else { return }
+            let snapshot = self.dataSource.snapshot()
+            guard indexPath.section < snapshot.sectionIdentifiers.count else { return }
+            let section = snapshot.sectionIdentifiers[indexPath.section]
+            if case .date(let dateKey) = section {
+                headerView.configure(title: self.sectionTitle(for: dateKey))
+            }
+        }
+
         dataSource = UICollectionViewDiffableDataSource<Section, FileItem.ID>(
             collectionView: collectionView
         ) { [weak self] collectionView, indexPath, id in
             guard let item = self?.viewModel.items.first(where: { $0.id == id }) else { return nil }
             return collectionView.dequeueConfiguredReusableCell(using: cellRegistration, for: indexPath, item: item.url)
         }
+
+        dataSource.supplementaryViewProvider = { collectionView, kind, indexPath in
+            guard kind == UICollectionView.elementKindSectionHeader else { return nil }
+            return collectionView.dequeueConfiguredReusableSupplementary(using: headerRegistration, for: indexPath)
+        }
     }
 
     private func applySnapshot() {
+        // Group items by date key while preserving sorted order
+        var dateMap: [String: [FileItem.ID]] = [:]
+        var dateOrder: [String] = []
+
+        for item in viewModel.items {
+            let date = item.captureDate ?? Date.distantFuture
+            let key = sectionKeyFormatter.string(from: date)
+            if dateMap[key] == nil {
+                dateOrder.append(key)
+                dateMap[key] = []
+            }
+            dateMap[key]!.append(item.id)
+        }
+
         var snapshot = NSDiffableDataSourceSnapshot<Section, FileItem.ID>()
-        snapshot.appendSections([.main])
-        snapshot.appendItems(viewModel.items.map(\.id), toSection: .main)
+        for key in dateOrder {
+            let section = Section.date(key)
+            snapshot.appendSections([section])
+            snapshot.appendItems(dateMap[key]!, toSection: section)
+        }
         dataSource.apply(snapshot, animatingDifferences: true)
+    }
+
+    // Format "yyyy-MM-dd" key into localized Japanese date string
+    private func sectionTitle(for dateKey: String) -> String {
+        if let date = sectionKeyFormatter.date(from: dateKey) {
+            return sectionDisplayFormatter.string(from: date)
+        }
+        return dateKey
     }
 
     // MARK: - Observation
@@ -269,5 +345,55 @@ extension FileBrowserViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
         Task { await viewModel.selectFolder(url) }
+    }
+}
+
+// MARK: - SectionHeaderView
+
+private final class SectionHeaderView: UICollectionReusableView {
+
+    private let glassView: UIVisualEffectView = {
+        let v = UIVisualEffectView(effect: UIGlassEffect())
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.layer.cornerRadius = 16
+        v.layer.cornerCurve = .continuous
+        v.clipsToBounds = true
+        return v
+    }()
+
+    private let label: UILabel = {
+        let l = UILabel()
+        l.translatesAutoresizingMaskIntoConstraints = false
+        l.font = .preferredFont(forTextStyle: .subheadline)
+        l.textColor = .label
+        return l
+    }()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+
+        addSubview(glassView)
+        glassView.contentView.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            glassView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            glassView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            glassView.heightAnchor.constraint(equalToConstant: 32),
+
+            label.leadingAnchor.constraint(equalTo: glassView.contentView.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: glassView.contentView.trailingAnchor, constant: -12),
+            label.centerYAnchor.constraint(equalTo: glassView.contentView.centerYAnchor),
+
+            glassView.trailingAnchor.constraint(equalTo: label.trailingAnchor, constant: 12),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError()
+    }
+
+    func configure(title: String) {
+        label.text = title
     }
 }

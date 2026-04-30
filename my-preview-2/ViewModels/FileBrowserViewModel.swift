@@ -19,16 +19,22 @@ final class FileBrowserViewModel {
     func loadItems() async {
         guard let url = rootURL else { return }
         isLoading = true
-        let loaded = await Task.detached(priority: .userInitiated) {
+        let loaded: [FileItem] = await Task.detached(priority: .userInitiated) {
+            // Bulk-fetch creationDate at directory scan time (near-zero extra cost)
             let contents = try? FileManager.default.contentsOfDirectory(
                 at: url,
-                includingPropertiesForKeys: nil,
+                includingPropertiesForKeys: [.creationDateKey],
                 options: .skipsHiddenFiles
             )
             return (contents ?? [])
                 .filter { ["jpg", "jpeg"].contains($0.pathExtension.lowercased()) }
-                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-                .map { FileItem(url: $0) }
+                .map { url -> FileItem in
+                    let date = (try? url.resourceValues(forKeys: [.creationDateKey]))?.creationDate
+                    return FileItem(url: url, captureDate: date)
+                }
+                .sorted {
+                    ($0.captureDate ?? .distantFuture) < ($1.captureDate ?? .distantFuture)
+                }
         }.value
         await MainActor.run {
             self.items = loaded
