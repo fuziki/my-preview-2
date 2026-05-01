@@ -1,9 +1,38 @@
 import UIKit
 import UniformTypeIdentifiers
 
+// MARK: - ViewMode
+
+private enum ViewMode: String {
+    case list, grid
+
+    var toggled: ViewMode { self == .list ? .grid : .list }
+
+    /// Icon shown on the toggle button (depicts what the *next* mode will be)
+    var toggleButtonImage: UIImage? {
+        switch self {
+        case .list: return UIImage(systemName: "square.grid.2x2")
+        case .grid: return UIImage(systemName: "list.bullet")
+        }
+    }
+}
+
+private extension UserDefaults {
+    private static let viewModeKey = "FileBrowser.viewMode"
+
+    var fileBrowserViewMode: ViewMode {
+        get { ViewMode(rawValue: string(forKey: Self.viewModeKey) ?? "") ?? .list }
+        set { set(newValue.rawValue, forKey: Self.viewModeKey) }
+    }
+}
+
+// MARK: - Section
+
 nonisolated enum Section: Hashable, Sendable {
     case date(String) // "yyyy-MM-dd" key used for sorting
 }
+
+// MARK: - FileBrowserViewController
 
 final class FileBrowserViewController: UIViewController {
 
@@ -14,6 +43,12 @@ final class FileBrowserViewController: UIViewController {
     private let viewModel = FileBrowserViewModel()
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
     private var lastKnownHasFolder: Bool = false
+
+    private var viewMode: ViewMode = UserDefaults.standard.fileBrowserViewMode
+
+    // Cell registrations — initialised in configureDataSource()
+    private var listCellRegistration: UICollectionView.CellRegistration<UICollectionViewListCell, URL>!
+    private var gridCellRegistration: UICollectionView.CellRegistration<ThumbnailCell, URL>!
 
     // MARK: - Date Formatters
 
@@ -40,27 +75,7 @@ final class FileBrowserViewController: UIViewController {
     // MARK: - Views
 
     private lazy var collectionView: UICollectionView = {
-        let layout = UICollectionViewCompositionalLayout { _, layoutEnvironment in
-            var listConfig = UICollectionLayoutListConfiguration(appearance: .plain)
-            listConfig.showsSeparators = true
-            let section = NSCollectionLayoutSection.list(using: listConfig, layoutEnvironment: layoutEnvironment)
-
-            // Sticky section header
-            let headerSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1.0),
-                heightDimension: .estimated(44)
-            )
-            let header = NSCollectionLayoutBoundarySupplementaryItem(
-                layoutSize: headerSize,
-                elementKind: UICollectionView.elementKindSectionHeader,
-                alignment: .top
-            )
-            header.pinToVisibleBounds = true
-            section.boundarySupplementaryItems = [header]
-
-            return section
-        }
-        let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: makeLayout(for: viewMode))
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.contentInsetAdjustmentBehavior = .automatic
         cv.delegate = self
@@ -103,6 +118,7 @@ final class FileBrowserViewController: UIViewController {
         title = "My Preview"
         additionalSafeAreaInsets.bottom = folderButtonSize + 32
         setupViews()
+        setupNavigationBar()
         configureDataSource()
         applySnapshot()
         startObservingItems()
@@ -160,8 +176,17 @@ final class FileBrowserViewController: UIViewController {
         ])
     }
 
+    private func setupNavigationBar() {
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: viewMode.toggleButtonImage,
+            style: .plain,
+            target: self,
+            action: #selector(toggleViewMode)
+        )
+    }
+
     private func configureDataSource() {
-        let cellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, URL> { cell, _, url in
+        listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, URL> { cell, _, url in
             var config = cell.defaultContentConfiguration()
             config.image = UIImage(systemName: "photo")
             config.imageProperties.tintColor = .systemBlue
@@ -169,6 +194,17 @@ final class FileBrowserViewController: UIViewController {
             config.textProperties.lineBreakMode = .byTruncatingMiddle
             config.textProperties.numberOfLines = 1
             cell.contentConfiguration = config
+        }
+
+        let thumbnailPixelSize = if let cellWidth = view.window?.windowScene?.screen.bounds.width,
+           let scale = view.window?.windowScene?.screen.scale {
+            min(400, Int(cellWidth * scale))
+        } else {
+            400
+        }
+
+        gridCellRegistration = UICollectionView.CellRegistration<ThumbnailCell, URL> { cell, _, url in
+            cell.configure(with: url, thumbnailPixelSize: thumbnailPixelSize)
         }
 
         let headerRegistration = UICollectionView.SupplementaryRegistration<SectionHeaderView>(
@@ -186,8 +222,16 @@ final class FileBrowserViewController: UIViewController {
         dataSource = UICollectionViewDiffableDataSource<Section, FileItem.ID>(
             collectionView: collectionView
         ) { [weak self] collectionView, indexPath, id in
-            guard let item = self?.viewModel.items.first(where: { $0.id == id }) else { return nil }
-            return collectionView.dequeueConfiguredReusableCell(using: cellRegistration, for: indexPath, item: item.url)
+            guard let self,
+                  let item = viewModel.items.first(where: { $0.id == id }) else { return nil }
+            switch viewMode {
+            case .list:
+                return collectionView.dequeueConfiguredReusableCell(
+                    using: listCellRegistration, for: indexPath, item: item.url)
+            case .grid:
+                return collectionView.dequeueConfiguredReusableCell(
+                    using: gridCellRegistration, for: indexPath, item: item.url)
+            }
         }
 
         dataSource.supplementaryViewProvider = { collectionView, kind, indexPath in
@@ -226,6 +270,70 @@ final class FileBrowserViewController: UIViewController {
             return sectionDisplayFormatter.string(from: date)
         }
         return dateKey
+    }
+
+    // MARK: - Layout Factories
+
+    private func makeLayout(for mode: ViewMode) -> UICollectionViewLayout {
+        mode == .grid ? makeGridLayout() : makeListLayout()
+    }
+
+    private func makeListLayout() -> UICollectionViewLayout {
+        UICollectionViewCompositionalLayout { _, layoutEnvironment in
+            var listConfig = UICollectionLayoutListConfiguration(appearance: .plain)
+            listConfig.showsSeparators = true
+            let section = NSCollectionLayoutSection.list(using: listConfig, layoutEnvironment: layoutEnvironment)
+
+            let headerSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .estimated(44)
+            )
+            let header = NSCollectionLayoutBoundarySupplementaryItem(
+                layoutSize: headerSize,
+                elementKind: UICollectionView.elementKindSectionHeader,
+                alignment: .top
+            )
+            header.pinToVisibleBounds = true
+            section.boundarySupplementaryItems = [header]
+
+            return section
+        }
+    }
+
+    private func makeGridLayout() -> UICollectionViewLayout {
+        UICollectionViewCompositionalLayout { _, _ in
+            let itemSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1 / 3),
+                heightDimension: .fractionalWidth(1 / 3)
+            )
+            let item = NSCollectionLayoutItem(layoutSize: itemSize)
+            item.contentInsets = NSDirectionalEdgeInsets(top: 1, leading: 1, bottom: 1, trailing: 1)
+
+            let groupSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1),
+                heightDimension: .fractionalWidth(1 / 3)
+            )
+            let group = NSCollectionLayoutGroup.horizontal(
+                layoutSize: groupSize, subitems: [item, item, item]
+            )
+
+            let section = NSCollectionLayoutSection(group: group)
+            section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0)
+
+            let headerSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .estimated(44)
+            )
+            let header = NSCollectionLayoutBoundarySupplementaryItem(
+                layoutSize: headerSize,
+                elementKind: UICollectionView.elementKindSectionHeader,
+                alignment: .top
+            )
+            header.pinToVisibleBounds = true
+            section.boundarySupplementaryItems = [header]
+
+            return section
+        }
     }
 
     // MARK: - Observation
@@ -319,6 +427,22 @@ final class FileBrowserViewController: UIViewController {
         let lastItem = collectionView.numberOfItems(inSection: lastSection) - 1
         guard lastItem >= 0 else { return }
         collectionView.scrollToItem(at: IndexPath(item: lastItem, section: lastSection), at: .bottom, animated: true)
+    }
+
+    @objc private func toggleViewMode() {
+        viewMode = viewMode.toggled
+        UserDefaults.standard.fileBrowserViewMode = viewMode
+
+        // Update button icon
+        navigationItem.rightBarButtonItem?.image = viewMode.toggleButtonImage
+
+        // Switch layout (no animation to avoid cell-type mismatch glitch)
+        collectionView.setCollectionViewLayout(makeLayout(for: viewMode), animated: false)
+
+        // Force all cells to be recreated with the new registration
+        var snapshot = dataSource.snapshot()
+        snapshot.reloadItems(snapshot.itemIdentifiers)
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 }
 
