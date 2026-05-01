@@ -90,6 +90,21 @@ final class PhotoViewerViewController: UIViewController {
         return GlassButtonView(button: button, cornerRadius: 22)
     }()
 
+    private let lastSavedDateLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textColor = UIColor.white.withAlphaComponent(0.65)
+        label.font = .preferredFont(forTextStyle: .caption2)
+        label.isHidden = true
+        return label
+    }()
+
+    private static let savedDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy/MM/dd HH:mm:ss"
+        return f
+    }()
+
     private let loadingIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .medium)
         indicator.translatesAutoresizingMaskIntoConstraints = false
@@ -144,6 +159,12 @@ final class PhotoViewerViewController: UIViewController {
         nextButtonView.button.isEnabled = viewModel.canGoNext
         nextButtonView.button.tintColor = viewModel.canGoNext ? .white : .systemGray
         updateSaveButton(status: viewModel.saveStatus)
+        if let date = viewModel.lastSavedDate {
+            lastSavedDateLabel.text = "最終保存: " + Self.savedDateFormatter.string(from: date)
+            lastSavedDateLabel.isHidden = false
+        } else {
+            lastSavedDateLabel.isHidden = true
+        }
         viewModel.isLoading ? loadingIndicator.startAnimating() : loadingIndicator.stopAnimating()
         updateOverlayVisibility(visible: viewModel.isOverlayVisible)
 
@@ -269,6 +290,13 @@ final class PhotoViewerViewController: UIViewController {
             loadingIndicator.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
             loadingIndicator.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
         ])
+
+        // Last saved date label: below save button
+        view.addSubview(lastSavedDateLabel)
+        NSLayoutConstraint.activate([
+            lastSavedDateLabel.topAnchor.constraint(equalTo: saveButtonView.bottomAnchor, constant: 4),
+            lastSavedDateLabel.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
+        ])
     }
 
     private func setupActions() {
@@ -305,6 +333,7 @@ final class PhotoViewerViewController: UIViewController {
             self.fileNameBlur.alpha = alpha
             self.thumbnailImageView.alpha = alpha
             self.saveButtonView.alpha = alpha
+            self.lastSavedDateLabel.alpha = alpha
         }
         setNeedsStatusBarAppearanceUpdate()
     }

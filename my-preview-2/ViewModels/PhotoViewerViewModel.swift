@@ -35,6 +35,8 @@ final class PhotoViewerViewModel {
     private(set) var isLoading: Bool = false
     private(set) var exifInfo: ExifInfo? = nil
     var saveStatus: SaveStatus = .idle
+    private static var savedDates: [URL: Date] = [:]
+    var lastSavedDate: Date? { Self.savedDates[currentURL] }
     var isOverlayVisible: Bool = true
 
     var currentURL: URL { allURLs[currentIndex] }
@@ -145,6 +147,7 @@ final class PhotoViewerViewModel {
                 let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, fileURL: url, options: options)
             }
+            Self.savedDates[url] = Date()
             saveStatus = .success
             try await Task.sleep(for: .seconds(2))
             saveStatus = .idle
