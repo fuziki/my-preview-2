@@ -8,9 +8,24 @@ final class PhotoViewerViewController: UIViewController {
     private var displayedImage: UIImage?
     private var autoNavigationTask: Task<Void, Never>?
 
-    // MARK: - Views
+    // MARK: - Page View Controller
 
-    private let zoomScrollView = PhotoZoomScrollView()
+    private lazy var pageViewController: UIPageViewController = {
+        let pvc = UIPageViewController(
+            transitionStyle: .scroll,
+            navigationOrientation: .horizontal,
+            options: [.interPageSpacing: 16]
+        )
+        pvc.dataSource = self
+        pvc.delegate = self
+        return pvc
+    }()
+
+    private var currentItemVC: PhotoPageItemViewController? {
+        pageViewController.viewControllers?.first as? PhotoPageItemViewController
+    }
+
+    // MARK: - Views
 
     private let closeButtonView = GlassButtonView.circle(systemImageName: "xmark")
     private let prevButtonView = GlassButtonView.circle(systemImageName: "chevron.left")
@@ -99,9 +114,8 @@ final class PhotoViewerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        setupScrollView()
+        setupPageViewController()
         setupOverlay()
-        setupGestures()
         setupActions()
         Task { await viewModel.loadCurrentImage() }
     }
@@ -146,25 +160,49 @@ final class PhotoViewerViewController: UIViewController {
             ]
             NSLayoutConstraint.activate(thumbnailSizeConstraints)
             thumbnailImageView.image = image
-            zoomScrollView.display(image: image, previousOrientation: viewModel.previousOrientation)
+
+            // Update the current page item's displayed image (button navigation path).
+            // On swipe navigation this VC already shows the correct image, so re-displaying is harmless.
+            currentItemVC?.display(image: image, previousOrientation: viewModel.previousOrientation)
+
+            // Refresh UIPageViewController so viewControllerBefore/After re-generates adjacent pages.
+            if let currentVC = currentItemVC {
+                pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)
+            }
         }
     }
 
     // MARK: - Setup
 
-    private func setupScrollView() {
-        view.addSubview(zoomScrollView)
+    private func setupPageViewController() {
+        let initialVC = makeItemVC(for: viewModel.currentIndex)
+        pageViewController.setViewControllers([initialVC], direction: .forward, animated: false)
+
+        addChild(pageViewController)
+        view.addSubview(pageViewController.view)
+        pageViewController.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            zoomScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            zoomScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            zoomScrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            zoomScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            pageViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            pageViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            pageViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            pageViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        pageViewController.didMove(toParent: self)
+
+        // Disable page swipe while the current image is zoomed in.
+        for recognizer in pageViewController.gestureRecognizers {
+            recognizer.delegate = self
+        }
+    }
+
+    private func makeItemVC(for index: Int) -> PhotoPageItemViewController {
+        let vc = PhotoPageItemViewController(index: index, url: viewModel.allURLs[index])
+        vc.delegate = self
+        return vc
     }
 
     private func setupOverlay() {
-        // Each floating element is added directly to view above zoomScrollView.
-        // Touches pass naturally to zoomScrollView in uncovered areas — no hitTest override needed.
+        // Each floating element is added directly to view above pageViewController.view.
 
         // Close button: top-left floating circle
         view.addSubview(closeButtonView)
@@ -231,18 +269,6 @@ final class PhotoViewerViewController: UIViewController {
             loadingIndicator.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
             loadingIndicator.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
         ])
-    }
-
-    private func setupGestures() {
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-        doubleTap.numberOfTapsRequired = 2
-
-        let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap))
-        singleTap.numberOfTapsRequired = 1
-        singleTap.require(toFail: doubleTap)
-
-        zoomScrollView.addGestureRecognizer(singleTap)
-        zoomScrollView.addGestureRecognizer(doubleTap)
     }
 
     private func setupActions() {
@@ -364,25 +390,70 @@ final class PhotoViewerViewController: UIViewController {
         autoNavigationTask?.cancel()
         autoNavigationTask = nil
     }
+}
 
-    @objc private func handleSingleTap() {
+// MARK: - PhotoPageItemDelegate
+
+extension PhotoViewerViewController: PhotoPageItemDelegate {
+    func pageItemDidTap(_ vc: PhotoPageItemViewController) {
         viewModel.toggleOverlay()
     }
 
-    @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
-        if zoomScrollView.zoomScale > zoomScrollView.minimumZoomScale + 0.001 {
-            zoomScrollView.setZoomScale(zoomScrollView.minimumZoomScale, animated: true)
+    func pageItemDidDoubleTap(_ vc: PhotoPageItemViewController, at locationInImage: CGPoint) {
+        let zoom = vc.zoomScrollView
+        if zoom.zoomScale > zoom.minimumZoomScale + 0.001 {
+            zoom.setZoomScale(zoom.minimumZoomScale, animated: true)
         } else {
-            let tapPoint = gesture.location(in: zoomScrollView.imageView)
-            let width = zoomScrollView.bounds.width / zoomScrollView.maximumZoomScale
-            let height = zoomScrollView.bounds.height / zoomScrollView.maximumZoomScale
+            let width = zoom.bounds.width / zoom.maximumZoomScale
+            let height = zoom.bounds.height / zoom.maximumZoomScale
             let rect = CGRect(
-                x: tapPoint.x - width / 2,
-                y: tapPoint.y - height / 2,
+                x: locationInImage.x - width / 2,
+                y: locationInImage.y - height / 2,
                 width: width,
                 height: height
             )
-            zoomScrollView.zoom(to: rect, animated: true)
+            zoom.zoom(to: rect, animated: true)
         }
+    }
+}
+
+// MARK: - UIPageViewControllerDataSource
+
+extension PhotoViewerViewController: UIPageViewControllerDataSource {
+    func pageViewController(_ pageViewController: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
+        guard let itemVC = viewController as? PhotoPageItemViewController,
+              itemVC.index > 0 else { return nil }
+        return makeItemVC(for: itemVC.index - 1)
+    }
+
+    func pageViewController(_ pageViewController: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
+        guard let itemVC = viewController as? PhotoPageItemViewController,
+              itemVC.index < viewModel.allURLs.count - 1 else { return nil }
+        return makeItemVC(for: itemVC.index + 1)
+    }
+}
+
+// MARK: - UIPageViewControllerDelegate
+
+extension PhotoViewerViewController: UIPageViewControllerDelegate {
+    func pageViewController(
+        _ pageViewController: UIPageViewController,
+        didFinishAnimating finished: Bool,
+        previousViewControllers: [UIViewController],
+        transitionCompleted completed: Bool
+    ) {
+        guard completed,
+              let newVC = pageViewController.viewControllers?.first as? PhotoPageItemViewController else { return }
+        // Do NOT set displayedImage here — updateProperties() must see a changed image to refresh thumbnailImageView.
+        Task { await viewModel.didSwipeTo(index: newVC.index, image: newVC.loadedImage) }
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+
+extension PhotoViewerViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // Disable page swipe when the current image is zoomed in.
+        !(currentItemVC?.isZoomed ?? false)
     }
 }

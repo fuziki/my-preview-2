@@ -111,6 +111,24 @@ final class PhotoViewerViewModel {
         await loadCurrentImage()
     }
 
+    /// Called after a swipe gesture completes in UIPageViewController.
+    /// Updates the current index and reloads only EXIF metadata (the image is already displayed by the page item VC).
+    func didSwipeTo(index: Int, image: UIImage?) async {
+        previousOrientation = nil  // Swipe always resets zoom on new VC
+        currentIndex = index
+        saveStatus = .idle
+        currentImage = image
+
+        let url = allURLs[index]
+        isLoading = true
+        let exif = await Task.detached(priority: .userInitiated) { [url] () -> ExifInfo? in
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return await Self.extractExif(from: data)
+        }.value
+        exifInfo = exif
+        isLoading = false
+    }
+
     func save() async {
         guard currentImage != nil else { return }
         let url = currentURL
