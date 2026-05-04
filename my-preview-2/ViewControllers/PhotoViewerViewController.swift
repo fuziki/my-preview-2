@@ -182,13 +182,18 @@ final class PhotoViewerViewController: UIViewController {
             NSLayoutConstraint.activate(thumbnailSizeConstraints)
             thumbnailImageView.image = image
 
-            // Update the current page item's displayed image (button navigation path).
-            // On swipe navigation this VC already shows the correct image, so re-displaying is harmless.
-            currentItemVC?.display(image: image, previousOrientation: viewModel.previousOrientation)
-
-            // Refresh UIPageViewController so viewControllerBefore/After re-generates adjacent pages.
-            if let currentVC = currentItemVC {
-                pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)
+            if currentItemVC?.index != viewModel.currentIndex {
+                // Button navigation: the current page item VC has a stale index.
+                // Create a new VC with the correct index so that swipe navigation generates correct neighbours.
+                let newVC = makeItemVC(for: viewModel.currentIndex)
+                newVC.display(image: image, previousOrientation: viewModel.previousOrientation)
+                pageViewController.setViewControllers([newVC], direction: .forward, animated: false)
+            } else {
+                // Swipe navigation (or initial load): VC index already matches; just refresh the displayed image.
+                currentItemVC?.display(image: image, previousOrientation: viewModel.previousOrientation)
+                if let currentVC = currentItemVC {
+                    pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)
+                }
             }
         }
     }
