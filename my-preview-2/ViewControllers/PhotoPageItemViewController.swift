@@ -5,13 +5,13 @@ protocol PhotoPageItemDelegate: AnyObject {
     func pageItemDidDoubleTap(_ vc: PhotoPageItemViewController, at locationInImage: CGPoint)
 }
 
-/// A single-image page used inside UIPageViewController for swipe navigation.
-/// Owns its own PhotoZoomScrollView and loads the image asynchronously from a URL.
+/// UIPageViewControllerのスワイプナビゲーション内で使用される、1枚の写真を表示するページ。
+/// PhotoZoomScrollViewを持ち、URLから非同期で画像を読み込む。
 final class PhotoPageItemViewController: UIViewController {
 
-    // MARK: - Properties
+    // MARK: - プロパティ
 
-    let index: Int
+    var index: Int
     let url: URL
     private(set) var loadedImage: UIImage?
 
@@ -23,7 +23,7 @@ final class PhotoPageItemViewController: UIViewController {
         zoomScrollView.zoomScale > zoomScrollView.minimumZoomScale + 0.001
     }
 
-    // MARK: - Init
+    // MARK: - 初期化
 
     init(index: Int, url: URL) {
         self.index = index
@@ -35,7 +35,7 @@ final class PhotoPageItemViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Lifecycle
+    // MARK: - ライフサイクル
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -45,7 +45,7 @@ final class PhotoPageItemViewController: UIViewController {
         Task { await loadImage() }
     }
 
-    // MARK: - Setup
+    // MARK: - セットアップ
 
     private func setupScrollView() {
         view.addSubview(zoomScrollView)
@@ -69,15 +69,15 @@ final class PhotoPageItemViewController: UIViewController {
         zoomScrollView.addGestureRecognizer(doubleTap)
     }
 
-    // MARK: - Image Display
+    // MARK: - 画像表示
 
-    /// Replaces the displayed image without changing the zoom level if orientation matches.
+    /// 向きが一致する場合はズームレベルを維持したまま表示画像を差し替える。
     func display(image: UIImage, previousOrientation: ImageOrientation? = nil) {
         loadedImage = image
         zoomScrollView.display(image: image, previousOrientation: previousOrientation)
     }
 
-    // MARK: - Private
+    // MARK: - プライベート
 
     private func loadImage() async {
         let url = self.url

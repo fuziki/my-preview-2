@@ -1,10 +1,10 @@
 import UIKit
 
-/// A glass-morphism style container that wraps UIVisualEffectView and a UIButton.
-/// Use the `circle(systemImageName:)` factory for 44×44 icon buttons.
+/// UIVisualEffectViewとUIButtonをラップするガラスモーフィズムスタイルのコンテナ。
+/// 44×44 アイコンボタンには `circle(systemImageName:)` ファクトリを使用する。
 final class GlassButtonView: UIView {
 
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     let button: UIButton
 
@@ -17,7 +17,7 @@ final class GlassButtonView: UIView {
         return view
     }()
 
-    // MARK: - Init
+    // MARK: - 初期化
 
     init(button: UIButton, cornerRadius: CGFloat = 22) {
         self.button = button
@@ -31,7 +31,7 @@ final class GlassButtonView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Setup
+    // MARK: - セットアップ
 
     private func setupViews() {
         addSubview(blurView)
@@ -48,10 +48,10 @@ final class GlassButtonView: UIView {
     }
 }
 
-// MARK: - Factory
+// MARK: - ファクトリ
 
 extension GlassButtonView {
-    /// Creates a 44×44 circular glass button with an SF Symbols icon.
+    /// SF Symbolsアイコンを持つ 44×44 の円形ガラスボタンを生成する。
     static func circle(systemImageName: String) -> GlassButtonView {
         var config = UIButton.Configuration.borderless()
         config.image = UIImage(systemName: systemImageName)

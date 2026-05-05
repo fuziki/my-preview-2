@@ -27,7 +27,7 @@ nonisolated func makeThumbnail(url: URL, maxPixelSize: Int) -> UIImage? {
     let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
     guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else { return nil }
 
-    // Fast path: embedded thumbnail + center crop
+    // 高速パス: 埋め込みサムネイルを使用する
     let fastOptions: [CFString: Any] = [
         kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
         kCGImageSourceCreateThumbnailWithTransform: true,
@@ -75,7 +75,7 @@ final class ThumbnailCell: UICollectionViewCell {
     }
 
     func configure(with url: URL, thumbnailPixelSize: Int) {
-        // Synchronous cache hit — no flicker
+        // キャッシュヒット（同期）— フリッカーなし
         if let cached = ThumbnailCache.shared.image(for: url) {
             imageView.image = cached
             return

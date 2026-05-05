@@ -154,11 +154,11 @@ contentInset = UIEdgeInsets(top: offsetY, left: offsetX, bottom: offsetY, right:
 
 `display(image:previousOrientation:)` を呼び出す際、`previousOrientation` との比較でズーム挙動を分岐する：
 
-| 遷移パターン                          | 挙動                                                                     |
-|---------------------------------------|--------------------------------------------------------------------------|
-| 初回表示（`previousOrientation` が nil）   | `resetZoom(for:)` でズームをリセット                                      |
-| 向きが変わった場合（縦 ↔ 横）          | `resetZoom(for:)` でズームをリセット                                      |
-| 向きが同じ場合（縦 → 縦、横 → 横）    | `updateZoomForSameOrientation(for:)` で現在のズーム比率を新しい画像に適用 |
+| 遷移パターン                                          | 挙動                                                                     |
+|-------------------------------------------------------|--------------------------------------------------------------------------|
+| 初回表示（`previousOrientation` が nil）              | `resetZoom(for:)` でズームをリセット                                      |
+| 向きが変わった場合（縦 ↔ 横）                          | `resetZoom(for:)` でズームをリセット                                      |
+| 向きが同じ場合（縦 → 縦、横 → 横）                    | `updateZoomForSameOrientation(for:)` で現在のズーム比率を新しい画像に適用 |
 
 同じ向きの場合のズーム引き継ぎ計算：
 
@@ -169,6 +169,10 @@ zoomScale = targetZoom
 ```
 
 引き継ぎ後は `clampContentOffset()` でコンテンツオフセットを有効範囲に収める。
+
+> **前後ボタンナビゲーション時のズーム維持**
+> ボタンナビゲーションでは同じ `PhotoPageItemViewController`（および同じ `PhotoZoomScrollView` インスタンス）を再利用するため、`updateZoomForSameOrientation` が読み取るズームスケールは直前の状態がそのまま残っている。これにより、同じ向きの写真に切り替わる際はズーム状態が自然に引き継がれる。向きが異なる写真に切り替わる場合は `resetZoom` が呼ばれ、ズームはリセットされる。
+> スワイプナビゲーションでは新しい VC が生成されるため、常にズームがリセットされる（`previousOrientation = nil`）。
 
 ---
 
@@ -330,6 +334,19 @@ zoomScrollView.zoom(to: rect, animated: true)
 - ナビゲーション前に `previousOrientation = currentImage?.photoOrientation` を保存する。
 - ナビゲーション後に `saveStatus = .idle` にリセットする。
 - 前後ボタンの `tintColor`：有効時は `.white`、無効時は `.systemGray`。
+
+### ナビゲーション実装戦略
+
+| ナビゲーション種別 | VC の扱い                                                                 | ズーム状態                                               |
+|--------------------|---------------------------------------------------------------------------|----------------------------------------------------------|
+| 前後ボタン         | 同じ `PhotoPageItemViewController` を再利用し、`index` を更新して画像を上書き | 同じ向きの場合は維持、向きが変わった場合はリセット        |
+| 左右スワイプ       | `UIPageViewController` が新しい VC を生成・表示                            | 常にリセット（新規 VC のため）                            |
+
+前後ボタン押下時、`updateProperties()` 内で以下の処理を行う：
+
+1. `currentItemVC.index` を `viewModel.currentIndex` に更新する（インデックスが古い場合のみ）
+2. 同じ VC に対して `display(image:previousOrientation:)` を呼ぶ
+3. `pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)` でUIPageViewControllerに隣ページのキャッシュを再生成させる
 
 ---
 

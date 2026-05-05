@@ -1,108 +1,63 @@
-import Foundation
 import UIKit
 import Observation
-import Photos
-import ImageIO
-
-enum SaveStatus {
-    case idle, saving, success, failure
-}
-
-struct ExifInfo {
-    let iso: String?
-    let focalLength: String?
-    let exposureValue: String?
-    let fNumber: String?
-    let shutterSpeed: String?
-}
-
-enum ImageOrientation {
-    case portrait, landscape
-}
-
-extension UIImage {
-    var photoOrientation: ImageOrientation {
-        size.width >= size.height ? .landscape : .portrait
-    }
-}
 
 @Observable
 final class PhotoViewerViewModel {
+
+    // MARK: - 出力（Observationを通じてViewControllerが読み取る）
+
     private(set) var currentIndex: Int
     private(set) var allURLs: [URL]
     private(set) var currentImage: UIImage? = nil
     private(set) var previousOrientation: ImageOrientation? = nil
     private(set) var isLoading: Bool = false
     private(set) var exifInfo: ExifInfo? = nil
-    var saveStatus: SaveStatus = .idle
-    private static var savedDates: [URL: Date] = [:]
-    var lastSavedDate: Date? { Self.savedDates[currentURL] }
+    private(set) var saveStatus: SaveStatus = .idle
+    private(set) var lastSavedDate: Date? = nil
     var isOverlayVisible: Bool = true
+
+    // MARK: - 派生状態
 
     var currentURL: URL { allURLs[currentIndex] }
     var currentFileName: String { currentURL.lastPathComponent }
     var canGoPrevious: Bool { currentIndex > 0 }
     var canGoNext: Bool { currentIndex < allURLs.count - 1 }
 
-    init(input: PhotoViewerInput) {
+    // MARK: - 依存関係
+
+    private let imageLoader: any ImageLoaderServiceProtocol
+    private let exifService: any ExifServiceProtocol
+    private let photoLibrary: any PhotoLibraryServiceProtocol
+    private let savedDateStore: any SavedDateStoreProtocol
+
+    // MARK: - 初期化
+
+    init(input: PhotoViewerInput, services: PhotoViewerServices) {
         allURLs = input.allURLs
         currentIndex = input.allURLs.firstIndex(of: input.initialURL) ?? 0
+        imageLoader = services.imageLoader
+        exifService = services.exifService
+        photoLibrary = services.photoLibrary
+        savedDateStore = services.savedDateStore
+        lastSavedDate = services.savedDateStore.date(for: input.allURLs[currentIndex])
     }
 
-    func loadCurrentImage() async {
-        let url = currentURL
-        isLoading = true
-        let result = await Task.detached(priority: .userInitiated) {
-            guard let data = try? Data(contentsOf: url) else { return (nil as UIImage?, nil as ExifInfo?) }
-            return (UIImage(data: data), await Self.extractExif(from: data))
-        }.value
-        currentImage = result.0
-        exifInfo = result.1
-        isLoading = false
+    // MARK: - ライフサイクル
+
+    /// 初期インデックスの画像とEXIFを読み込む。VCの準備完了後に一度だけ呼ぶ。
+    func loadInitial() async {
+        await loadImageAndExif(for: currentURL)
     }
 
-    private static func extractExif(from data: Data) -> ExifInfo? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
-              let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] else {
-            return nil
-        }
-
-        let iso: String? = {
-            guard let array = exif[kCGImagePropertyExifISOSpeedRatings as String] as? [Int],
-                  let value = array.first else { return nil }
-            return "ISO \(value)"
-        }()
-
-        let focalLength: String? = {
-            guard let fl = exif[kCGImagePropertyExifFocalLength as String] as? Double else { return nil }
-            return String(format: "%.0fmm", fl)
-        }()
-
-        let exposureValue: String? = {
-            guard let ev = exif[kCGImagePropertyExifExposureBiasValue as String] as? Double else { return nil }
-            return ev == 0 ? "±0EV" : String(format: "%+.1fEV", ev)
-        }()
-
-        let fNumber: String? = {
-            guard let fn = exif[kCGImagePropertyExifFNumber as String] as? Double else { return nil }
-            return String(format: "f/%.1f", fn)
-        }()
-
-        let shutterSpeed: String? = {
-            guard let et = exif[kCGImagePropertyExifExposureTime as String] as? Double, et > 0 else { return nil }
-            return et >= 1.0 ? String(format: "%.0fs", et) : "1/\(Int(round(1.0 / et)))s"
-        }()
-
-        return ExifInfo(iso: iso, focalLength: focalLength, exposureValue: exposureValue, fNumber: fNumber, shutterSpeed: shutterSpeed)
-    }
+    // MARK: - ナビゲーション
 
     func navigatePrevious() async {
         guard canGoPrevious else { return }
         previousOrientation = currentImage?.photoOrientation
         currentIndex -= 1
         saveStatus = .idle
-        await loadCurrentImage()
+        lastSavedDate = savedDateStore.date(for: currentURL)
+        await loadImageAndExif(for: currentURL)
     }
 
     func navigateNext() async {
@@ -110,53 +65,65 @@ final class PhotoViewerViewModel {
         previousOrientation = currentImage?.photoOrientation
         currentIndex += 1
         saveStatus = .idle
-        await loadCurrentImage()
+        lastSavedDate = savedDateStore.date(for: currentURL)
+        await loadImageAndExif(for: currentURL)
     }
 
-    /// Called after a swipe gesture completes in UIPageViewController.
-    /// Updates the current index and reloads only EXIF metadata (the image is already displayed by the page item VC).
+    /// UIPageViewControllerのスワイプ完了後に呼ばれる。
+    /// 画像はページアイテムVCで既に表示済みのため、EXIFのみ読み込む。
     func didSwipeTo(index: Int, image: UIImage?) async {
-        previousOrientation = nil  // Swipe always resets zoom on new VC
+        previousOrientation = nil  // スワイプは常に新しいページアイテムVCを表示するのでズームはリセットされる
         currentIndex = index
         saveStatus = .idle
         currentImage = image
-
-        let url = allURLs[index]
-        isLoading = true
-        let exif = await Task.detached(priority: .userInitiated) { [url] () -> ExifInfo? in
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return await Self.extractExif(from: data)
-        }.value
-        exifInfo = exif
-        isLoading = false
+        lastSavedDate = savedDateStore.date(for: currentURL)
+        await loadExif(for: currentURL)
     }
+
+    // MARK: - 保存
 
     func save() async {
         guard currentImage != nil else { return }
         let url = currentURL
         saveStatus = .saving
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else {
-            saveStatus = .failure
-            return
-        }
         do {
-            try await PHPhotoLibrary.shared().performChanges {
-                let options = PHAssetResourceCreationOptions()
-                options.originalFilename = url.lastPathComponent
-                let request = PHAssetCreationRequest.forAsset()
-                request.addResource(with: .photo, fileURL: url, options: options)
-            }
-            Self.savedDates[url] = Date()
+            try await photoLibrary.save(fileURL: url)
+            let date = Date()
+            savedDateStore.setDate(date, for: url)
+            lastSavedDate = date
             saveStatus = .success
-            try await Task.sleep(for: .seconds(2))
-            saveStatus = .idle
+            try? await Task.sleep(for: .seconds(2))
+            // ナビゲーション時は即座に .idle にリセットされるため、まだ .success の場合のみリセット
+            if saveStatus == .success {
+                saveStatus = .idle
+            }
         } catch {
             saveStatus = .failure
         }
     }
 
+    // MARK: - オーバーレイ
+
     func toggleOverlay() {
         isOverlayVisible.toggle()
+    }
+
+    // MARK: - プライベート読み込み
+
+    /// 画像とEXIFを並行して読み込む（ボタンナビゲーションと初回読み込みで使用）。
+    private func loadImageAndExif(for url: URL) async {
+        isLoading = true
+        async let image = imageLoader.loadImage(from: url)
+        async let exif = exifService.extractExif(from: url)
+        currentImage = await image
+        exifInfo = await exif
+        isLoading = false
+    }
+
+    /// EXIFのみ読み込む（スワイプナビゲーション後に使用。画像は既に表示済み）。
+    private func loadExif(for url: URL) async {
+        isLoading = true
+        exifInfo = await exifService.extractExif(from: url)
+        isLoading = false
     }
 }

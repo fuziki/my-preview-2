@@ -2,13 +2,13 @@ import UIKit
 
 final class PhotoViewerViewController: UIViewController {
 
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     private let viewModel: PhotoViewerViewModel
     private var displayedImage: UIImage?
     private var autoNavigationTask: Task<Void, Never>?
 
-    // MARK: - Page View Controller
+    // MARK: - ページビューコントローラー
 
     private lazy var pageViewController: UIPageViewController = {
         let pvc = UIPageViewController(
@@ -25,7 +25,7 @@ final class PhotoViewerViewController: UIViewController {
         pageViewController.viewControllers?.first as? PhotoPageItemViewController
     }
 
-    // MARK: - Views
+    // MARK: - ビュー
 
     private let closeButtonView = GlassButtonView.circle(systemImageName: "xmark")
     private let prevButtonView = GlassButtonView.circle(systemImageName: "chevron.left")
@@ -113,10 +113,10 @@ final class PhotoViewerViewController: UIViewController {
         return indicator
     }()
 
-    // MARK: - Init
+    // MARK: - 初期化
 
-    init(input: PhotoViewerInput) {
-        viewModel = PhotoViewerViewModel(input: input)
+    init(input: PhotoViewerInput, services: PhotoViewerServices) {
+        viewModel = PhotoViewerViewModel(input: input, services: services)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -124,7 +124,7 @@ final class PhotoViewerViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Lifecycle
+    // MARK: - ライフサイクル
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -132,10 +132,10 @@ final class PhotoViewerViewController: UIViewController {
         setupPageViewController()
         setupOverlay()
         setupActions()
-        Task { await viewModel.loadCurrentImage() }
+        Task { await viewModel.loadInitial() }
     }
 
-    // MARK: - Status Bar
+    // MARK: - ステータスバー
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     override var prefersStatusBarHidden: Bool { !viewModel.isOverlayVisible }
@@ -183,22 +183,20 @@ final class PhotoViewerViewController: UIViewController {
             thumbnailImageView.image = image
 
             if currentItemVC?.index != viewModel.currentIndex {
-                // Button navigation: the current page item VC has a stale index.
-                // Create a new VC with the correct index so that swipe navigation generates correct neighbours.
-                let newVC = makeItemVC(for: viewModel.currentIndex)
-                newVC.display(image: image, previousOrientation: viewModel.previousOrientation)
-                pageViewController.setViewControllers([newVC], direction: .forward, animated: false)
-            } else {
-                // Swipe navigation (or initial load): VC index already matches; just refresh the displayed image.
-                currentItemVC?.display(image: image, previousOrientation: viewModel.previousOrientation)
-                if let currentVC = currentItemVC {
-                    pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)
-                }
+                // ボタンナビゲーション: 同じVCのインデックスを更新し、画像を上書きする。
+                // VCを新規作成しないことで、同じ向きの場合にズーム状態が自然に引き継がれる。
+                currentItemVC?.index = viewModel.currentIndex
+            }
+            // スワイプナビゲーション（または初回読み込み）はインデックスが既に一致している。
+            currentItemVC?.display(image: image, previousOrientation: viewModel.previousOrientation)
+            if let currentVC = currentItemVC {
+                // UIPageViewControllerに現在のVCを通知し、隣ページのキャッシュを再生成させる。
+                pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)
             }
         }
     }
 
-    // MARK: - Setup
+    // MARK: - セットアップ
 
     private func setupPageViewController() {
         let initialVC = makeItemVC(for: viewModel.currentIndex)
@@ -215,7 +213,7 @@ final class PhotoViewerViewController: UIViewController {
         ])
         pageViewController.didMove(toParent: self)
 
-        // Disable page swipe while the current image is zoomed in.
+        // ズーム中はページスワイプを無効化する。
         for recognizer in pageViewController.gestureRecognizers {
             recognizer.delegate = self
         }
@@ -228,30 +226,30 @@ final class PhotoViewerViewController: UIViewController {
     }
 
     private func setupOverlay() {
-        // Each floating element is added directly to view above pageViewController.view.
+        // 各フローティング要素をpageViewController.viewの上に直接追加する。
 
-        // Close button: top-left floating circle
+        // 閉じるボタン: 左上のフローティング円
         view.addSubview(closeButtonView)
         NSLayoutConstraint.activate([
             closeButtonView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             closeButtonView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
         ])
 
-        // Prev button: bottom-left floating circle
+        // 前へボタン: 左下のフローティング円
         view.addSubview(prevButtonView)
         NSLayoutConstraint.activate([
             prevButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
             prevButtonView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
         ])
 
-        // Next button: bottom-right floating circle
+        // 次へボタン: 右下のフローティング円
         view.addSubview(nextButtonView)
         NSLayoutConstraint.activate([
             nextButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
             nextButtonView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
 
-        // File name + exif: top-right floating pill
+        // ファイル名 + EXIF: 右上のフローティングピル
         fileNameStack.addArrangedSubview(fileNameLabel)
         fileNameStack.addArrangedSubview(exifLabel)
         view.addSubview(fileNameBlur)
@@ -268,14 +266,14 @@ final class PhotoViewerViewController: UIViewController {
             fileNameStack.trailingAnchor.constraint(equalTo: fileNameBlur.contentView.trailingAnchor, constant: -14),
         ])
 
-        // Thumbnail: below file name label, right-aligned
+        // サムネイル: ファイル名ラベルの下、右揃え
         view.addSubview(thumbnailImageView)
         NSLayoutConstraint.activate([
             thumbnailImageView.topAnchor.constraint(equalTo: fileNameBlur.bottomAnchor, constant: 8),
             thumbnailImageView.trailingAnchor.constraint(equalTo: fileNameBlur.trailingAnchor),
         ])
 
-        // Save button: bottom-center capsule
+        // 保存ボタン: 下部中央のカプセル形
         view.addSubview(saveButtonView)
         NSLayoutConstraint.activate([
             saveButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
@@ -289,14 +287,14 @@ final class PhotoViewerViewController: UIViewController {
             saveButtonView.button.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
         ])
 
-        // Loading indicator: above save button
+        // ローディングインジケーター: 保存ボタンの上
         view.addSubview(loadingIndicator)
         NSLayoutConstraint.activate([
             loadingIndicator.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
             loadingIndicator.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
         ])
 
-        // Last saved date label: below save button
+        // 最終保存日時ラベル: 保存ボタンの下
         view.addSubview(lastSavedDateLabel)
         NSLayoutConstraint.activate([
             lastSavedDateLabel.topAnchor.constraint(equalTo: saveButtonView.bottomAnchor, constant: 4),
@@ -318,8 +316,8 @@ final class PhotoViewerViewController: UIViewController {
         nextLongPress.minimumPressDuration = 1.0
         nextButtonView.button.addGestureRecognizer(nextLongPress)
 
-        // Prevent UIKit from automatically dimming the save button when disabled.
-        // The glass background makes white text at ~30% opacity nearly invisible.
+        // UIKitが無効時に保存ボタンを自動的に暗くするのを防ぐ。
+        // ガラス背景では約30%の不透明度の白テキストがほぼ見えなくなるため。
         saveButtonView.button.configurationUpdateHandler = { button in
             var config = button.configuration
             config?.baseForegroundColor = .white
@@ -327,7 +325,7 @@ final class PhotoViewerViewController: UIViewController {
         }
     }
 
-    // MARK: - Overlay
+    // MARK: - オーバーレイ
 
     private func updateOverlayVisibility(visible: Bool) {
         UIView.animate(withDuration: 0.2) {
@@ -343,7 +341,7 @@ final class PhotoViewerViewController: UIViewController {
         setNeedsStatusBarAppearanceUpdate()
     }
 
-    // MARK: - Save Button
+    // MARK: - 保存ボタン
 
     private func updateSaveButton(status: SaveStatus) {
         switch status {
@@ -362,7 +360,7 @@ final class PhotoViewerViewController: UIViewController {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - アクション
 
     @objc private func closeTapped() {
         dismiss(animated: true)
@@ -478,7 +476,7 @@ extension PhotoViewerViewController: UIPageViewControllerDelegate {
     ) {
         guard completed,
               let newVC = pageViewController.viewControllers?.first as? PhotoPageItemViewController else { return }
-        // Do NOT set displayedImage here — updateProperties() must see a changed image to refresh thumbnailImageView.
+        // ここで displayedImage を設定しない — updateProperties() が画像の変化を検知してサムネイルを更新するため。
         Task { await viewModel.didSwipeTo(index: newVC.index, image: newVC.loadedImage) }
     }
 }
@@ -487,7 +485,7 @@ extension PhotoViewerViewController: UIPageViewControllerDelegate {
 
 extension PhotoViewerViewController: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        // Disable page swipe when the current image is zoomed in.
+        // ズーム中はページスワイプを無効化する。
         !(currentItemVC?.isZoomed ?? false)
     }
 }

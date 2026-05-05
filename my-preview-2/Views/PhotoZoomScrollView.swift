@@ -1,11 +1,10 @@
 import UIKit
 
-/// A UIScrollView subclass that manages image display with pinch-to-zoom,
-/// aspect-fit scaling, and centered content insets.
-/// Automatically recalculates zoom when its bounds change (e.g., device rotation).
+/// ピンチズーム、アスペクトフィット拡縮、中央配置コンテンツインセットを管理するUIScrollViewサブクラス。
+/// バウンズ変更時（例: デバイス回転）に自動でズームを再計算する。
 final class PhotoZoomScrollView: UIScrollView {
 
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     private(set) var imageView: UIImageView = {
         let iv = UIImageView()
@@ -16,7 +15,7 @@ final class PhotoZoomScrollView: UIScrollView {
     private var currentImage: UIImage?
     private var lastKnownBoundsSize: CGSize = .zero
 
-    // MARK: - Init
+    // MARK: - 初期化
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -27,7 +26,7 @@ final class PhotoZoomScrollView: UIScrollView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Setup
+    // MARK: - セットアップ
 
     private func setupScrollView() {
         translatesAutoresizingMaskIntoConstraints = false
@@ -39,13 +38,13 @@ final class PhotoZoomScrollView: UIScrollView {
         addSubview(imageView)
     }
 
-    // MARK: - Layout
+    // MARK: - レイアウト
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let newSize = bounds.size
         if newSize != lastKnownBoundsSize, newSize.width > 0, newSize.height > 0 {
-            // Bounds changed (e.g. rotation): recalculate fit scale.
+            // バウンズ変更（例: 回転）: フィットスケールを再計算する。
             lastKnownBoundsSize = newSize
             if let image = currentImage {
                 resetZoom(for: image)
@@ -55,9 +54,9 @@ final class PhotoZoomScrollView: UIScrollView {
         }
     }
 
-    // MARK: - Image Display
+    // MARK: - 画像表示
 
-    /// Updates the displayed image and adjusts zoom based on orientation change.
+    /// 向きの変化に応じて表示画像を更新し、ズームを調整する。
     func display(image: UIImage, previousOrientation: ImageOrientation?) {
         currentImage = image
         imageView.image = image
@@ -69,11 +68,11 @@ final class PhotoZoomScrollView: UIScrollView {
         }
     }
 
-    // MARK: - Zoom
+    // MARK: - ズーム
 
     func resetZoom(for image: UIImage) {
-        // Must reset to zoomScale=1 before modifying imageView.frame.
-        // Setting frame while a non-identity transform is active is undefined behavior (Apple docs).
+        // imageView.frame を変更する前に zoomScale=1 にリセットする必要がある。
+        // 非恒等変換が有効な状態で frame を設定するのは未定義動作（Apple ドキュメント参照）。
         minimumZoomScale = 1.0
         maximumZoomScale = 1.0
         zoomScale = 1.0
@@ -94,7 +93,7 @@ final class PhotoZoomScrollView: UIScrollView {
         let prevMinScale = minimumZoomScale
         let zoomRatio = prevMinScale > 0 ? zoomScale / prevMinScale : 1.0
 
-        // Must reset to zoomScale=1 before modifying imageView.frame (same reason as resetZoom).
+        // imageView.frame 変更前に zoomScale=1 にリセット（resetZoom と同じ理由）。
         minimumZoomScale = 1.0
         maximumZoomScale = 1.0
         zoomScale = 1.0
@@ -106,7 +105,7 @@ final class PhotoZoomScrollView: UIScrollView {
         let scale = aspectFitScale(for: image)
         minimumZoomScale = scale
         maximumZoomScale = max(1.0, scale)
-        // Restore zoom proportional to previous fit level, clamped to valid range.
+        // 以前のフィットレベルに比例したズームを復元し、有効範囲にクランプする。
         let targetZoom = min(max(scale * zoomRatio, scale), max(1.0, scale))
         zoomScale = targetZoom
 
@@ -121,8 +120,8 @@ final class PhotoZoomScrollView: UIScrollView {
     }
 
     private func centerImageView() {
-        // Use contentInset for centering — never modify imageView.frame directly while UIScrollView
-        // has a zoom transform applied (doing so is undefined behavior per Apple docs).
+        // 中央揃えには contentInset を使う — UIScrollViewにズーム変換が適用された状態で
+        // imageView.frame を直接変更してはいけない（Apple ドキュメントで未定義動作とされている）。
         let boundsSize = bounds.size
         let contentSize = self.contentSize
         let offsetX = max((boundsSize.width - contentSize.width) / 2, 0)
@@ -131,7 +130,7 @@ final class PhotoZoomScrollView: UIScrollView {
     }
 
     private func clampContentOffset() {
-        // Account for contentInset when clamping (inset shifts the valid offset range).
+        // クランプ時に contentInset を考慮する（インセットは有効オフセット範囲をシフトする）。
         let inset = contentInset
         let minX = -inset.left
         let minY = -inset.top

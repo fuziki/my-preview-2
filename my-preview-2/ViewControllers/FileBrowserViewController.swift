@@ -40,15 +40,30 @@ final class FileBrowserViewController: UIViewController {
 
     // MARK: - Properties
 
-    private let viewModel = FileBrowserViewModel()
+    private let viewModel: FileBrowserViewModel
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
     private var lastKnownHasFolder: Bool = false
 
     private var viewMode: ViewMode = UserDefaults.standard.fileBrowserViewMode
 
+    // Services shared across all photo viewer sessions (SavedDateStore persists dates between opens)
+    private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
+    private lazy var photoViewerServices = PhotoViewerServices.production(savedDateStore: savedDateStore)
+
     // Cell registrations — initialised in configureDataSource()
     private var listCellRegistration: UICollectionView.CellRegistration<UICollectionViewListCell, URL>!
     private var gridCellRegistration: UICollectionView.CellRegistration<ThumbnailCell, URL>!
+
+    // MARK: - Init
+
+    init(fileSystemService: any FileSystemServiceProtocol) {
+        viewModel = FileBrowserViewModel(fileSystemService: fileSystemService)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     // MARK: - Date Formatters
 
@@ -457,7 +472,7 @@ extension FileBrowserViewController: UICollectionViewDelegate {
         let allURLs = viewModel.items.map(\.url)
 
         let input = PhotoViewerInput(initialURL: selectedURL, allURLs: allURLs)
-        let photoViewer = PhotoViewerViewController(input: input)
+        let photoViewer = PhotoViewerViewController(input: input, services: photoViewerServices)
         photoViewer.modalPresentationStyle = .fullScreen
         present(photoViewer, animated: true)
     }
