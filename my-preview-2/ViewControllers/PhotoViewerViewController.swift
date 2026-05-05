@@ -31,6 +31,20 @@ final class PhotoViewerViewController: UIViewController {
     private let prevButtonView = GlassButtonView.circle(systemImageName: "chevron.left")
     private let nextButtonView = GlassButtonView.circle(systemImageName: "chevron.right")
 
+    /// ガラスボタンの前面に重ねる透明タッチ領域（88×88）。
+    /// GlassButtonViewは視覚のみ担当し、タップ・長押しはこちらで検出する。
+    private let prevHitAreaButton: UIButton = {
+        let button = UIButton(type: .custom)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+
+    private let nextHitAreaButton: UIButton = {
+        let button = UIButton(type: .custom)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+
     private let fileNameBlur: UIVisualEffectView = {
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
         blur.translatesAutoresizingMaskIntoConstraints = false
@@ -156,8 +170,10 @@ final class PhotoViewerViewController: UIViewController {
         exifLabel.isHidden = exifParts.isEmpty
         prevButtonView.button.isEnabled = viewModel.canGoPrevious
         prevButtonView.button.tintColor = viewModel.canGoPrevious ? .white : .systemGray
+        prevHitAreaButton.isEnabled = viewModel.canGoPrevious
         nextButtonView.button.isEnabled = viewModel.canGoNext
         nextButtonView.button.tintColor = viewModel.canGoNext ? .white : .systemGray
+        nextHitAreaButton.isEnabled = viewModel.canGoNext
         updateSaveButton(status: viewModel.saveStatus)
         if let date = viewModel.lastSavedDate {
             lastSavedDateLabel.text = "最終保存: " + Self.savedDateFormatter.string(from: date)
@@ -300,21 +316,42 @@ final class PhotoViewerViewController: UIViewController {
             lastSavedDateLabel.topAnchor.constraint(equalTo: saveButtonView.bottomAnchor, constant: 4),
             lastSavedDateLabel.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
         ])
+
+        // 前へタッチ領域: ガラスボタンより広い四角形（88×88）。ガラスボタンの上に重ねて前面に配置する。
+        // leadingをそろえることで、タッチ領域がガラスボタンの右・上方向に広がる。
+        view.addSubview(prevHitAreaButton)
+        NSLayoutConstraint.activate([
+            prevHitAreaButton.widthAnchor.constraint(equalToConstant: 88),
+            prevHitAreaButton.heightAnchor.constraint(equalToConstant: 88),
+            prevHitAreaButton.bottomAnchor.constraint(equalTo: prevButtonView.bottomAnchor),
+            prevHitAreaButton.leadingAnchor.constraint(equalTo: prevButtonView.leadingAnchor),
+        ])
+
+        // 次へタッチ領域: ガラスボタンより広い四角形（88×88）。ガラスボタンの上に重ねて前面に配置する。
+        // trailingをそろえることで、タッチ領域がガラスボタンの左・上方向に広がる。
+        view.addSubview(nextHitAreaButton)
+        NSLayoutConstraint.activate([
+            nextHitAreaButton.widthAnchor.constraint(equalToConstant: 88),
+            nextHitAreaButton.heightAnchor.constraint(equalToConstant: 88),
+            nextHitAreaButton.bottomAnchor.constraint(equalTo: nextButtonView.bottomAnchor),
+            nextHitAreaButton.trailingAnchor.constraint(equalTo: nextButtonView.trailingAnchor),
+        ])
     }
 
     private func setupActions() {
         closeButtonView.button.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        prevButtonView.button.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
-        nextButtonView.button.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
+        // タップ・長押しはガラスボタンの前面にある広いタッチ領域ボタンで検出する。
+        prevHitAreaButton.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
+        nextHitAreaButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
         saveButtonView.button.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
 
         let prevLongPress = UILongPressGestureRecognizer(target: self, action: #selector(prevLongPressed(_:)))
         prevLongPress.minimumPressDuration = 1.0
-        prevButtonView.button.addGestureRecognizer(prevLongPress)
+        prevHitAreaButton.addGestureRecognizer(prevLongPress)
 
         let nextLongPress = UILongPressGestureRecognizer(target: self, action: #selector(nextLongPressed(_:)))
         nextLongPress.minimumPressDuration = 1.0
-        nextButtonView.button.addGestureRecognizer(nextLongPress)
+        nextHitAreaButton.addGestureRecognizer(nextLongPress)
 
         // UIKitが無効時に保存ボタンを自動的に暗くするのを防ぐ。
         // ガラス背景では約30%の不透明度の白テキストがほぼ見えなくなるため。
@@ -333,6 +370,9 @@ final class PhotoViewerViewController: UIViewController {
             self.closeButtonView.alpha = alpha
             self.prevButtonView.alpha = alpha
             self.nextButtonView.alpha = alpha
+            // alpha=0 のとき UIKit がタッチを無効化するため、オーバーレイ非表示中は操作不可になる。
+            self.prevHitAreaButton.alpha = alpha
+            self.nextHitAreaButton.alpha = alpha
             self.fileNameBlur.alpha = alpha
             self.thumbnailImageView.alpha = alpha
             self.saveButtonView.alpha = alpha
