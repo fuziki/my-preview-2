@@ -158,6 +158,44 @@ final class PhotoViewerViewController: UIViewController {
         super.viewDidAppear(animated)
         // ズームトランジションのスワイプ閉じ制御のため、プレゼンテーションコントローラのデリゲートを設定する
         presentationController?.delegate = self
+        disableEdgePanDismiss()
+    }
+
+    /// ズームトランジションの左端スワイプdismissを無効化する。
+    /// UIPageViewControllerの水平スワイプナビゲーションと競合するため無効にする。
+    ///
+    /// iOS 18のズームトランジションはプライベートクラスのジェスチャーをviewまたはその親ビューにアタッチする。
+    /// isEnabled = false はシステムに上書きされることがあるため、delegateを差し替えて
+    /// gestureRecognizerShouldBegin で false を返す方式を使う。
+    /// viewDidAppear時点では未アタッチのことがあるため、最大5回リトライする。
+    private func disableEdgePanDismiss() {
+        // ズームトランジションの左端エッジパンdismissジェスチャーのPrivateクラス名
+        let targetClassName = "_UIParallaxTransitionPanGestureRecognizer"
+        Task { @MainActor [weak self] in
+            for _ in 0..<5 {
+                guard let self else { return }
+                if let gesture = findGestureInHierarchy(named: targetClassName, from: view) {
+                    // isEnabled = false はシステムに再有効化される場合があるため、
+                    // delegate を差し替えて gestureRecognizerShouldBegin で制御する
+                    gesture.delegate = self
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+        }
+    }
+
+    /// 指定クラス名のジェスチャーをviewから親ビューへ遡って探索する。
+    private func findGestureInHierarchy(named className: String, from view: UIView) -> UIGestureRecognizer? {
+        if let found = view.gestureRecognizers?.first(where: {
+            String(describing: type(of: $0)) == className
+        }) {
+            return found
+        }
+        if let superview = view.superview {
+            return findGestureInHierarchy(named: className, from: superview)
+        }
+        return nil
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -544,8 +582,14 @@ extension PhotoViewerViewController: UIPageViewControllerDelegate {
 
 extension PhotoViewerViewController: UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        // ズームトランジションの左端エッジパンdismissを常に無効化する。
+        // isEnabled = false はシステムに再有効化されることがあるため、
+        // delegate 経由で shouldBegin を false にする方式を使う。
+        if String(describing: type(of: gestureRecognizer)) == "_UIParallaxTransitionPanGestureRecognizer" {
+            return false
+        }
         // ズーム中はページスワイプを無効化する。
-        !(currentItemVC?.isZoomed ?? false)
+        return !(currentItemVC?.isZoomed ?? false)
     }
 }
 
