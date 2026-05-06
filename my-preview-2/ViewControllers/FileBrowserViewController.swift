@@ -19,10 +19,16 @@ private enum ViewMode: String {
 
 private extension UserDefaults {
     private static let viewModeKey = "FileBrowser.viewMode"
+    private static let lastViewedFileNameKey = "FileBrowser.lastViewedFileName"
 
     var fileBrowserViewMode: ViewMode {
         get { ViewMode(rawValue: string(forKey: Self.viewModeKey) ?? "") ?? .list }
         set { set(newValue.rawValue, forKey: Self.viewModeKey) }
+    }
+
+    var fileBrowserLastViewedFileName: String? {
+        get { string(forKey: Self.lastViewedFileNameKey) }
+        set { set(newValue, forKey: Self.lastViewedFileNameKey) }
     }
 }
 
@@ -411,6 +417,7 @@ final class FileBrowserViewController: UIViewController {
                 let hasFolderChanged = hasFolder != self.lastKnownHasFolder
                 self.lastKnownHasFolder = hasFolder
                 self.applySnapshot()
+                self.restoreLastViewedItemIfNeeded()
                 self.updateEmptyState()
                 if hasFolderChanged {
                     self.animateFolderButton(hasFolder: hasFolder)
@@ -418,6 +425,15 @@ final class FileBrowserViewController: UIViewController {
                 self.startObservingItems()
             }
         }
+    }
+
+    /// UserDefaultsに保存されたファイル名からlastViewedItemIDを復元する。
+    /// すでに設定済みの場合、またはアイテムが空の場合は何もしない。
+    private func restoreLastViewedItemIfNeeded() {
+        guard lastViewedItemID == nil,
+              let fileName = UserDefaults.standard.fileBrowserLastViewedFileName,
+              let item = viewModel.items.first(where: { $0.name == fileName }) else { return }
+        lastViewedItemID = item.id
     }
 
     // MARK: - UI更新
@@ -574,6 +590,8 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             let newItemID = self.viewModel.items.first(where: { $0.url == currentURL })?.id
             let oldItemID = self.lastViewedItemID
             self.lastViewedItemID = newItemID
+            // ファイル名をUserDefaultsに永続化する（起動をまたいで最後に表示を復元するため）
+            UserDefaults.standard.fileBrowserLastViewedFileName = currentURL.lastPathComponent
 
             // 変化のあったセルのみを再設定する（不要な再描画を避けるため）
             var snapshot = self.dataSource.snapshot()
