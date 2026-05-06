@@ -1,21 +1,23 @@
 import UIKit
 
-protocol PhotoPageItemDelegate: AnyObject {
-    func pageItemDidTap(_ vc: PhotoPageItemViewController)
-    func pageItemDidDoubleTap(_ vc: PhotoPageItemViewController, at locationInImage: CGPoint)
+protocol PhotoPageItemCellDelegate: AnyObject {
+    func pageItemCellDidTap(_ cell: PhotoPageItemCell)
+    func pageItemCellDidDoubleTap(_ cell: PhotoPageItemCell, at locationInImage: CGPoint)
 }
 
-/// UIPageViewControllerのスワイプナビゲーション内で使用される、1枚の写真を表示するページ。
+/// UICollectionViewのスワイプナビゲーション内で使用される、1枚の写真を表示するセル。
 /// PhotoZoomScrollViewを持ち、URLから非同期で画像を読み込む。
-final class PhotoPageItemViewController: UIViewController {
+final class PhotoPageItemCell: UICollectionViewCell {
+
+    static let reuseIdentifier = "PhotoPageItemCell"
 
     // MARK: - プロパティ
 
-    var index: Int
-    let url: URL
+    var index: Int = 0
     private(set) var loadedImage: UIImage?
+    private var loadTask: Task<Void, Never>?
 
-    weak var delegate: PhotoPageItemDelegate?
+    weak var delegate: PhotoPageItemCellDelegate?
 
     let zoomScrollView = PhotoZoomScrollView()
 
@@ -25,35 +27,26 @@ final class PhotoPageItemViewController: UIViewController {
 
     // MARK: - 初期化
 
-    init(index: Int, url: URL) {
-        self.index = index
-        self.url = url
-        super.init(nibName: nil, bundle: nil)
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentView.backgroundColor = .black
+        setupScrollView()
+        setupGestures()
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - ライフサイクル
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .black
-        setupScrollView()
-        setupGestures()
-        Task { await loadImage() }
-    }
-
     // MARK: - セットアップ
 
     private func setupScrollView() {
-        view.addSubview(zoomScrollView)
+        contentView.addSubview(zoomScrollView)
         NSLayoutConstraint.activate([
-            zoomScrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            zoomScrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            zoomScrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            zoomScrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            zoomScrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            zoomScrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            zoomScrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            zoomScrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
     }
 
@@ -69,6 +62,15 @@ final class PhotoPageItemViewController: UIViewController {
         zoomScrollView.addGestureRecognizer(doubleTap)
     }
 
+    // MARK: - 設定
+
+    func configure(index: Int, url: URL) {
+        self.index = index
+        loadedImage = nil
+        loadTask?.cancel()
+        loadTask = Task { await loadImage(from: url) }
+    }
+
     // MARK: - 画像表示
 
     /// 向きが一致する場合はズームレベルを維持したまま表示画像を差し替える。
@@ -77,22 +79,32 @@ final class PhotoPageItemViewController: UIViewController {
         zoomScrollView.display(image: image, previousOrientation: previousOrientation)
     }
 
+    // MARK: - 再利用
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        loadTask?.cancel()
+        loadTask = nil
+        loadedImage = nil
+        zoomScrollView.imageView.image = nil
+    }
+
     // MARK: - プライベート
 
-    private func loadImage() async {
-        let url = self.url
+    private func loadImage(from url: URL) async {
         let data = await Task.detached(priority: .userInitiated) {
             try? Data(contentsOf: url)
         }.value
         guard let data, let image = UIImage(data: data) else { return }
+        guard !Task.isCancelled else { return }
         display(image: image)
     }
 
     @objc private func handleSingleTap() {
-        delegate?.pageItemDidTap(self)
+        delegate?.pageItemCellDidTap(self)
     }
 
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
-        delegate?.pageItemDidDoubleTap(self, at: gesture.location(in: zoomScrollView.imageView))
+        delegate?.pageItemCellDidDoubleTap(self, at: gesture.location(in: zoomScrollView.imageView))
     }
 }
