@@ -250,15 +250,34 @@ final class FileBrowserViewController: UIViewController {
             let section = snapshot.sectionIdentifiers[indexPath.section]
             guard case .date(let dateKey) = section else { return }
 
-            // 全セクションをコンテキストメニューのアクションとして生成する
-            let menuActions = snapshot.sectionIdentifiers.compactMap { sec -> UIAction? in
-                guard case .date(let key) = sec else { return nil }
-                return UIAction(title: self.sectionTitle(for: key)) { [weak self] _ in
-                    self?.jumpToSection(sec)
+            // menuProvider クロージャはメニュー表示のたびに呼ばれる（UIDeferredMenuElement.uncached による）
+            headerView.configure(title: self.sectionTitle(for: dateKey)) { [weak self] in
+                guard let self else { return [] }
+                let snapshot = self.dataSource.snapshot()
+                var actions: [UIMenuElement] = []
+
+                // 「最後に表示」アクションをメニュー先頭に追加する
+                if let lastViewedID = self.lastViewedItemID,
+                   snapshot.itemIdentifiers.contains(lastViewedID) {
+                    let action = UIAction(
+                        title: "最後に表示",
+                        image: UIImage(systemName: "eye")
+                    ) { [weak self] _ in
+                        self?.jumpToLastViewed()
+                    }
+                    actions.append(action)
                 }
+
+                // 全セクションをジャンプアクションとして追加する
+                let sectionActions = snapshot.sectionIdentifiers.compactMap { sec -> UIAction? in
+                    guard case .date(let key) = sec else { return nil }
+                    return UIAction(title: self.sectionTitle(for: key)) { [weak self] _ in
+                        self?.jumpToSection(sec)
+                    }
+                }
+                actions.append(contentsOf: sectionActions)
+                return actions
             }
-            let menu = UIMenu(title: "", children: menuActions)
-            headerView.configure(title: self.sectionTitle(for: dateKey), menu: menu)
         }
 
         dataSource = UICollectionViewDiffableDataSource<Section, FileItem.ID>(
@@ -500,6 +519,12 @@ final class FileBrowserViewController: UIViewController {
         )
     }
 
+    private func jumpToLastViewed() {
+        guard let lastViewedID = lastViewedItemID,
+              let indexPath = dataSource.indexPath(for: lastViewedID) else { return }
+        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
+    }
+
     // MARK: - ズームトランジション用ヘルパー
 
     /// 指定URLに対応するセルのビューを返す。
@@ -653,8 +678,13 @@ private final class SectionHeaderView: UICollectionReusableView {
         fatalError()
     }
 
-    func configure(title: String, menu: UIMenu) {
+    func configure(title: String, menuProvider: @escaping () -> [UIMenuElement]) {
         label.text = title
-        menuButton.menu = menu
+        // UIDeferredMenuElement.uncached を使うことで、メニューが表示されるたびに
+        // menuProvider が呼ばれ、常に最新の内容が反映される
+        let deferred = UIDeferredMenuElement.uncached { completion in
+            completion(menuProvider())
+        }
+        menuButton.menu = UIMenu(title: "", children: [deferred])
     }
 }
