@@ -8,7 +8,7 @@ private enum ViewMode: String {
 
     var toggled: ViewMode { self == .list ? .grid : .list }
 
-    /// Icon shown on the toggle button (depicts what the *next* mode will be)
+    /// トグルボタンに表示するアイコン（次のモードを示す）
     var toggleButtonImage: UIImage? {
         switch self {
         case .list: return UIImage(systemName: "square.grid.2x2")
@@ -29,7 +29,7 @@ private extension UserDefaults {
 // MARK: - Section
 
 nonisolated enum Section: Hashable, Sendable {
-    case date(String) // "yyyy-MM-dd" key used for sorting
+    case date(String) // ソートキーとして使用する "yyyy-MM-dd" 形式の文字列
 }
 
 // MARK: - FileBrowserViewController
@@ -38,7 +38,7 @@ final class FileBrowserViewController: UIViewController {
 
     private let folderButtonSize: CGFloat = 56
 
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     private let viewModel: FileBrowserViewModel
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
@@ -46,15 +46,15 @@ final class FileBrowserViewController: UIViewController {
 
     private var viewMode: ViewMode = UserDefaults.standard.fileBrowserViewMode
 
-    // Services shared across all photo viewer sessions (SavedDateStore persists dates between opens)
+    // PhotoViewerServicesをすべてのフォトビューア間で共有する（SavedDateStoreは写真閲覧をまたいで保存日時を保持する）
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
     private lazy var photoViewerServices = PhotoViewerServices.production(savedDateStore: savedDateStore)
 
-    // Cell registrations — initialised in configureDataSource()
+    // セル登録 — configureDataSource() で初期化する
     private var listCellRegistration: UICollectionView.CellRegistration<UICollectionViewListCell, URL>!
     private var gridCellRegistration: UICollectionView.CellRegistration<ThumbnailCell, URL>!
 
-    // MARK: - Init
+    // MARK: - 初期化
 
     init(fileSystemService: any FileSystemServiceProtocol) {
         viewModel = FileBrowserViewModel(fileSystemService: fileSystemService)
@@ -65,7 +65,7 @@ final class FileBrowserViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: - Date Formatters
+    // MARK: - 日付フォーマッタ
 
     private lazy var sectionKeyFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -82,12 +82,12 @@ final class FileBrowserViewController: UIViewController {
         return f
     }()
 
-    // MARK: - Folder Button Constraints
+    // MARK: - フォルダボタン制約
 
     private var folderButtonTrailingConstraint: NSLayoutConstraint!
     private var folderButtonWidthConstraint: NSLayoutConstraint!
 
-    // MARK: - Views
+    // MARK: - ビュー
 
     private lazy var collectionView: UICollectionView = {
         let cv = UICollectionView(frame: .zero, collectionViewLayout: makeLayout(for: viewMode))
@@ -126,7 +126,7 @@ final class FileBrowserViewController: UIViewController {
         return button
     }()
 
-    // MARK: - Lifecycle
+    // MARK: - ライフサイクル
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -139,12 +139,12 @@ final class FileBrowserViewController: UIViewController {
         startObservingItems()
     }
 
-    // MARK: - Setup
+    // MARK: - セットアップ
 
     private func setupViews() {
         view.backgroundColor = .systemBackground
 
-        // Collection view (edge-to-edge)
+        // コレクションビュー（全面表示）
         view.addSubview(collectionView)
         NSLayoutConstraint.activate([
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -153,7 +153,7 @@ final class FileBrowserViewController: UIViewController {
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        // Empty state view
+        // 空状態ビュー
         view.addSubview(emptyStateView)
         NSLayoutConstraint.activate([
             emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -162,7 +162,7 @@ final class FileBrowserViewController: UIViewController {
             emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        // Folder button with switchable constraints
+        // 切り替え可能な制約付きフォルダボタン
         view.addSubview(folderButton)
 
         let trailingConstraint = folderButton.trailingAnchor.constraint(
@@ -181,7 +181,7 @@ final class FileBrowserViewController: UIViewController {
         folderButtonTrailingConstraint = trailingConstraint
         folderButtonWidthConstraint = widthConstraint
 
-        // Jump to bottom button (right side, same vertical position as folderButton)
+        // 下部へジャンプボタン（右側、folderButtonと同じ垂直位置）
         view.addSubview(jumpToBottomButton)
         NSLayoutConstraint.activate([
             jumpToBottomButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
@@ -211,6 +211,7 @@ final class FileBrowserViewController: UIViewController {
             cell.contentConfiguration = config
         }
 
+        // サムネイルのピクセルサイズを画面解像度から算出する
         let thumbnailPixelSize = if let cellWidth = view.window?.windowScene?.screen.bounds.width,
            let scale = view.window?.windowScene?.screen.scale {
             min(400, Int(cellWidth * scale))
@@ -229,9 +230,17 @@ final class FileBrowserViewController: UIViewController {
             let snapshot = self.dataSource.snapshot()
             guard indexPath.section < snapshot.sectionIdentifiers.count else { return }
             let section = snapshot.sectionIdentifiers[indexPath.section]
-            if case .date(let dateKey) = section {
-                headerView.configure(title: self.sectionTitle(for: dateKey))
+            guard case .date(let dateKey) = section else { return }
+
+            // 全セクションをコンテキストメニューのアクションとして生成する
+            let menuActions = snapshot.sectionIdentifiers.compactMap { sec -> UIAction? in
+                guard case .date(let key) = sec else { return nil }
+                return UIAction(title: self.sectionTitle(for: key)) { [weak self] _ in
+                    self?.jumpToSection(sec)
+                }
             }
+            let menu = UIMenu(title: "", children: menuActions)
+            headerView.configure(title: self.sectionTitle(for: dateKey), menu: menu)
         }
 
         dataSource = UICollectionViewDiffableDataSource<Section, FileItem.ID>(
@@ -256,7 +265,7 @@ final class FileBrowserViewController: UIViewController {
     }
 
     private func applySnapshot() {
-        // Group items by date key while preserving sorted order
+        // ソート順を維持しながら日付キーでアイテムをグループ化する
         var dateMap: [String: [FileItem.ID]] = [:]
         var dateOrder: [String] = []
 
@@ -279,7 +288,7 @@ final class FileBrowserViewController: UIViewController {
         dataSource.apply(snapshot, animatingDifferences: true)
     }
 
-    // Format "yyyy-MM-dd" key into localized Japanese date string
+    // "yyyy-MM-dd" キーをローカライズされた日本語日付文字列に変換する
     private func sectionTitle(for dateKey: String) -> String {
         if let date = sectionKeyFormatter.date(from: dateKey) {
             return sectionDisplayFormatter.string(from: date)
@@ -287,7 +296,7 @@ final class FileBrowserViewController: UIViewController {
         return dateKey
     }
 
-    // MARK: - Layout Factories
+    // MARK: - レイアウトファクトリ
 
     private func makeLayout(for mode: ViewMode) -> UICollectionViewLayout {
         mode == .grid ? makeGridLayout() : makeListLayout()
@@ -351,7 +360,7 @@ final class FileBrowserViewController: UIViewController {
         }
     }
 
-    // MARK: - Observation
+    // MARK: - 監視
 
     private func startObservingItems() {
         withObservationTracking {
@@ -374,7 +383,7 @@ final class FileBrowserViewController: UIViewController {
         }
     }
 
-    // MARK: - UI Updates
+    // MARK: - UI更新
 
     private func updateEmptyState() {
         let hasFolder = viewModel.hasFolder
@@ -427,7 +436,7 @@ final class FileBrowserViewController: UIViewController {
         updateEmptyState()
     }
 
-    // MARK: - Actions
+    // MARK: - アクション
 
     @objc private func openFolderPicker() {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
@@ -448,16 +457,29 @@ final class FileBrowserViewController: UIViewController {
         viewMode = viewMode.toggled
         UserDefaults.standard.fileBrowserViewMode = viewMode
 
-        // Update button icon
+        // ボタンアイコンを更新する
         navigationItem.rightBarButtonItem?.image = viewMode.toggleButtonImage
 
-        // Switch layout (no animation to avoid cell-type mismatch glitch)
+        // レイアウトを切り替える（セルタイプ不一致のグリッチを避けるためアニメーションなし）
         collectionView.setCollectionViewLayout(makeLayout(for: viewMode), animated: false)
 
-        // Force all cells to be recreated with the new registration
+        // すべてのセルを新しい登録で再作成する
         var snapshot = dataSource.snapshot()
         snapshot.reloadItems(snapshot.itemIdentifiers)
         dataSource.apply(snapshot, animatingDifferences: false)
+    }
+
+    // MARK: - セクションジャンプ
+
+    private func jumpToSection(_ section: Section) {
+        let snapshot = dataSource.snapshot()
+        guard let sectionIndex = snapshot.sectionIdentifiers.firstIndex(of: section) else { return }
+        guard collectionView.numberOfItems(inSection: sectionIndex) > 0 else { return }
+        collectionView.scrollToItem(
+            at: IndexPath(item: 0, section: sectionIndex),
+            at: .top,
+            animated: true
+        )
     }
 }
 
@@ -508,12 +530,31 @@ private final class SectionHeaderView: UICollectionReusableView {
         return l
     }()
 
+    // 日付ジャンプが可能であることを示すシェブロンアイコン
+    private let chevronImageView: UIImageView = {
+        let iv = UIImageView(image: UIImage(systemName: "chevron.up.chevron.down"))
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.tintColor = .secondaryLabel
+        iv.contentMode = .scaleAspectFit
+        return iv
+    }()
+
+    // ガラスビューの前面に重ねる透明タッチ領域。タップ時にコンテキストメニューを表示する。
+    private let menuButton: UIButton = {
+        let button = UIButton(type: .custom)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.showsMenuAsPrimaryAction = true
+        return button
+    }()
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
 
         addSubview(glassView)
         glassView.contentView.addSubview(label)
+        glassView.contentView.addSubview(chevronImageView)
+        addSubview(menuButton)  // ガラスビューの前面に配置
 
         NSLayoutConstraint.activate([
             glassView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
@@ -521,10 +562,21 @@ private final class SectionHeaderView: UICollectionReusableView {
             glassView.heightAnchor.constraint(equalToConstant: 32),
 
             label.leadingAnchor.constraint(equalTo: glassView.contentView.leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: glassView.contentView.trailingAnchor, constant: -12),
             label.centerYAnchor.constraint(equalTo: glassView.contentView.centerYAnchor),
+            label.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -6),
 
-            glassView.trailingAnchor.constraint(equalTo: label.trailingAnchor, constant: 12),
+            chevronImageView.centerYAnchor.constraint(equalTo: glassView.contentView.centerYAnchor),
+            chevronImageView.trailingAnchor.constraint(equalTo: glassView.contentView.trailingAnchor, constant: -10),
+            chevronImageView.widthAnchor.constraint(equalToConstant: 12),
+            chevronImageView.heightAnchor.constraint(equalToConstant: 12),
+
+            glassView.trailingAnchor.constraint(equalTo: chevronImageView.trailingAnchor, constant: 10),
+
+            // menuButtonをglassViewと同じ範囲に重ねる
+            menuButton.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
+            menuButton.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
+            menuButton.topAnchor.constraint(equalTo: glassView.topAnchor),
+            menuButton.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
         ])
     }
 
@@ -532,7 +584,8 @@ private final class SectionHeaderView: UICollectionReusableView {
         fatalError()
     }
 
-    func configure(title: String) {
+    func configure(title: String, menu: UIMenu) {
         label.text = title
+        menuButton.menu = menu
     }
 }

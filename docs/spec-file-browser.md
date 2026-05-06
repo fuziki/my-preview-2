@@ -169,6 +169,41 @@ UINavigationController
 
 ---
 
+## セクションヘッダー（SectionHeaderView）
+
+### 外観
+
+- `UIGlassEffect` を使用したガラス形態素のピルバッジ（高さ 32pt、角丸 16pt）を左端に配置する。
+- ガラスバッジ内にはローカライズされた日付テキストと `chevron.up.chevron.down` アイコンを横並びで表示する。
+- ヘッダーはスクロール中も画面上部に固定される（`pinToVisibleBounds = true`）。
+
+### コンテキストメニュー（日付ジャンプ）
+
+- ヘッダーをタップするとコンテキストメニューが開く。
+- メニューには現在のデータソースにある全セクションの日付が一覧表示される。
+- 日付を選択すると対象セクションの先頭アイテムへスクロールする。
+
+#### 実装方針
+
+- `SectionHeaderView` 内のガラスビューの前面に透明な `UIButton(type: .custom)` を重ねる。
+- `showsMenuAsPrimaryAction = true` を設定し、タップ時にコンテキストメニューを表示する。
+- ヘッダー登録クロージャ（`configureDataSource` 内）でスナップショットの全セクションから `UIAction` を生成し `UIMenu` を組み立てて渡す。
+- セクションへのジャンプは `scrollToItem(at:IndexPath(item:0, section:), at:.top, animated:true)` で行う。
+
+```swift
+// ヘッダー登録クロージャでのメニュー生成
+let menuActions = snapshot.sectionIdentifiers.compactMap { sec -> UIAction? in
+    guard case .date(let key) = sec else { return nil }
+    return UIAction(title: sectionTitle(for: key)) { [weak self] _ in
+        self?.jumpToSection(sec)
+    }
+}
+let menu = UIMenu(title: "", children: menuActions)
+headerView.configure(title: sectionTitle(for: dateKey), menu: menu)
+```
+
+---
+
 ## ファイル読み込み処理（ViewModel の `loadItems() async`）
 
 ```swift
