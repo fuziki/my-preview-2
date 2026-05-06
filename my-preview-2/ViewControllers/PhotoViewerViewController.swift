@@ -7,6 +7,11 @@ final class PhotoViewerViewController: UIViewController {
     private let viewModel: PhotoViewerViewModel
     private var displayedImage: UIImage?
     private var autoNavigationTask: Task<Void, Never>?
+/// 現在表示中のURL（FileBrowserがズーム戻り先セルを特定するために使用する）
+    var currentURL: URL { viewModel.currentURL }
+
+    /// 閉じる時に呼ばれるコールバック（最後に表示していたURLを通知する）
+    var onDismiss: ((URL) -> Void)?
 
     // MARK: - ページビューコントローラー
 
@@ -147,6 +152,20 @@ final class PhotoViewerViewController: UIViewController {
         setupOverlay()
         setupActions()
         Task { await viewModel.loadInitial() }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // ズームトランジションのスワイプ閉じ制御のため、プレゼンテーションコントローラのデリゲートを設定する
+        presentationController?.delegate = self
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isBeingDismissed {
+            // 閉じる時点での表示URLをFileBrowserへ通知する
+            onDismiss?(viewModel.currentURL)
+        }
     }
 
     // MARK: - ステータスバー
@@ -528,4 +547,14 @@ extension PhotoViewerViewController: UIGestureRecognizerDelegate {
         // ズーム中はページスワイプを無効化する。
         !(currentItemVC?.isZoomed ?? false)
     }
+}
+
+// MARK: - UIAdaptivePresentationControllerDelegate
+
+extension PhotoViewerViewController: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
+        // 画像をズーム中はスワイプで閉じる操作を無効にする
+        !(currentItemVC?.isZoomed ?? false)
+    }
+
 }

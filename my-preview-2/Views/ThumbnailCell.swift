@@ -51,17 +51,52 @@ final class ThumbnailCell: UICollectionViewCell {
         return iv
     }()
 
+    // 「最後に表示」バッジのラベル
+    private let lastViewedLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "最後に表示"
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 9, weight: .medium)
+        label.textAlignment = .center
+        label.numberOfLines = 1
+        return label
+    }()
+
+    // 「最後に表示」バッジの背景（半透明の黒帯）
+    private let lastViewedBadge: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.backgroundColor = UIColor.black.withAlphaComponent(0.65)
+        v.isHidden = true
+        return v
+    }()
+
     private var loadingTask: Task<Void, Never>?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .black
+
         contentView.addSubview(imageView)
+        contentView.addSubview(lastViewedBadge)
+        lastViewedBadge.addSubview(lastViewedLabel)
+
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+
+            // バッジは下部全幅に配置する
+            lastViewedBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            lastViewedBadge.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            lastViewedBadge.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+
+            lastViewedLabel.topAnchor.constraint(equalTo: lastViewedBadge.topAnchor, constant: 3),
+            lastViewedLabel.bottomAnchor.constraint(equalTo: lastViewedBadge.bottomAnchor, constant: -3),
+            lastViewedLabel.leadingAnchor.constraint(equalTo: lastViewedBadge.leadingAnchor, constant: 4),
+            lastViewedLabel.trailingAnchor.constraint(equalTo: lastViewedBadge.trailingAnchor, constant: -4),
         ])
     }
 
@@ -72,6 +107,7 @@ final class ThumbnailCell: UICollectionViewCell {
         loadingTask?.cancel()
         loadingTask = nil
         imageView.image = nil
+        lastViewedBadge.isHidden = true
     }
 
     func configure(with url: URL, thumbnailPixelSize: Int) {
@@ -93,5 +129,10 @@ final class ThumbnailCell: UICollectionViewCell {
             }
             imageView.image = image
         }
+    }
+
+    /// 「最後に表示」バッジの表示状態を設定する
+    func setLastViewed(_ show: Bool) {
+        lastViewedBadge.isHidden = !show
     }
 }

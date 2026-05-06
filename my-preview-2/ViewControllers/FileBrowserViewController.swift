@@ -50,6 +50,9 @@ final class FileBrowserViewController: UIViewController {
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
     private lazy var photoViewerServices = PhotoViewerServices.production(savedDateStore: savedDateStore)
 
+    /// 最後に閲覧していたアイテムのID（「最後に表示」バッジの表示に使用する）
+    private var lastViewedItemID: FileItem.ID?
+
     // セル登録 — configureDataSource() で初期化する
     private var listCellRegistration: UICollectionView.CellRegistration<UICollectionViewListCell, URL>!
     private var gridCellRegistration: UICollectionView.CellRegistration<ThumbnailCell, URL>!
@@ -201,13 +204,22 @@ final class FileBrowserViewController: UIViewController {
     }
 
     private func configureDataSource() {
-        listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, URL> { cell, _, url in
+        listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, URL> { [weak self] cell, _, url in
             var config = cell.defaultContentConfiguration()
             config.image = UIImage(systemName: "photo")
             config.imageProperties.tintColor = .systemBlue
             config.text = url.lastPathComponent
             config.textProperties.lineBreakMode = .byTruncatingMiddle
             config.textProperties.numberOfLines = 1
+
+            // 最後に閲覧したアイテムにセカンダリテキストを付ける
+            let isLastViewed = self.map { s in
+                s.viewModel.items.first(where: { $0.url == url })?.id == s.lastViewedItemID
+            } ?? false
+            config.secondaryText = isLastViewed ? "最後に表示" : nil
+            config.secondaryTextProperties.color = .systemBlue
+            config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+
             cell.contentConfiguration = config
         }
 
@@ -219,8 +231,14 @@ final class FileBrowserViewController: UIViewController {
             400
         }
 
-        gridCellRegistration = UICollectionView.CellRegistration<ThumbnailCell, URL> { cell, _, url in
+        gridCellRegistration = UICollectionView.CellRegistration<ThumbnailCell, URL> { [weak self] cell, _, url in
             cell.configure(with: url, thumbnailPixelSize: thumbnailPixelSize)
+
+            // 最後に閲覧したアイテムにバッジを付ける
+            let isLastViewed = self.map { s in
+                s.viewModel.items.first(where: { $0.url == url })?.id == s.lastViewedItemID
+            } ?? false
+            cell.setLastViewed(isLastViewed)
         }
 
         let headerRegistration = UICollectionView.SupplementaryRegistration<SectionHeaderView>(
@@ -481,21 +499,72 @@ final class FileBrowserViewController: UIViewController {
             animated: true
         )
     }
+
+    // MARK: - ズームトランジション用ヘルパー
+
+    /// 指定URLに対応するセルのビューを返す。
+    /// セルが画面外の場合は先にスクロールして可視範囲に収める（閉じるアニメーションの戻り先として使用）。
+    private func cellViewForURL(_ url: URL) -> UIView? {
+        guard let item = viewModel.items.first(where: { $0.url == url }),
+              let indexPath = dataSource.indexPath(for: item.id) else { return nil }
+
+        // セルがまだ可視でない場合はスクロールして可視範囲に入れる（アニメーションなし）
+        let visiblePaths = collectionView.indexPathsForVisibleItems
+        if !visiblePaths.contains(indexPath) {
+            collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: false)
+            collectionView.layoutIfNeeded()
+        }
+
+        return collectionView.cellForItem(at: indexPath)
+    }
 }
 
 // MARK: - UICollectionViewDelegate
 
 extension FileBrowserViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        collectionView.deselectItem(at: indexPath, animated: true)
+        collectionView.deselectItem(at: indexPath, animated: false)
 
-        guard let selectedID = dataSource.itemIdentifier(for: indexPath) else { return }
-        guard let selectedURL = viewModel.items.first(where: { $0.id == selectedID })?.url else { return }
+        guard let selectedID = dataSource.itemIdentifier(for: indexPath),
+              let selectedItem = viewModel.items.first(where: { $0.id == selectedID }) else { return }
         let allURLs = viewModel.items.map(\.url)
 
-        let input = PhotoViewerInput(initialURL: selectedURL, allURLs: allURLs)
+        let input = PhotoViewerInput(initialURL: selectedItem.url, allURLs: allURLs)
         let photoViewer = PhotoViewerViewController(input: input, services: photoViewerServices)
-        photoViewer.modalPresentationStyle = .fullScreen
+
+        // ステータスバーの制御をPhotoViewerViewControllerに委譲する
+        photoViewer.modalPresentationCapturesStatusBarAppearance = true
+
+        // セルからズームイン/アウトするトランジションを設定する。
+        // sourceViewProviderは表示時と閉じる時に呼ばれる。
+        // photoViewer.currentURLは常に現在表示中のURLを返すため、両タイミングで正しいセルを指す。
+        photoViewer.preferredTransition = .zoom { [weak self, weak photoViewer] _ in
+            guard let self, let photoViewer else { return nil }
+            return self.cellViewForURL(photoViewer.currentURL)
+        }
+
+        // 閉じる時: 最後に表示したアイテムを記録してセルを更新する
+        photoViewer.onDismiss = { [weak self] currentURL in
+            guard let self else { return }
+            let newItemID = self.viewModel.items.first(where: { $0.url == currentURL })?.id
+            let oldItemID = self.lastViewedItemID
+            self.lastViewedItemID = newItemID
+
+            // 変化のあったセルのみを再設定する（不要な再描画を避けるため）
+            var snapshot = self.dataSource.snapshot()
+            var toReconfigure: [FileItem.ID] = []
+            if let old = oldItemID, snapshot.itemIdentifiers.contains(old) {
+                toReconfigure.append(old)
+            }
+            if let new = newItemID, new != oldItemID, snapshot.itemIdentifiers.contains(new) {
+                toReconfigure.append(new)
+            }
+            if !toReconfigure.isEmpty {
+                snapshot.reconfigureItems(toReconfigure)
+                self.dataSource.apply(snapshot, animatingDifferences: false)
+            }
+        }
+
         present(photoViewer, animated: true)
     }
 }
