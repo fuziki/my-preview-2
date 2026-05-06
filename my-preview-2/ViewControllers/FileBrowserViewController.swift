@@ -1,30 +1,8 @@
 import UIKit
 import UniformTypeIdentifiers
 
-// MARK: - ViewMode
-
-private enum ViewMode: String {
-    case list, grid
-
-    var toggled: ViewMode { self == .list ? .grid : .list }
-
-    /// トグルボタンに表示するアイコン（次のモードを示す）
-    var toggleButtonImage: UIImage? {
-        switch self {
-        case .list: return UIImage(systemName: "square.grid.2x2")
-        case .grid: return UIImage(systemName: "list.bullet")
-        }
-    }
-}
-
 private extension UserDefaults {
-    private static let viewModeKey = "FileBrowser.viewMode"
     private static let lastViewedFileNameKey = "FileBrowser.lastViewedFileName"
-
-    var fileBrowserViewMode: ViewMode {
-        get { ViewMode(rawValue: string(forKey: Self.viewModeKey) ?? "") ?? .list }
-        set { set(newValue.rawValue, forKey: Self.viewModeKey) }
-    }
 
     var fileBrowserLastViewedFileName: String? {
         get { string(forKey: Self.lastViewedFileNameKey) }
@@ -50,7 +28,7 @@ final class FileBrowserViewController: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
     private var lastKnownHasFolder: Bool = false
 
-    private var viewMode: ViewMode = UserDefaults.standard.fileBrowserViewMode
+    private var viewMode: ViewMode = AppSettingsService.shared.viewMode
 
     // PhotoViewerServicesをすべてのフォトビューア間で共有する（SavedDateStoreは写真閲覧をまたいで保存日時を保持する）
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
@@ -202,10 +180,10 @@ final class FileBrowserViewController: UIViewController {
 
     private func setupNavigationBar() {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
-            image: viewMode.toggleButtonImage,
+            image: UIImage(systemName: "gear"),
             style: .plain,
             target: self,
-            action: #selector(toggleViewMode)
+            action: #selector(openSettings)
         )
     }
 
@@ -506,12 +484,22 @@ final class FileBrowserViewController: UIViewController {
         collectionView.scrollToItem(at: IndexPath(item: lastItem, section: lastSection), at: .bottom, animated: true)
     }
 
-    @objc private func toggleViewMode() {
-        viewMode = viewMode.toggled
-        UserDefaults.standard.fileBrowserViewMode = viewMode
+    @objc private func openSettings() {
+        let settingsVC = SettingsViewController()
+        navigationController?.pushViewController(settingsVC, animated: true)
+    }
 
-        // ボタンアイコンを更新する
-        navigationItem.rightBarButtonItem?.image = viewMode.toggleButtonImage
+    // MARK: - 設定同期
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        syncViewModeFromSettings()
+    }
+
+    private func syncViewModeFromSettings() {
+        let newMode = AppSettingsService.shared.viewMode
+        guard newMode != viewMode else { return }
+        viewMode = newMode
 
         // レイアウトを切り替える（セルタイプ不一致のグリッチを避けるためアニメーションなし）
         collectionView.setCollectionViewLayout(makeLayout(for: viewMode), animated: false)
