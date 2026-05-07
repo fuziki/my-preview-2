@@ -4,7 +4,7 @@ import UIKit
 
 final class SettingsViewController: UIViewController {
 
-    private let settings: any AppSettingsServiceProtocol = AppSettingsService.shared
+    private let viewModel = SettingsViewModel()
 
     private lazy var tableView: UITableView = {
         let tv = UITableView(frame: .zero, style: .insetGrouped)
@@ -57,12 +57,12 @@ extension SettingsViewController: UITableViewDataSource {
             let modes: [ViewMode] = [.list, .grid]
             let mode = modes[indexPath.row]
             config.text = mode == .list ? "リスト" : "グリッド"
-            cell.accessoryType = settings.viewMode == mode ? .checkmark : .none
+            cell.accessoryType = viewModel.viewMode == mode ? .checkmark : .none
         } else {
             let formats: [SaveFormat] = [.jpeg, .jpegAndRaw]
             let format = formats[indexPath.row]
             config.text = format.displayName
-            cell.accessoryType = settings.saveFormat == format ? .checkmark : .none
+            cell.accessoryType = viewModel.saveFormat == format ? .checkmark : .none
         }
 
         cell.contentConfiguration = config
@@ -78,9 +78,9 @@ extension SettingsViewController: UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
 
         if indexPath.section == 0 {
-            settings.viewMode = [.list, .grid][indexPath.row]
+            viewModel.viewMode = [.list, .grid][indexPath.row]
         } else {
-            settings.saveFormat = [.jpeg, .jpegAndRaw][indexPath.row]
+            viewModel.saveFormat = [.jpeg, .jpegAndRaw][indexPath.row]
         }
 
         tableView.reloadSections(IndexSet(integer: indexPath.section), with: .none)

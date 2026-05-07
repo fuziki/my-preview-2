@@ -9,13 +9,20 @@ protocol PhotoLibraryServiceProtocol: AnyObject {
 }
 
 final class PhotoLibraryService: PhotoLibraryServiceProtocol {
+    private let storage: any UserDefaultsStorageProtocol
+
+    init(storage: any UserDefaultsStorageProtocol = UserDefaultsStorage.shared) {
+        self.storage = storage
+    }
+
     func save(fileURL: URL) async throws {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             throw PhotoLibraryError.unauthorized
         }
 
-        let rawURL = AppSettingsService.shared.saveFormat == .jpegAndRaw ? findRawFile(for: fileURL) : nil
+        let saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
+        let rawURL = saveFormat == .jpegAndRaw ? findRawFile(for: fileURL) : nil
 
         try await PHPhotoLibrary.shared().performChanges {
             let options = PHAssetResourceCreationOptions()

@@ -1,15 +1,6 @@
 import UIKit
 import UniformTypeIdentifiers
 
-private extension UserDefaults {
-    private static let lastViewedFileNameKey = "FileBrowser.lastViewedFileName"
-
-    var fileBrowserLastViewedFileName: String? {
-        get { string(forKey: Self.lastViewedFileNameKey) }
-        set { set(newValue, forKey: Self.lastViewedFileNameKey) }
-    }
-}
-
 // MARK: - Section
 
 nonisolated enum Section: Hashable, Sendable {
@@ -28,7 +19,8 @@ final class FileBrowserViewController: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
     private var lastKnownHasFolder: Bool = false
 
-    private var viewMode: ViewMode = AppSettingsService.shared.viewMode
+    // 最後に適用したviewModeを記録する（syncViewModeFromSettingsで変更検出に使用）
+    private var appliedViewMode: ViewMode?
 
     // PhotoViewerServicesをすべてのフォトビューア間で共有する（SavedDateStoreは写真閲覧をまたいで保存日時を保持する）
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
@@ -77,7 +69,7 @@ final class FileBrowserViewController: UIViewController {
     // MARK: - ビュー
 
     private lazy var collectionView: UICollectionView = {
-        let cv = UICollectionView(frame: .zero, collectionViewLayout: makeLayout(for: viewMode))
+        let cv = UICollectionView(frame: .zero, collectionViewLayout: makeLayout(for: viewModel.viewMode))
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.contentInsetAdjustmentBehavior = .automatic
         cv.delegate = self
@@ -269,7 +261,7 @@ final class FileBrowserViewController: UIViewController {
         ) { [weak self] collectionView, indexPath, id in
             guard let self,
                   let item = viewModel.items.first(where: { $0.id == id }) else { return nil }
-            switch viewMode {
+            switch viewModel.viewMode {
             case .list:
                 return collectionView.dequeueConfiguredReusableCell(
                     using: listCellRegistration, for: indexPath, item: item.url)
@@ -405,13 +397,11 @@ final class FileBrowserViewController: UIViewController {
         }
     }
 
-    /// UserDefaultsに保存されたファイル名からlastViewedItemIDを復元する。
-    /// すでに設定済みの場合、またはアイテムが空の場合は何もしない。
+    /// ViewModelが保持するlastViewedItemからlastViewedItemIDを復元する。
+    /// すでに設定済みの場合は何もしない。
     private func restoreLastViewedItemIfNeeded() {
-        guard lastViewedItemID == nil,
-              let fileName = UserDefaults.standard.fileBrowserLastViewedFileName,
-              let item = viewModel.items.first(where: { $0.name == fileName }) else { return }
-        lastViewedItemID = item.id
+        guard lastViewedItemID == nil else { return }
+        lastViewedItemID = viewModel.lastViewedItem?.id
     }
 
     // MARK: - UI更新
@@ -497,12 +487,12 @@ final class FileBrowserViewController: UIViewController {
     }
 
     private func syncViewModeFromSettings() {
-        let newMode = AppSettingsService.shared.viewMode
-        guard newMode != viewMode else { return }
-        viewMode = newMode
+        let newMode = viewModel.viewMode
+        guard newMode != appliedViewMode else { return }
+        appliedViewMode = newMode
 
         // レイアウトを切り替える（セルタイプ不一致のグリッチを避けるためアニメーションなし）
-        collectionView.setCollectionViewLayout(makeLayout(for: viewMode), animated: false)
+        collectionView.setCollectionViewLayout(makeLayout(for: newMode), animated: false)
 
         // すべてのセルを新しい登録で再作成する
         var snapshot = dataSource.snapshot()
@@ -578,8 +568,8 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             let newItemID = self.viewModel.items.first(where: { $0.url == currentURL })?.id
             let oldItemID = self.lastViewedItemID
             self.lastViewedItemID = newItemID
-            // ファイル名をUserDefaultsに永続化する（起動をまたいで最後に表示を復元するため）
-            UserDefaults.standard.fileBrowserLastViewedFileName = currentURL.lastPathComponent
+            // ファイル名をViewModelを通じてUserDefaultsに永続化する（起動をまたいで最後に表示を復元するため）
+            self.viewModel.saveLastViewed(url: currentURL)
 
             // 変化のあったセルのみを再設定する（不要な再描画を避けるため）
             var snapshot = self.dataSource.snapshot()
