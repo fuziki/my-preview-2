@@ -17,7 +17,6 @@ final class FileBrowserViewController: UIViewController {
 
     private let viewModel: FileBrowserViewModel
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
-    private var lastKnownHasFolder: Bool = false
 
     // 最後に適用したviewModeを記録する（syncViewModeFromSettingsで変更検出に使用）
     private var appliedViewMode: ViewMode?
@@ -25,9 +24,6 @@ final class FileBrowserViewController: UIViewController {
     // PhotoViewerServicesをすべてのフォトビューア間で共有する（SavedDateStoreは写真閲覧をまたいで保存日時を保持する）
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
     private lazy var photoViewerServices = PhotoViewerServices.production(savedDateStore: savedDateStore)
-
-    /// 最後に閲覧していたアイテムのID（「最後に表示」バッジの表示に使用する）
-    private var lastViewedItemID: FileItem.ID?
 
     // セル登録 — configureDataSource() で初期化する
     private var listCellRegistration: UICollectionView.CellRegistration<UICollectionViewListCell, URL>!
@@ -43,23 +39,6 @@ final class FileBrowserViewController: UIViewController {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
-    // MARK: - 日付フォーマッタ
-
-    private lazy var sectionKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
-    private lazy var sectionDisplayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "ja_JP")
-        f.dateStyle = .long
-        f.timeStyle = .none
-        return f
-    }()
 
     // MARK: - フォルダボタン制約
 
@@ -190,7 +169,7 @@ final class FileBrowserViewController: UIViewController {
 
             // 最後に閲覧したアイテムにセカンダリテキストを付ける
             let isLastViewed = self.map { s in
-                s.viewModel.items.first(where: { $0.url == url })?.id == s.lastViewedItemID
+                s.viewModel.items.first(where: { $0.url == url })?.id == s.viewModel.lastViewedItemID
             } ?? false
             config.secondaryText = isLastViewed ? "最後に表示" : nil
             config.secondaryTextProperties.color = .systemBlue
@@ -212,7 +191,7 @@ final class FileBrowserViewController: UIViewController {
 
             // 最後に閲覧したアイテムにバッジを付ける
             let isLastViewed = self.map { s in
-                s.viewModel.items.first(where: { $0.url == url })?.id == s.lastViewedItemID
+                s.viewModel.items.first(where: { $0.url == url })?.id == s.viewModel.lastViewedItemID
             } ?? false
             cell.setLastViewed(isLastViewed)
         }
@@ -227,14 +206,13 @@ final class FileBrowserViewController: UIViewController {
             guard case .date(let dateKey) = section else { return }
 
             // menuProvider クロージャはメニュー表示のたびに呼ばれる（UIDeferredMenuElement.uncached による）
-            headerView.configure(title: self.sectionTitle(for: dateKey)) { [weak self] in
+            headerView.configure(title: viewModel.sectionTitle(for: dateKey)) { [weak self] in
                 guard let self else { return [] }
-                let snapshot = self.dataSource.snapshot()
+                let (showsLastViewed, sections) = viewModel.makeMenuData()
                 var actions: [UIMenuElement] = []
 
                 // 「最後に表示」アクションをメニュー先頭に追加する
-                if let lastViewedID = self.lastViewedItemID,
-                   snapshot.itemIdentifiers.contains(lastViewedID) {
+                if showsLastViewed {
                     let action = UIAction(
                         title: "最後に表示",
                         image: UIImage(systemName: "eye")
@@ -245,10 +223,9 @@ final class FileBrowserViewController: UIViewController {
                 }
 
                 // 全セクションをジャンプアクションとして追加する
-                let sectionActions = snapshot.sectionIdentifiers.compactMap { sec -> UIAction? in
-                    guard case .date(let key) = sec else { return nil }
-                    return UIAction(title: self.sectionTitle(for: key)) { [weak self] _ in
-                        self?.jumpToSection(sec)
+                let sectionActions = sections.map { (key, title) in
+                    UIAction(title: title) { [weak self] _ in
+                        self?.jumpToSection(Section.date(key))
                     }
                 }
                 actions.append(contentsOf: sectionActions)
@@ -278,35 +255,13 @@ final class FileBrowserViewController: UIViewController {
     }
 
     private func applySnapshot() {
-        // ソート順を維持しながら日付キーでアイテムをグループ化する
-        var dateMap: [String: [FileItem.ID]] = [:]
-        var dateOrder: [String] = []
-
-        for item in viewModel.items {
-            let date = item.captureDate ?? Date.distantFuture
-            let key = sectionKeyFormatter.string(from: date)
-            if dateMap[key] == nil {
-                dateOrder.append(key)
-                dateMap[key] = []
-            }
-            dateMap[key]!.append(item.id)
-        }
-
         var snapshot = NSDiffableDataSourceSnapshot<Section, FileItem.ID>()
-        for key in dateOrder {
+        for key in viewModel.sectionDateKeys {
             let section = Section.date(key)
             snapshot.appendSections([section])
-            snapshot.appendItems(dateMap[key]!, toSection: section)
+            snapshot.appendItems(viewModel.sectionItems[key] ?? [], toSection: section)
         }
         dataSource.apply(snapshot, animatingDifferences: true)
-    }
-
-    // "yyyy-MM-dd" キーをローカライズされた日本語日付文字列に変換する
-    private func sectionTitle(for dateKey: String) -> String {
-        if let date = sectionKeyFormatter.date(from: dateKey) {
-            return sectionDisplayFormatter.string(from: date)
-        }
-        return dateKey
     }
 
     // MARK: - レイアウトファクトリ
@@ -380,28 +335,19 @@ final class FileBrowserViewController: UIViewController {
             _ = viewModel.items
             _ = viewModel.hasFolder
             _ = viewModel.isLoading
+            _ = viewModel.sectionDateKeys
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let hasFolder = self.viewModel.hasFolder
-                let hasFolderChanged = hasFolder != self.lastKnownHasFolder
-                self.lastKnownHasFolder = hasFolder
+                let hasFolderChanged = viewModel.consumeHasFolderChanged()
                 self.applySnapshot()
-                self.restoreLastViewedItemIfNeeded()
                 self.updateEmptyState()
                 if hasFolderChanged {
-                    self.animateFolderButton(hasFolder: hasFolder)
+                    self.animateFolderButton(hasFolder: viewModel.hasFolder)
                 }
                 self.startObservingItems()
             }
         }
-    }
-
-    /// ViewModelが保持するlastViewedItemからlastViewedItemIDを復元する。
-    /// すでに設定済みの場合は何もしない。
-    private func restoreLastViewedItemIfNeeded() {
-        guard lastViewedItemID == nil else { return }
-        lastViewedItemID = viewModel.lastViewedItem?.id
     }
 
     // MARK: - UI更新
@@ -514,7 +460,7 @@ final class FileBrowserViewController: UIViewController {
     }
 
     private func jumpToLastViewed() {
-        guard let lastViewedID = lastViewedItemID,
+        guard let lastViewedID = viewModel.lastViewedItemID,
               let indexPath = dataSource.indexPath(for: lastViewedID) else { return }
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
     }
@@ -565,11 +511,10 @@ extension FileBrowserViewController: UICollectionViewDelegate {
         // 閉じる時: 最後に表示したアイテムを記録してセルを更新する
         photoViewer.onDismiss = { [weak self] currentURL in
             guard let self else { return }
-            let newItemID = self.viewModel.items.first(where: { $0.url == currentURL })?.id
-            let oldItemID = self.lastViewedItemID
-            self.lastViewedItemID = newItemID
-            // ファイル名をViewModelを通じてUserDefaultsに永続化する（起動をまたいで最後に表示を復元するため）
-            self.viewModel.saveLastViewed(url: currentURL)
+            let oldItemID = viewModel.lastViewedItemID
+            // ファイル名をViewModelを通じてUserDefaultsに永続化し、lastViewedItemIDも更新する
+            viewModel.saveLastViewed(url: currentURL)
+            let newItemID = viewModel.lastViewedItemID
 
             // 変化のあったセルのみを再設定する（不要な再描画を避けるため）
             var snapshot = self.dataSource.snapshot()
