@@ -8,6 +8,7 @@ struct PhotoViewerServices {
     let exifService: any ExifServiceProtocol
     let photoLibrary: any PhotoLibraryServiceProtocol
     let savedDateStore: any SavedDateStoreProtocol
+    let hapticsService: any HapticsServiceProtocol
 }
 
 extension PhotoViewerServices {
@@ -17,7 +18,8 @@ extension PhotoViewerServices {
             imageLoader: ImageLoaderService(),
             exifService: ExifService(),
             photoLibrary: PhotoLibraryService(),
-            savedDateStore: savedDateStore
+            savedDateStore: savedDateStore,
+            hapticsService: HapticsService()
         )
     }
 }

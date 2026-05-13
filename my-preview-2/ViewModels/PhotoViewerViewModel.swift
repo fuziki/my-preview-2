@@ -29,6 +29,7 @@ final class PhotoViewerViewModel {
     private let exifService: any ExifServiceProtocol
     private let photoLibrary: any PhotoLibraryServiceProtocol
     private let savedDateStore: any SavedDateStoreProtocol
+    private let hapticsService: any HapticsServiceProtocol
 
     // MARK: - 初期化
 
@@ -39,6 +40,7 @@ final class PhotoViewerViewModel {
         exifService = services.exifService
         photoLibrary = services.photoLibrary
         savedDateStore = services.savedDateStore
+        hapticsService = services.hapticsService
         lastSavedDate = services.savedDateStore.date(for: input.allURLs[currentIndex])
     }
 
@@ -92,6 +94,7 @@ final class PhotoViewerViewModel {
             savedDateStore.setDate(date, for: url)
             lastSavedDate = date
             saveStatus = .success
+            hapticsService.notifySuccess()
             try? await Task.sleep(for: .seconds(2))
             // ナビゲーション時は即座に .idle にリセットされるため、まだ .success の場合のみリセット
             if saveStatus == .success {
@@ -99,6 +102,7 @@ final class PhotoViewerViewModel {
             }
         } catch {
             saveStatus = .failure
+            hapticsService.notifyError()
         }
     }
 
