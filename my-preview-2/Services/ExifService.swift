@@ -46,12 +46,18 @@ final class ExifService: ExifServiceProtocol {
             return et >= 1.0 ? String(format: "%.0fs", et) : "1/\(Int(round(1.0 / et)))s"
         }()
 
+        let flashFired: Bool = {
+            guard let flashValue = exif[kCGImagePropertyExifFlash as String] as? Int else { return false }
+            return (flashValue & 0x1) != 0
+        }()
+
         return ExifInfo(
             iso: iso,
             focalLength: focalLength,
             exposureValue: exposureValue,
             fNumber: fNumber,
-            shutterSpeed: shutterSpeed
+            shutterSpeed: shutterSpeed,
+            flashFired: flashFired
         )
     }
 }

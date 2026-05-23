@@ -219,7 +219,9 @@ final class PhotoViewerViewController: UIViewController {
             viewModel.exifInfo?.fNumber,
             viewModel.exifInfo?.shutterSpeed,
         ].compactMap { $0 }
-        exifLabel.text = exifParts.joined(separator: "  ")
+        let exifText = exifParts.joined(separator: "  ")
+        let flashSuffix = viewModel.exifInfo?.flashFired == true ? "  ⚡️" : ""
+        exifLabel.text = exifText + flashSuffix
         exifLabel.isHidden = exifParts.isEmpty
         prevButtonView.button.isEnabled = viewModel.canGoPrevious
         prevButtonView.button.tintColor = viewModel.canGoPrevious ? .white : .systemGray

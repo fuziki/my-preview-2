@@ -6,4 +6,5 @@ struct ExifInfo {
     let exposureValue: String?
     let fNumber: String?
     let shutterSpeed: String?
+    let flashFired: Bool
 }
