@@ -206,7 +206,9 @@ final class FileBrowserViewController: UIViewController {
             guard case .date(let dateKey) = section else { return }
 
             // menuProvider クロージャはメニュー表示のたびに呼ばれる（UIDeferredMenuElement.uncached による）
-            headerView.configure(title: viewModel.sectionTitle(for: dateKey)) { [weak self] in
+            let count = snapshot.numberOfItems(inSection: section)
+            let title = "\(viewModel.sectionTitle(for: dateKey)) (\(count)枚)"
+            headerView.configure(title: title) { [weak self] in
                 guard let self else { return [] }
                 let (showsLastViewed, sections) = viewModel.makeMenuData()
                 var actions: [UIMenuElement] = []
@@ -214,8 +216,7 @@ final class FileBrowserViewController: UIViewController {
                 // 「最後に表示」アクションをメニュー先頭に追加する
                 if showsLastViewed {
                     let action = UIAction(
-                        title: "最後に表示",
-                        image: UIImage(systemName: "eye")
+                        title: "最後に表示"
                     ) { [weak self] _ in
                         self?.jumpToLastViewed()
                     }

@@ -90,7 +90,8 @@ final class FileBrowserViewModel {
             showsLastViewed = false
         }
         let sections = sectionDateKeys.map { key in
-            (key: key, title: sectionTitle(for: key))
+            let count = sectionItems[key]?.count ?? 0
+            return (key: key, title: "\(sectionTitle(for: key)) (\(count)枚)")
         }
         return (showsLastViewed: showsLastViewed, sections: sections)
     }
