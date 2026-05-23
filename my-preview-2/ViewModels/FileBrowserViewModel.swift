@@ -6,6 +6,7 @@ final class FileBrowserViewModel {
     private(set) var items: [FileItem] = []
     private(set) var hasFolder: Bool = false
     private(set) var isLoading: Bool = false
+    private(set) var folderName: String? = nil
     private var rootURL: URL? = nil
 
     // MARK: - 永続化された状態（UserDefaultsと双方向同期）
@@ -120,6 +121,7 @@ final class FileBrowserViewModel {
         rootURL?.stopAccessingSecurityScopedResource()
         guard url.startAccessingSecurityScopedResource() else { return }
         rootURL = url
+        folderName = url.lastPathComponent
         hasFolder = true
         await loadItems()
     }

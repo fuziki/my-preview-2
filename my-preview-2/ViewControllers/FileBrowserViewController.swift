@@ -337,6 +337,7 @@ final class FileBrowserViewController: UIViewController {
             _ = viewModel.hasFolder
             _ = viewModel.isLoading
             _ = viewModel.sectionDateKeys
+            _ = viewModel.folderName
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -346,6 +347,7 @@ final class FileBrowserViewController: UIViewController {
                 if hasFolderChanged {
                     self.animateFolderButton(hasFolder: viewModel.hasFolder)
                 }
+                self.title = viewModel.folderName ?? "My Preview"
                 self.startObservingItems()
             }
         }
