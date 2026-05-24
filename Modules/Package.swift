@@ -35,5 +35,22 @@ let package = Package(
             dependencies: ["Core", "FileBrowser", "PhotoViewer"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
+
+        // MARK: - テストターゲット
+
+        // FileBrowserViewModelのユニットテスト
+        .testTarget(
+            name: "FileBrowserTests",
+            dependencies: ["FileBrowser"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+        // PhotoViewerViewModelのユニットテスト
+        // SwiftUI: UIKitを経由してSwiftUI.AttributedStringのシンボルが参照されるためリンクが必要
+        .testTarget(
+            name: "PhotoViewerTests",
+            dependencies: ["PhotoViewer"],
+            swiftSettings: [.defaultIsolation(MainActor.self)],
+            linkerSettings: [.linkedFramework("SwiftUI", .when(platforms: [.iOS]))]
+        ),
     ]
 )
