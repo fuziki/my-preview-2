@@ -413,6 +413,18 @@ public final class PhotoViewerViewController: UIViewController {
         nextHitAreaButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
         saveButtonView.button.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
 
+        // disabled 状態でも文字色を白に保つ。baseForegroundColor は UIKit が状態に応じて調整するが、
+        // titleTextAttributesTransformer の foregroundColor は状態に関わらず直接適用される。
+        saveButtonView.button.configurationUpdateHandler = { button in
+            var config = button.configuration
+            config?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+                var updated = attributes
+                updated.foregroundColor = UIColor.white.withAlphaComponent(0.8)
+                return updated
+            }
+            button.configuration = config
+        }
+
         let prevLongPress = UILongPressGestureRecognizer(target: self, action: #selector(prevLongPressed(_:)))
         prevLongPress.minimumPressDuration = 1.0
         prevHitAreaButton.addGestureRecognizer(prevLongPress)
@@ -421,13 +433,6 @@ public final class PhotoViewerViewController: UIViewController {
         nextLongPress.minimumPressDuration = 1.0
         nextHitAreaButton.addGestureRecognizer(nextLongPress)
 
-        // UIKitが無効時に保存ボタンを自動的に暗くするのを防ぐ。
-        // ガラス背景では約30%の不透明度の白テキストがほぼ見えなくなるため。
-        saveButtonView.button.configurationUpdateHandler = { button in
-            var config = button.configuration
-            config?.baseForegroundColor = .white
-            button.configuration = config
-        }
     }
 
     // MARK: - オーバーレイ
