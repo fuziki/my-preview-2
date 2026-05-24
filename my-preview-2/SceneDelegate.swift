@@ -1,11 +1,5 @@
-//
-//  SceneDelegate.swift
-//  my-preview-2
-//
-//  Created by fuziki on 2026/04/29.
-//
-
 import UIKit
+import AppMain
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -13,12 +7,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
-        let window = UIWindow(windowScene: windowScene)
-        let fileBrowserVC = FileBrowserViewController(fileSystemService: FileSystemService())
-        let navController = UINavigationController(rootViewController: fileBrowserVC)
-        window.rootViewController = navController
-        window.makeKeyAndVisible()
-        self.window = window
+        self.window = makeWindow(windowScene: windowScene)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

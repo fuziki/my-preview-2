@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		47D00ED02FC2DD7700F217FE /* AppMain in Frameworks */ = {isa = PBXBuildFile; productRef = 47D00ECF2FC2DD7700F217FE /* AppMain */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		47D00D6B2FA2085100F217FE /* my-preview-2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "my-preview-2.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		47D00ECD2FC2DD3600F217FE /* Modules */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Modules; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,6 +46,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				47D00ED02FC2DD7700F217FE /* AppMain in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -50,8 +56,10 @@
 		47D00D622FA2085100F217FE = {
 			isa = PBXGroup;
 			children = (
+				47D00ECD2FC2DD3600F217FE /* Modules */,
 				47D00E0C2FA25E3B00F217FE /* Config */,
 				47D00D6D2FA2085100F217FE /* my-preview-2 */,
+				47D00ECE2FC2DD7700F217FE /* Frameworks */,
 				47D00D6C2FA2085100F217FE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -62,6 +70,13 @@
 				47D00D6B2FA2085100F217FE /* my-preview-2.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		47D00ECE2FC2DD7700F217FE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -84,6 +99,7 @@
 			);
 			name = "my-preview-2";
 			packageProductDependencies = (
+				47D00ECF2FC2DD7700F217FE /* AppMain */,
 			);
 			productName = "my-preview-2";
 			productReference = 47D00D6B2FA2085100F217FE /* my-preview-2.app */;
@@ -349,6 +365,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		47D00ECF2FC2DD7700F217FE /* AppMain */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AppMain;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 47D00D632FA2085100F217FE /* Project object */;
 }
