@@ -18,9 +18,6 @@ final class FileBrowserViewController: UIViewController {
     private let viewModel: FileBrowserViewModel
     private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
 
-    // 最後に適用したviewModeを記録する（syncViewModeFromSettingsで変更検出に使用）
-    private var appliedViewMode: ViewMode?
-
     // PhotoViewerServicesをすべてのフォトビューア間で共有する（SavedDateStoreは写真閲覧をまたいで保存日時を保持する）
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
     private lazy var photoViewerServices = PhotoViewerServices.production(savedDateStore: savedDateStore)
@@ -95,6 +92,7 @@ final class FileBrowserViewController: UIViewController {
         configureDataSource()
         applySnapshot()
         startObservingItems()
+        startObservingViewMode()
     }
 
     // MARK: - セットアップ
@@ -152,10 +150,79 @@ final class FileBrowserViewController: UIViewController {
     private func setupNavigationBar() {
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "gear"),
-            style: .plain,
-            target: self,
-            action: #selector(openSettings)
+            menu: makeSettingsMenu()
         )
+    }
+
+    /// 設定メニューを生成する。UIDeferredMenuElement.uncached でメニュー表示のたびに最新状態を反映する。
+    private func makeSettingsMenu() -> UIMenu {
+        let deferred = UIDeferredMenuElement.uncached { [weak self] completion in
+            let elements = self?.buildSettingsMenuElements() ?? []
+            completion(elements)
+        }
+        return UIMenu(title: "", children: [deferred])
+    }
+
+    /// アクション選択後、keepsMenuPresented でメニューが開いたままの状態でも
+    /// チェックマークを更新するため、menu プロパティを再代入して再評価させる。
+    private func refreshSettingsMenu() {
+        navigationItem.rightBarButtonItem?.menu = makeSettingsMenu()
+    }
+
+    private func buildSettingsMenuElements() -> [UIMenuElement] {
+        // 表示モード セクション（インライン展開・横並びアイコン+テキスト）
+        let listAction = UIAction(
+            title: "リスト",
+            image: UIImage(systemName: "list.bullet"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.viewMode == .list ? .on : .off
+        ) { [weak self] _ in
+            self?.viewModel.viewMode = .list
+            self?.refreshSettingsMenu()
+        }
+        let gridAction = UIAction(
+            title: "グリッド",
+            image: UIImage(systemName: "square.grid.2x2"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.viewMode == .grid ? .on : .off
+        ) { [weak self] _ in
+            self?.viewModel.viewMode = .grid
+            self?.refreshSettingsMenu()
+        }
+        let viewModeMenu = UIMenu(
+            title: "表示モード",
+            options: [.displayInline, .singleSelection],
+            children: [listAction, gridAction]
+        )
+        viewModeMenu.preferredElementSize = .medium
+
+        // 保存形式 セクション（インライン展開・横並びアイコン+テキスト）
+        let jpegAction = UIAction(
+            title: "JPEG",
+            image: UIImage(systemName: "photo"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.saveFormat == .jpeg ? .on : .off
+        ) { [weak self] _ in
+            self?.viewModel.saveFormat = .jpeg
+            self?.refreshSettingsMenu()
+        }
+        let jpegAndRawAction = UIAction(
+            title: "JPEG + RAW",
+            image: UIImage(systemName: "photo.on.rectangle.angled"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.saveFormat == .jpegAndRaw ? .on : .off
+        ) { [weak self] _ in
+            self?.viewModel.saveFormat = .jpegAndRaw
+            self?.refreshSettingsMenu()
+        }
+        let saveFormatMenu = UIMenu(
+            title: "保存形式",
+            options: [.displayInline, .singleSelection],
+            children: [jpegAction, jpegAndRawAction]
+        )
+        saveFormatMenu.preferredElementSize = .medium
+
+        return [viewModeMenu, saveFormatMenu]
     }
 
     private func configureDataSource() {
@@ -353,6 +420,19 @@ final class FileBrowserViewController: UIViewController {
         }
     }
 
+    // viewModeの変化のみを独立して監視し、レイアウトを更新する
+    private func startObservingViewMode() {
+        withObservationTracking {
+            _ = viewModel.viewMode
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.applyViewMode(viewModel.viewMode)
+                self.startObservingViewMode()
+            }
+        }
+    }
+
     // MARK: - UI更新
 
     private func updateEmptyState() {
@@ -423,25 +503,11 @@ final class FileBrowserViewController: UIViewController {
         collectionView.scrollToItem(at: IndexPath(item: lastItem, section: lastSection), at: .bottom, animated: true)
     }
 
-    @objc private func openSettings() {
-        let settingsVC = SettingsViewController()
-        navigationController?.pushViewController(settingsVC, animated: true)
-    }
-
     // MARK: - 設定同期
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        syncViewModeFromSettings()
-    }
-
-    private func syncViewModeFromSettings() {
-        let newMode = viewModel.viewMode
-        guard newMode != appliedViewMode else { return }
-        appliedViewMode = newMode
-
+    private func applyViewMode(_ mode: ViewMode) {
         // レイアウトを切り替える（セルタイプ不一致のグリッチを避けるためアニメーションなし）
-        collectionView.setCollectionViewLayout(makeLayout(for: newMode), animated: false)
+        collectionView.setCollectionViewLayout(makeLayout(for: mode), animated: false)
 
         // すべてのセルを新しい登録で再作成する
         var snapshot = dataSource.snapshot()

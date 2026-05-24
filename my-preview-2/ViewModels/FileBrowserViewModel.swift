@@ -16,6 +16,11 @@ final class FileBrowserViewModel {
         didSet { storage.set(viewMode.rawValue, forKey: .viewMode) }
     }
 
+    /// 保存形式。変更時にUserDefaultsへ自動保存される
+    var saveFormat: SaveFormat {
+        didSet { storage.set(saveFormat.rawValue, forKey: .saveFormat) }
+    }
+
     /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
     private var lastViewedFileName: String? {
         didSet { storage.set(lastViewedFileName, forKey: .lastViewedFileName) }
@@ -112,6 +117,7 @@ final class FileBrowserViewModel {
         self.storage = storage
         // UserDefaultsから復元する
         self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
+        self.saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
         self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
     }
 

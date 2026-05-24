@@ -13,7 +13,7 @@ final class ExifService: ExifServiceProtocol {
         }.value
     }
 
-    private static func parse(data: Data) -> ExifInfo? {
+    private static nonisolated func parse(data: Data) -> ExifInfo? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
               let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] else {
