@@ -8,6 +8,8 @@ public final class PhotoViewerViewController: UIViewController {
     private let viewModel: PhotoViewerViewModel
     private var displayedImage: UIImage?
     private var autoNavigationTask: Task<Void, Never>?
+    private var longPressZoomCircleView: UIView?
+    private var longPressLastLocation: CGPoint = .zero
     /// 現在表示中のURL（FileBrowserがズーム戻り先セルを特定するために使用する）
     public var currentURL: URL { viewModel.currentURL }
 
@@ -433,6 +435,9 @@ public final class PhotoViewerViewController: UIViewController {
         nextLongPress.minimumPressDuration = 1.0
         nextHitAreaButton.addGestureRecognizer(nextLongPress)
 
+        let longPressZoom = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressZoom(_:)))
+        longPressZoom.minimumPressDuration = 0.5
+        collectionView.addGestureRecognizer(longPressZoom)
     }
 
     // MARK: - オーバーレイ
@@ -534,6 +539,68 @@ public final class PhotoViewerViewController: UIViewController {
     private func stopAutoNavigation() {
         autoNavigationTask?.cancel()
         autoNavigationTask = nil
+    }
+
+    // MARK: - 長押しズーム
+
+    @objc private func handleLongPressZoom(_ gesture: UILongPressGestureRecognizer) {
+        switch gesture.state {
+        case .began:
+            let location = gesture.location(in: view)
+            longPressLastLocation = location
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showZoomCircle(at: location)
+        case .changed:
+            let location = gesture.location(in: view)
+            let dx = location.x - longPressLastLocation.x
+            let dy = location.y - longPressLastLocation.y
+            longPressLastLocation = location
+
+            // UIKit座標系（Y下向き）: 右上方向成分 = dx - dy
+            // 右上方向で拡大、左下方向で縮小
+            let multiplier = exp((dx - dy) * 0.01)
+            if let zoom = currentItemCell?.zoomScrollView {
+                let newScale = max(zoom.minimumZoomScale, min(zoom.maximumZoomScale, zoom.zoomScale * multiplier))
+                zoom.setZoomScale(newScale, animated: false)
+            }
+            longPressZoomCircleView?.center = location
+        case .ended, .cancelled, .failed:
+            hideZoomCircle()
+        default:
+            break
+        }
+    }
+
+    private func showZoomCircle(at point: CGPoint) {
+        let size: CGFloat = 60
+        let circle = UIView()
+        circle.bounds = CGRect(origin: .zero, size: CGSize(width: size, height: size))
+        circle.center = point
+        circle.layer.cornerRadius = size / 2
+        circle.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+        circle.layer.borderColor = UIColor.white.withAlphaComponent(0.85).cgColor
+        circle.layer.borderWidth = 2
+        circle.isUserInteractionEnabled = false
+        view.addSubview(circle)
+
+        circle.transform = CGAffineTransform(scaleX: 0.3, y: 0.3)
+        circle.alpha = 0
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0.8, options: []) {
+            circle.transform = .identity
+            circle.alpha = 1
+        }
+        longPressZoomCircleView = circle
+    }
+
+    private func hideZoomCircle() {
+        guard let circle = longPressZoomCircleView else { return }
+        longPressZoomCircleView = nil
+        UIView.animate(withDuration: 0.2) {
+            circle.alpha = 0
+            circle.transform = CGAffineTransform(scaleX: 0.3, y: 0.3)
+        } completion: { _ in
+            circle.removeFromSuperview()
+        }
     }
 }
 
