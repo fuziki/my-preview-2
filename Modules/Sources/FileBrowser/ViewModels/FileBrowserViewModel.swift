@@ -4,7 +4,9 @@ import Core
 
 @Observable
 public final class FileBrowserViewModel {
-    public private(set) var items: [FileItem] = []
+    public private(set) var sections: [FileBrowserSection] = []
+    public var items: [FileItem] { sections.flatMap(\.items) }
+    private var loadedItems: [FileItem] = []
     public private(set) var hasFolder: Bool = false
     public private(set) var isLoading: Bool = false
     public private(set) var folderName: String? = nil
@@ -34,14 +36,6 @@ public final class FileBrowserViewModel {
         guard let fileName = lastViewedFileName else { return nil }
         return items.first(where: { $0.name == fileName })
     }
-
-    // MARK: - セクションデータ（日付でグループ化したアイテム）
-
-    /// "yyyy-MM-dd" キーの順序付きリスト
-    public private(set) var sectionDateKeys: [String] = []
-
-    /// 各日付セクションのアイテムID
-    public private(set) var sectionItems: [String: [FileItem.ID]] = [:]
 
     // MARK: - 最後に閲覧したアイテムID
 
@@ -77,30 +71,33 @@ public final class FileBrowserViewModel {
         return f
     }()
 
-    /// "yyyy-MM-dd" キーをローカライズされた日本語日付文字列に変換する
-    public func sectionTitle(for dateKey: String) -> String {
-        if let date = sectionKeyFormatter.date(from: dateKey) {
+    /// Section.IDをローカライズされた日本語日付文字列に変換する
+    public func sectionTitle(for id: FileBrowserSection.ID) -> String {
+        if let date = sectionKeyFormatter.date(from: id.dateKey) {
             return sectionDisplayFormatter.string(from: date)
         }
-        return dateKey
+        return id.dateKey
+    }
+
+    /// Section.IDからSectionの実態を引く
+    public func section(for id: FileBrowserSection.ID) -> FileBrowserSection? {
+        sections.first(where: { $0.id == id })
     }
 
     // MARK: - メニューデータ
 
     /// セクションヘッダーのメニュー用データを返す
-    /// - Returns: 「最後に表示」を表示するか、セクション一覧（キーとタイトルのペア）
-    public func makeMenuData() -> (showsLastViewed: Bool, sections: [(key: String, title: String)]) {
+    public func makeMenuData() -> (showsLastViewed: Bool, sections: [(id: FileBrowserSection.ID, title: String)]) {
         let showsLastViewed: Bool
-        if let id = lastViewedItemID {
-            showsLastViewed = sectionItems.values.contains(where: { $0.contains(id) })
+        if let itemID = lastViewedItemID {
+            showsLastViewed = sections.contains(where: { $0.items.contains(where: { $0.id == itemID }) })
         } else {
             showsLastViewed = false
         }
-        let sections = sectionDateKeys.map { key in
-            let count = sectionItems[key]?.count ?? 0
-            return (key: key, title: "\(sectionTitle(for: key)) (\(count)枚)")
+        let sectionData = sections.map { section in
+            (id: section.id, title: "\(sectionTitle(for: section.id)) (\(section.items.count)枚)")
         }
-        return (showsLastViewed: showsLastViewed, sections: sections)
+        return (showsLastViewed: showsLastViewed, sections: sectionData)
     }
 
     // MARK: - 依存関係
@@ -144,27 +141,28 @@ public final class FileBrowserViewModel {
     private func loadItems() async {
         guard let url = rootURL else { return }
         isLoading = true
-        items = await fileSystemService.scanForJPEGs(in: url)
+        loadedItems = await fileSystemService.scanForJPEGs(in: url)
         updateSections()
         restoreLastViewedItemIDIfNeeded()
         isLoading = false
     }
 
-    /// アイテムを日付キーでグループ化してsectionDateKeys・sectionItemsを更新する
+    /// loadedItemsを日付キーでグループ化してsectionsを更新する
     private func updateSections() {
-        var dateMap: [String: [FileItem.ID]] = [:]
+        var sectionMap: [String: [FileItem]] = [:]
         var dateOrder: [String] = []
-        for item in items {
+        for item in loadedItems {
             let date = item.captureDate ?? Date.distantFuture
             let key = sectionKeyFormatter.string(from: date)
-            if dateMap[key] == nil {
+            if sectionMap[key] == nil {
                 dateOrder.append(key)
-                dateMap[key] = []
+                sectionMap[key] = []
             }
-            dateMap[key]!.append(item.id)
+            sectionMap[key]!.append(item)
         }
-        sectionDateKeys = dateOrder
-        sectionItems = dateMap
+        sections = dateOrder.map { key in
+            FileBrowserSection(id: .init(dateKey: key), items: sectionMap[key] ?? [])
+        }
     }
 
     /// lastViewedItemIDが未設定の場合に限りlastViewedItemから復元する（初回ロード時に使用）

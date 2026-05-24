@@ -2,12 +2,6 @@ import UIKit
 import UniformTypeIdentifiers
 import Core
 
-// MARK: - Section
-
-nonisolated enum Section: Hashable, Sendable {
-    case date(String) // ソートキーとして使用する "yyyy-MM-dd" 形式の文字列
-}
-
 // MARK: - FileBrowserViewController
 
 public final class FileBrowserViewController: UIViewController {
@@ -17,7 +11,7 @@ public final class FileBrowserViewController: UIViewController {
     // MARK: - プロパティ
 
     private let viewModel: FileBrowserViewModel
-    private var dataSource: UICollectionViewDiffableDataSource<Section, FileItem.ID>!
+    private var dataSource: UICollectionViewDiffableDataSource<FileBrowserSection.ID, FileItem.ID>!
 
     /// PhotoViewerViewControllerを生成するファクトリ。AppMainから注入される。
     /// FileBrowserモジュールはPhotoViewerモジュールに依存しないため、UIViewControllerとして受け取る。
@@ -271,31 +265,25 @@ public final class FileBrowserViewController: UIViewController {
             guard let self else { return }
             let snapshot = self.dataSource.snapshot()
             guard indexPath.section < snapshot.sectionIdentifiers.count else { return }
-            let section = snapshot.sectionIdentifiers[indexPath.section]
-            guard case .date(let dateKey) = section else { return }
+            let sectionID = snapshot.sectionIdentifiers[indexPath.section]
+            guard let section = viewModel.section(for: sectionID) else { return }
 
-            // menuProvider クロージャはメニュー表示のたびに呼ばれる（UIDeferredMenuElement.uncached による）
-            let count = snapshot.numberOfItems(inSection: section)
-            let title = "\(viewModel.sectionTitle(for: dateKey)) (\(count)枚)"
+            let title = "\(viewModel.sectionTitle(for: sectionID)) (\(section.items.count)枚)"
             headerView.configure(title: title) { [weak self] in
                 guard let self else { return [] }
                 let (showsLastViewed, sections) = viewModel.makeMenuData()
                 var actions: [UIMenuElement] = []
 
-                // 「最後に表示」アクションをメニュー先頭に追加する
                 if showsLastViewed {
-                    let action = UIAction(
-                        title: "最後に表示"
-                    ) { [weak self] _ in
+                    let action = UIAction(title: "最後に表示") { [weak self] _ in
                         self?.jumpToLastViewed()
                     }
                     actions.append(action)
                 }
 
-                // 全セクションをジャンプアクションとして追加する
-                let sectionActions = sections.map { (key, title) in
+                let sectionActions = sections.map { (id, title) in
                     UIAction(title: title) { [weak self] _ in
-                        self?.jumpToSection(Section.date(key))
+                        self?.jumpToSection(id)
                     }
                 }
                 actions.append(contentsOf: sectionActions)
@@ -303,7 +291,7 @@ public final class FileBrowserViewController: UIViewController {
             }
         }
 
-        dataSource = UICollectionViewDiffableDataSource<Section, FileItem.ID>(
+        dataSource = UICollectionViewDiffableDataSource<FileBrowserSection.ID, FileItem.ID>(
             collectionView: collectionView
         ) { [weak self] collectionView, indexPath, id in
             guard let self,
@@ -325,11 +313,10 @@ public final class FileBrowserViewController: UIViewController {
     }
 
     private func applySnapshot() {
-        var snapshot = NSDiffableDataSourceSnapshot<Section, FileItem.ID>()
-        for key in viewModel.sectionDateKeys {
-            let section = Section.date(key)
-            snapshot.appendSections([section])
-            snapshot.appendItems(viewModel.sectionItems[key] ?? [], toSection: section)
+        var snapshot = NSDiffableDataSourceSnapshot<FileBrowserSection.ID, FileItem.ID>()
+        for section in viewModel.sections {
+            snapshot.appendSections([section.id])
+            snapshot.appendItems(section.items.map(\.id), toSection: section.id)
         }
         dataSource.apply(snapshot, animatingDifferences: true)
     }
@@ -402,10 +389,9 @@ public final class FileBrowserViewController: UIViewController {
 
     private func startObservingItems() {
         withObservationTracking {
-            _ = viewModel.items
+            _ = viewModel.sections
             _ = viewModel.hasFolder
             _ = viewModel.isLoading
-            _ = viewModel.sectionDateKeys
             _ = viewModel.folderName
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
@@ -519,9 +505,9 @@ public final class FileBrowserViewController: UIViewController {
 
     // MARK: - セクションジャンプ
 
-    private func jumpToSection(_ section: Section) {
+    private func jumpToSection(_ sectionID: FileBrowserSection.ID) {
         let snapshot = dataSource.snapshot()
-        guard let sectionIndex = snapshot.sectionIdentifiers.firstIndex(of: section) else { return }
+        guard let sectionIndex = snapshot.sectionIdentifiers.firstIndex(of: sectionID) else { return }
         guard collectionView.numberOfItems(inSection: sectionIndex) > 0 else { return }
         collectionView.scrollToItem(
             at: IndexPath(item: 0, section: sectionIndex),

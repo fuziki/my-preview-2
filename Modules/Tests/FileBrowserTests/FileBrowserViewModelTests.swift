@@ -24,13 +24,12 @@ struct FileBrowserViewModelTests {
     @Test
     func initialState_defaultValues() {
         #expect(viewModel.items == [])
+        #expect(viewModel.sections.isEmpty)
         #expect(viewModel.hasFolder == false)
         #expect(viewModel.isLoading == false)
         #expect(viewModel.folderName == nil)
         #expect(viewModel.viewMode == .list)
         #expect(viewModel.saveFormat == .jpegAndRaw)
-        #expect(viewModel.sectionDateKeys == [])
-        #expect(viewModel.sectionItems == [:])
         #expect(viewModel.lastViewedItemID == nil)
     }
 
@@ -129,35 +128,35 @@ struct FileBrowserViewModelTests {
 
     @Test
     func sectionTitle_returnsNonEmptyString_forValidDate() {
-        #expect(viewModel.sectionTitle(for: "2024-01-15").isEmpty == false)
+        #expect(viewModel.sectionTitle(for: .init(dateKey: "2024-01-15")).isEmpty == false)
     }
 
     @Test
     func sectionTitle_containsYear_forValidDate() {
-        #expect(viewModel.sectionTitle(for: "2024-01-15").contains("2024"))
+        #expect(viewModel.sectionTitle(for: .init(dateKey: "2024-01-15")).contains("2024"))
     }
 
     @Test
     func sectionTitle_returnsInputKey_forInvalidDate() {
         let invalidKey = "invalid-date"
-        #expect(viewModel.sectionTitle(for: invalidKey) == invalidKey)
+        #expect(viewModel.sectionTitle(for: .init(dateKey: invalidKey)) == invalidKey)
     }
 
     // MARK: - updateSections（selectFolder経由で間接テスト）
 
     @Test
-    func selectFolder_updatesSectionDateKeys_singleDate() async {
+    func selectFolder_updatesSections_singleDate() async {
         let date = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10))!
         fileSystemService.stubbedItems = [
             FileItem(url: URL(fileURLWithPath: "/tmp/a.jpg"), captureDate: date),
             FileItem(url: URL(fileURLWithPath: "/tmp/b.jpg"), captureDate: date),
         ]
         await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
-        #expect(viewModel.sectionDateKeys.count == 1)
+        #expect(viewModel.sections.count == 1)
     }
 
     @Test
-    func selectFolder_updatesSectionDateKeys_multipleDates() async {
+    func selectFolder_updatesSections_multipleDates() async {
         let date1 = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10))!
         let date2 = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 11))!
         fileSystemService.stubbedItems = [
@@ -165,7 +164,7 @@ struct FileBrowserViewModelTests {
             FileItem(url: URL(fileURLWithPath: "/tmp/b.jpg"), captureDate: date2),
         ]
         await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
-        #expect(viewModel.sectionDateKeys.count == 2)
+        #expect(viewModel.sections.count == 2)
     }
 
     @Test
@@ -177,8 +176,8 @@ struct FileBrowserViewModelTests {
         ]
         await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
 
-        let key = try #require(viewModel.sectionDateKeys.first)
-        #expect(viewModel.sectionItems[key]?.count == 2)
+        let section = try #require(viewModel.sections.first)
+        #expect(section.items.count == 2)
     }
 
     // MARK: - makeMenuData
@@ -199,7 +198,7 @@ struct FileBrowserViewModelTests {
     }
 
     @Test
-    func makeMenuData_sectionsCount_matchesSectionDateKeys() async {
+    func makeMenuData_sectionsCount_matchesSections() async {
         let date = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10))!
         fileSystemService.stubbedItems = [
             FileItem(url: URL(fileURLWithPath: "/tmp/a.jpg"), captureDate: date),
@@ -207,7 +206,7 @@ struct FileBrowserViewModelTests {
         await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
 
         let data = viewModel.makeMenuData()
-        #expect(data.sections.count == viewModel.sectionDateKeys.count)
+        #expect(data.sections.count == viewModel.sections.count)
     }
 
     @Test

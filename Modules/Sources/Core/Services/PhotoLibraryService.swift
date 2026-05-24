@@ -24,11 +24,17 @@ public final class PhotoLibraryService: PhotoLibraryServiceProtocol {
         let saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
         let rawURL = saveFormat == .jpegAndRaw ? findRawFile(for: fileURL) : nil
 
+        try await performSave(jpegURL: fileURL, rawURL: rawURL)
+    }
+
+    // defaultIsolation(MainActor.self) により @MainActor 隔離されたクロージャを
+    // Photos フレームワークのスレッドから呼び出すと actor 隔離違反でクラッシュするため nonisolated にする
+    private nonisolated func performSave(jpegURL: URL, rawURL: URL?) async throws {
         try await PHPhotoLibrary.shared().performChanges {
             let options = PHAssetResourceCreationOptions()
-            options.originalFilename = fileURL.lastPathComponent
+            options.originalFilename = jpegURL.lastPathComponent
             let request = PHAssetCreationRequest.forAsset()
-            request.addResource(with: .photo, fileURL: fileURL, options: options)
+            request.addResource(with: .photo, fileURL: jpegURL, options: options)
 
             if let rawURL {
                 let rawOptions = PHAssetResourceCreationOptions()
