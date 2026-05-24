@@ -218,7 +218,33 @@ public final class FileBrowserViewController: UIViewController {
         )
         saveFormatMenu.preferredElementSize = .medium
 
-        return [viewModeMenu, saveFormatMenu]
+        // ソート順 セクション
+        let newestFirstAction = UIAction(
+            title: "新しい順",
+            image: UIImage(systemName: "arrow.down"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.sortOrder == FileSortOrder.dateDescending ? .on : .off
+        ) { [weak self] _ in
+            self?.viewModel.sortOrder = .dateDescending
+            self?.refreshSettingsMenu()
+        }
+        let oldestFirstAction = UIAction(
+            title: "古い順",
+            image: UIImage(systemName: "arrow.up"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.sortOrder == FileSortOrder.dateAscending ? .on : .off
+        ) { [weak self] _ in
+            self?.viewModel.sortOrder = .dateAscending
+            self?.refreshSettingsMenu()
+        }
+        let sortOrderMenu = UIMenu(
+            title: "ソート順",
+            options: [.displayInline, .singleSelection],
+            children: [oldestFirstAction, newestFirstAction]
+        )
+        sortOrderMenu.preferredElementSize = .medium
+
+        return [viewModeMenu, sortOrderMenu, saveFormatMenu]
     }
 
     private func configureDataSource() {

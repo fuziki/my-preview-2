@@ -7,6 +7,7 @@ public enum AppStorageKey: String {
     // 表示設定
     case viewMode = "AppSettings.viewMode"
     case saveFormat = "AppSettings.saveFormat"
+    case sortOrder = "AppSettings.sortOrder"
     // ファイルブラウザ状態
     case lastViewedFileName = "FileBrowser.lastViewedFileName"
 }

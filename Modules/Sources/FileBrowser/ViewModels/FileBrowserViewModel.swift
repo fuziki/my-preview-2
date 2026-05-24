@@ -24,6 +24,14 @@ public final class FileBrowserViewModel {
         didSet { storage.set(saveFormat.rawValue, forKey: .saveFormat) }
     }
 
+    /// ソート順。変更時にUserDefaultsへ自動保存し、セクションを再構築する
+    public var sortOrder: FileSortOrder {
+        didSet {
+            storage.set(sortOrder.rawValue, forKey: .sortOrder)
+            updateSections()
+        }
+    }
+
     /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
     private var lastViewedFileName: String? {
         didSet { storage.set(lastViewedFileName, forKey: .lastViewedFileName) }
@@ -116,6 +124,7 @@ public final class FileBrowserViewModel {
         // UserDefaultsから復元する
         self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
         self.saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
+        self.sortOrder = FileSortOrder(rawValue: storage.string(forKey: .sortOrder) ?? "") ?? .dateAscending
         self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
     }
 
@@ -147,21 +156,25 @@ public final class FileBrowserViewModel {
         isLoading = false
     }
 
-    /// loadedItemsを日付キーでグループ化してsectionsを更新する
+    /// loadedItemsを日付キーでグループ化し、sortOrderに従ってセクションとアイテムを並べてsectionsを更新する
     private func updateSections() {
         var sectionMap: [String: [FileItem]] = [:]
-        var dateOrder: [String] = []
         for item in loadedItems {
             let date = item.captureDate ?? Date.distantFuture
             let key = sectionKeyFormatter.string(from: date)
-            if sectionMap[key] == nil {
-                dateOrder.append(key)
-                sectionMap[key] = []
-            }
+            if sectionMap[key] == nil { sectionMap[key] = [] }
             sectionMap[key]!.append(item)
         }
-        sections = dateOrder.map { key in
-            FileBrowserSection(id: .init(dateKey: key), items: sectionMap[key] ?? [])
+        let ascending = sortOrder == .dateAscending
+        // "yyyy-MM-dd"形式は辞書順＝日付順なので文字列比較でソートできる
+        let sortedKeys = sectionMap.keys.sorted(by: ascending ? (<) : (>))
+        sections = sortedKeys.map { key in
+            let items = (sectionMap[key] ?? []).sorted {
+                let a = $0.captureDate ?? Date.distantFuture
+                let b = $1.captureDate ?? Date.distantFuture
+                return ascending ? a < b : a > b
+            }
+            return FileBrowserSection(id: .init(dateKey: key), items: items)
         }
     }
 
