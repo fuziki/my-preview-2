@@ -293,7 +293,7 @@ public final class PhotoViewerViewController: UIViewController {
         view.addSubview(photoInfoPillView)
         NSLayoutConstraint.activate([
             photoInfoPillView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            photoInfoPillView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
+            photoInfoPillView.leadingAnchor.constraint(equalTo: closeButtonView.trailingAnchor, constant: 8),
             photoInfoPillView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
 

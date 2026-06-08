@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 import Core
 
 // MARK: - PhotoInfoPillView
@@ -78,7 +79,8 @@ final class PhotoInfoPillView: UIView {
         NSLayoutConstraint.activate([
             blurView.topAnchor.constraint(equalTo: topAnchor),
             blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            // コンテンツ幅で右寄せ。leadingは>=にしてスタック幅で決まるようにする
+            blurView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
             heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
@@ -132,6 +134,12 @@ final class PhotoInfoPillView: UIView {
         let text = exifText.isEmpty ? fileName : "\(fileName)\n\(exifText)"
         UIPasteboard.general.string = text
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        ToastKit.show {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.on.clipboard")
+                Text("クリップボードにコピーしました")
+            }
+        }
     }
 
     private func formattedExifForClipboard() -> String {
@@ -154,7 +162,6 @@ final class PhotoInfoPillView: UIView {
 // MARK: - Preview
 
 #if DEBUG
-import SwiftUI
 
 #Preview("ファイル名＋EXIF（フラッシュあり）") {
     let vc = UIViewController()
