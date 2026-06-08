@@ -82,42 +82,7 @@ public final class PhotoViewerViewController: UIViewController {
         return button
     }()
 
-    private let fileNameBlur: UIVisualEffectView = {
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        blur.translatesAutoresizingMaskIntoConstraints = false
-        blur.layer.cornerRadius = 16
-        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        blur.layer.borderWidth = 0.5
-        blur.clipsToBounds = true
-        return blur
-    }()
-
-    private let fileNameStack: UIStackView = {
-        let stack = UIStackView()
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .vertical
-        stack.spacing = 2
-        stack.alignment = .leading
-        return stack
-    }()
-
-    private let fileNameLabel: UILabel = {
-        let label = UILabel()
-        label.textColor = .white
-        label.font = .preferredFont(forTextStyle: .callout)
-        label.lineBreakMode = .byTruncatingMiddle
-        label.numberOfLines = 1
-        return label
-    }()
-
-    private let exifLabel: UILabel = {
-        let label = UILabel()
-        label.textColor = UIColor.white.withAlphaComponent(0.75)
-        label.font = .preferredFont(forTextStyle: .caption1)
-        label.numberOfLines = 1
-        label.isHidden = true
-        return label
-    }()
+    private let photoInfoPillView = PhotoInfoPillView()
 
     private let thumbnailImageView: UIImageView = {
         let iv = UIImageView()
@@ -214,18 +179,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     override public func updateProperties() {
         super.updateProperties()
-        fileNameLabel.text = viewModel.currentFileName
-        let exifParts = [
-            viewModel.exifInfo?.iso,
-            viewModel.exifInfo?.focalLength,
-            viewModel.exifInfo?.exposureValue,
-            viewModel.exifInfo?.fNumber,
-            viewModel.exifInfo?.shutterSpeed,
-        ].compactMap { $0 }
-        let exifText = exifParts.joined(separator: "  ")
-        let flashSuffix = viewModel.exifInfo?.flashFired == true ? "  ⚡️" : ""
-        exifLabel.text = exifText + flashSuffix
-        exifLabel.isHidden = exifParts.isEmpty
+        photoInfoPillView.configure(fileName: viewModel.currentFileName, exifInfo: viewModel.exifInfo)
         prevButtonView.button.isEnabled = viewModel.canGoPrevious
         prevButtonView.button.tintColor = viewModel.canGoPrevious ? .white : .systemGray
         prevHitAreaButton.isEnabled = viewModel.canGoPrevious
@@ -336,27 +290,18 @@ public final class PhotoViewerViewController: UIViewController {
         ])
 
         // ファイル名 + EXIF: 右上のフローティングピル
-        fileNameStack.addArrangedSubview(fileNameLabel)
-        fileNameStack.addArrangedSubview(exifLabel)
-        view.addSubview(fileNameBlur)
-        fileNameBlur.contentView.addSubview(fileNameStack)
+        view.addSubview(photoInfoPillView)
         NSLayoutConstraint.activate([
-            fileNameBlur.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            fileNameBlur.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
-            fileNameBlur.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            fileNameBlur.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
-            fileNameStack.centerYAnchor.constraint(equalTo: fileNameBlur.contentView.centerYAnchor),
-            fileNameStack.topAnchor.constraint(greaterThanOrEqualTo: fileNameBlur.contentView.topAnchor, constant: 8),
-            fileNameStack.bottomAnchor.constraint(lessThanOrEqualTo: fileNameBlur.contentView.bottomAnchor, constant: -8),
-            fileNameStack.leadingAnchor.constraint(equalTo: fileNameBlur.contentView.leadingAnchor, constant: 14),
-            fileNameStack.trailingAnchor.constraint(equalTo: fileNameBlur.contentView.trailingAnchor, constant: -14),
+            photoInfoPillView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            photoInfoPillView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
+            photoInfoPillView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
 
         // サムネイル: ファイル名ラベルの下、右揃え
         view.addSubview(thumbnailImageView)
         NSLayoutConstraint.activate([
-            thumbnailImageView.topAnchor.constraint(equalTo: fileNameBlur.bottomAnchor, constant: 8),
-            thumbnailImageView.trailingAnchor.constraint(equalTo: fileNameBlur.trailingAnchor),
+            thumbnailImageView.topAnchor.constraint(equalTo: photoInfoPillView.bottomAnchor, constant: 8),
+            thumbnailImageView.trailingAnchor.constraint(equalTo: photoInfoPillView.trailingAnchor),
         ])
 
         // 保存ボタン: 下部中央のカプセル形
@@ -451,7 +396,7 @@ public final class PhotoViewerViewController: UIViewController {
             // alpha=0 のとき UIKit がタッチを無効化するため、オーバーレイ非表示中は操作不可になる。
             self.prevHitAreaButton.alpha = alpha
             self.nextHitAreaButton.alpha = alpha
-            self.fileNameBlur.alpha = alpha
+            self.photoInfoPillView.alpha = alpha
             self.thumbnailImageView.alpha = alpha
             self.saveButtonView.alpha = alpha
             self.lastSavedDateLabel.alpha = alpha
