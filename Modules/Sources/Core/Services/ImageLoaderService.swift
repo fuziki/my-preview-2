@@ -5,12 +5,19 @@ public protocol ImageLoaderServiceProtocol: Sendable {
 }
 
 public final class ImageLoaderService: ImageLoaderServiceProtocol {
-    public init() {}
+    private let tracker: FileLoadingTracker
+
+    public init(tracker: FileLoadingTracker) {
+        self.tracker = tracker
+    }
 
     public func loadImage(from url: URL) async -> UIImage? {
-        await Task.detached(priority: .userInitiated) {
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return UIImage(data: data)
-        }.value
+        let load: () async -> UIImage? = {
+            await Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return UIImage(data: data)
+            }.value
+        }
+        return await tracker.track(load)
     }
 }

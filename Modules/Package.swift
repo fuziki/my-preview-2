@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "Core", targets: ["Core"]),
         .library(name: "FileBrowser", targets: ["FileBrowser"]),
         .library(name: "PhotoViewer", targets: ["PhotoViewer"]),
+        .library(name: "ToastKit", targets: ["ToastKit"]),
         .library(name: "AppMain", targets: ["AppMain"]),
     ],
     targets: [
@@ -23,16 +24,21 @@ let package = Package(
             dependencies: ["Core"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        // フォトビューアー機能モジュール（Coreに依存）
+        // トースト通知UI（UIKit / SwiftUI のみに依存）
+        .target(
+            name: "ToastKit",
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+        // フォトビューアー機能モジュール（Core / ToastKit に依存）
         .target(
             name: "PhotoViewer",
-            dependencies: ["Core"],
+            dependencies: ["Core", "ToastKit"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // アプリエントリーポイント（全モジュールに依存）
         .target(
             name: "AppMain",
-            dependencies: ["Core", "FileBrowser", "PhotoViewer"],
+            dependencies: ["Core", "FileBrowser", "PhotoViewer", "ToastKit"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
 

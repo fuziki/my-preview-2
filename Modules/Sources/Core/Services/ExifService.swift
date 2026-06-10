@@ -6,13 +6,20 @@ public protocol ExifServiceProtocol: Sendable {
 }
 
 public final class ExifService: ExifServiceProtocol {
-    public init() {}
+    private let tracker: FileLoadingTracker
+
+    public init(tracker: FileLoadingTracker) {
+        self.tracker = tracker
+    }
 
     public func extractExif(from url: URL) async -> ExifInfo? {
-        await Task.detached(priority: .userInitiated) {
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return Self.parse(data: data)
-        }.value
+        let extract: () async -> ExifInfo? = {
+            await Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                return Self.parse(data: data)
+            }.value
+        }
+        return await tracker.track(extract)
     }
 
     private static nonisolated func parse(data: Data) -> ExifInfo? {

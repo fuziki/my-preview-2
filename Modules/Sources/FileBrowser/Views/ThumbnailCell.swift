@@ -1,45 +1,5 @@
 import UIKit
-import ImageIO
-
-// MARK: - ThumbnailCache
-
-final class ThumbnailCache {
-    static let shared = ThumbnailCache()
-    private let cache = NSCache<NSURL, UIImage>()
-
-    private init() {
-        cache.countLimit = 500
-        cache.totalCostLimit = 100 * 1024 * 1024 // 100 MB
-    }
-
-    func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url as NSURL)
-    }
-
-    func setImage(_ image: UIImage, for url: URL) {
-        cache.setObject(image, forKey: url as NSURL)
-    }
-}
-
-// MARK: - Thumbnail Generation
-
-nonisolated func makeThumbnail(url: URL, maxPixelSize: Int) -> UIImage? {
-    let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else { return nil }
-
-    // 高速パス: 埋め込みサムネイルを使用する
-    let fastOptions: [CFString: Any] = [
-        kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
-        kCGImageSourceCreateThumbnailWithTransform: true,
-        kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-    ]
-
-    guard let embedded = CGImageSourceCreateThumbnailAtIndex(source, 0, fastOptions as CFDictionary) else { return nil }
-    let ui = UIImage(cgImage: embedded)
-    return ui
-}
-
-// MARK: - ThumbnailCell
+import Core
 
 public final class ThumbnailCell: UICollectionViewCell {
     private let imageView: UIImageView = {
@@ -88,7 +48,6 @@ public final class ThumbnailCell: UICollectionViewCell {
             imageView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
 
-            // バッジは下部全幅に配置する
             lastViewedBadge.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             lastViewedBadge.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             lastViewedBadge.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
@@ -110,23 +69,16 @@ public final class ThumbnailCell: UICollectionViewCell {
         lastViewedBadge.isHidden = true
     }
 
-    public func configure(with url: URL, thumbnailPixelSize: Int) {
+    public func configure(with url: URL, thumbnailPixelSize: Int, thumbnailService: any ThumbnailServiceProtocol) {
         // キャッシュヒット（同期）— フリッカーなし
-        if let cached = ThumbnailCache.shared.image(for: url) {
+        if let cached = thumbnailService.cachedThumbnail(for: url) {
             imageView.image = cached
             return
         }
 
         loadingTask = Task { @MainActor [weak self] in
-            let image = await Task.detached(priority: .userInitiated) {
-                makeThumbnail(url: url, maxPixelSize: thumbnailPixelSize)
-            }.value
-
+            let image = await thumbnailService.loadThumbnail(url: url, maxPixelSize: thumbnailPixelSize)
             guard !Task.isCancelled, let self else { return }
-
-            if let image {
-                ThumbnailCache.shared.setImage(image, for: url)
-            }
             imageView.image = image
         }
     }

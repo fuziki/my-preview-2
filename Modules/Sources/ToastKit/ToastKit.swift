@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Public API
 
 @MainActor
-enum ToastKit {
+public enum ToastKit {
 
     // MARK: Configuration
 
@@ -13,19 +13,25 @@ enum ToastKit {
         var displayDuration: TimeInterval = 3.0
         /// 前の通知が消えてから次を表示するまでの間隔（秒）。デフォルト 0.4
         var interItemSpacing: TimeInterval = 0.4
-
-        init() {}
     }
 
     /// グローバル設定
     static var configuration = Configuration()
 
+    // MARK: Setup
+
+    /// アプリ起動時に一度だけ呼ぶ。makeWindow(windowScene:) 内で呼ぶこと。
+    public static func setup(windowScene: UIWindowScene) {
+        ToastWindowManager.shared.setup(windowScene: windowScene)
+    }
+
     // MARK: show
 
-    static func show<Content: View>(
+    public static func show<Content: View>(
         duration: TimeInterval? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
+        assert(ToastWindowManager.shared.isReady, "ToastKit.show が呼ばれましたが setup(windowScene:) がまだ呼ばれていません")
         let item = ToastItem(
             duration: duration ?? configuration.displayDuration,
             viewBuilder: { AnyView(content()) }
@@ -36,7 +42,7 @@ enum ToastKit {
 
 // MARK: - Internal model
 
-private struct ToastItem {
+struct ToastItem {
     let id = UUID()
     let duration: TimeInterval
     let viewBuilder: () -> AnyView
@@ -45,7 +51,7 @@ private struct ToastItem {
 // MARK: - Queue manager
 
 @MainActor
-private final class ToastQueue {
+final class ToastQueue {
     static let shared = ToastQueue()
 
     private var queue: [ToastItem] = []
@@ -65,7 +71,7 @@ private final class ToastQueue {
             self.isPresenting = false
             let spacing = ToastKit.configuration.interItemSpacing
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(spacing * 1_000_000_000))
+                try? await Task.sleep(for: .seconds(spacing))
                 self.dequeueIfNeeded()
             }
         }
@@ -75,25 +81,25 @@ private final class ToastQueue {
 // MARK: - Window manager
 
 @MainActor
-private final class ToastWindowManager {
+final class ToastWindowManager {
     static let shared = ToastWindowManager()
 
+    private var windowScene: UIWindowScene?
     private var toastWindow: ToastWindow?
 
+    var isReady: Bool { windowScene != nil }
+
+    func setup(windowScene: UIWindowScene) {
+        self.windowScene = windowScene
+    }
+
     func present(item: ToastItem, completion: @escaping () -> Void) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })
-                ?? UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .first
-        else { return }
+        guard let scene = windowScene else { return }
 
         let window: ToastWindow
         if let existing = toastWindow {
             window = existing
         } else {
-            // init(windowScene:) を使用して deprecated な init(frame:) を避ける
             let w = ToastWindow(windowScene: scene)
             toastWindow = w
             window = w
@@ -107,7 +113,7 @@ private final class ToastWindowManager {
 
 // MARK: - Custom UIWindow
 
-private final class ToastWindow: UIWindow {
+final class ToastWindow: UIWindow {
 
     private var currentVC: ToastHostingController?
 
@@ -145,7 +151,7 @@ private final class ToastWindow: UIWindow {
 
 // MARK: - Hosting ViewController
 
-private final class ToastHostingController: UIViewController, UIGestureRecognizerDelegate {
+final class ToastHostingController: UIViewController, UIGestureRecognizerDelegate {
 
     private let item: ToastItem
     private let dismissCallback: () -> Void
@@ -236,7 +242,7 @@ private final class ToastHostingController: UIViewController, UIGestureRecognize
     private func layoutToastView() {
         guard let hostingView else { return }
 
-        let safeTop = topInset()
+        let statusBarHeight = view.window?.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
         let availableWidth = min(view.bounds.width - horizontalPadding * 2, maxWidth)
 
         let fittingSize = hostingView.systemLayoutSizeFitting(
@@ -247,14 +253,9 @@ private final class ToastHostingController: UIViewController, UIGestureRecognize
         let toastWidth  = min(fittingSize.width, availableWidth)
         let toastHeight = fittingSize.height
         let toastX      = (view.bounds.width - toastWidth) / 2
-        let toastY      = safeTop + topSpacing
+        let toastY      = statusBarHeight + topSpacing
 
         hostingView.frame = CGRect(x: toastX, y: toastY, width: toastWidth, height: toastHeight)
-    }
-
-    private func topInset() -> CGFloat {
-        guard let scene = view.window?.windowScene else { return 0 }
-        return scene.statusBarManager?.statusBarFrame.height ?? 0
     }
 
     // MARK: - Animation
@@ -288,7 +289,8 @@ private final class ToastHostingController: UIViewController, UIGestureRecognize
         state = .dismissing
         cancelDismissTimer()
 
-        let targetY   = hostingView.frame.origin.y - hostingView.frame.height - topInset() - 40
+        let statusBarHeight = view.window?.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
+        let targetY = hostingView.frame.origin.y - hostingView.frame.height - statusBarHeight - 40
         let springVel = abs(velocity) / max(abs(targetY - hostingView.frame.origin.y), 1)
 
         UIView.animate(

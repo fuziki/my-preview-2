@@ -7,7 +7,7 @@ protocol PhotoPageItemCellDelegate: AnyObject {
 }
 
 /// UICollectionViewのスワイプナビゲーション内で使用される、1枚の写真を表示するセル。
-/// PhotoZoomScrollViewを持ち、URLから非同期で画像を読み込む。
+/// PhotoZoomScrollViewを持ち、ImageLoaderServiceProtocol経由でURLから非同期で画像を読み込む。
 final class PhotoPageItemCell: UICollectionViewCell {
 
     static let reuseIdentifier = "PhotoPageItemCell"
@@ -65,11 +65,11 @@ final class PhotoPageItemCell: UICollectionViewCell {
 
     // MARK: - 設定
 
-    func configure(index: Int, url: URL) {
+    func configure(index: Int, url: URL, imageLoader: any ImageLoaderServiceProtocol) {
         self.index = index
         loadedImage = nil
         loadTask?.cancel()
-        loadTask = Task { await loadImage(from: url) }
+        loadTask = Task { await self.loadImage(from: url, imageLoader: imageLoader) }
     }
 
     // MARK: - 画像表示
@@ -92,12 +92,8 @@ final class PhotoPageItemCell: UICollectionViewCell {
 
     // MARK: - プライベート
 
-    private func loadImage(from url: URL) async {
-        let data = await Task.detached(priority: .userInitiated) {
-            try? Data(contentsOf: url)
-        }.value
-        guard let data, let image = UIImage(data: data) else { return }
-        guard !Task.isCancelled else { return }
+    private func loadImage(from url: URL, imageLoader: any ImageLoaderServiceProtocol) async {
+        guard let image = await imageLoader.loadImage(from: url), !Task.isCancelled else { return }
         display(image: image)
     }
 

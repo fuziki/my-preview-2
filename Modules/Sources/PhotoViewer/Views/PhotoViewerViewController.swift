@@ -131,8 +131,11 @@ public final class PhotoViewerViewController: UIViewController {
 
     // MARK: - 初期化
 
+    private let imageLoader: any ImageLoaderServiceProtocol
+
     public init(input: PhotoViewerInput, services: PhotoViewerServices) {
         viewModel = PhotoViewerViewModel(input: input, services: services)
+        imageLoader = services.imageLoader
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -594,7 +597,7 @@ extension PhotoViewerViewController: UICollectionViewDataSource {
         // layoutPageOffsetを加算して論理インデックスに変換する。境界値はクランプする。
         let logicalIndex = max(0, min(viewModel.allURLs.count - 1, indexPath.item + layoutPageOffset))
         cell.delegate = self
-        cell.configure(index: logicalIndex, url: viewModel.allURLs[logicalIndex])
+        cell.configure(index: logicalIndex, url: viewModel.allURLs[logicalIndex], imageLoader: imageLoader)
         return cell
     }
 }

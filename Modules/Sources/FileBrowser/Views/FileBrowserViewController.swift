@@ -17,14 +17,21 @@ public final class FileBrowserViewController: UIViewController {
     /// FileBrowserモジュールはPhotoViewerモジュールに依存しないため、UIViewControllerとして受け取る。
     private let photoViewerFactory: (PhotoViewerInput) -> UIViewController
 
+    private let thumbnailService: any ThumbnailServiceProtocol
+
     // セル登録 — configureDataSource() で初期化する
     private var listCellRegistration: UICollectionView.CellRegistration<UICollectionViewListCell, URL>!
     private var gridCellRegistration: UICollectionView.CellRegistration<ThumbnailCell, URL>!
 
     // MARK: - 初期化
 
-    public init(viewModel: FileBrowserViewModel, photoViewerFactory: @escaping (PhotoViewerInput) -> UIViewController) {
+    public init(
+        viewModel: FileBrowserViewModel,
+        thumbnailService: any ThumbnailServiceProtocol,
+        photoViewerFactory: @escaping (PhotoViewerInput) -> UIViewController
+    ) {
         self.viewModel = viewModel
+        self.thumbnailService = thumbnailService
         self.photoViewerFactory = photoViewerFactory
         super.init(nibName: nil, bundle: nil)
     }
@@ -275,8 +282,8 @@ public final class FileBrowserViewController: UIViewController {
             400
         }
 
-        gridCellRegistration = UICollectionView.CellRegistration<ThumbnailCell, URL> { [weak self] cell, _, url in
-            cell.configure(with: url, thumbnailPixelSize: thumbnailPixelSize)
+        gridCellRegistration = UICollectionView.CellRegistration<ThumbnailCell, URL> { [weak self, thumbnailService = thumbnailService] cell, _, url in
+            cell.configure(with: url, thumbnailPixelSize: thumbnailPixelSize, thumbnailService: thumbnailService)
 
             // 最後に閲覧したアイテムにバッジを付ける
             let isLastViewed = self.map { s in
