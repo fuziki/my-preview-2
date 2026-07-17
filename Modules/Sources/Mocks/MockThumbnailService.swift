@@ -3,8 +3,8 @@ import Core
 
 /// シミュレータビルド用のThumbnailServiceモック。
 /// モックサムネイルを生成し、実サービスと同様にキャッシュから同期取得できる。
-/// cacheへのアクセスはMainActor上に限られるため@unchecked Sendableで問題ない。
-public final class MockThumbnailService: ThumbnailServiceProtocol, @unchecked Sendable {
+@MainActor
+public final class MockThumbnailService: ThumbnailServiceProtocol {
     private var cache: [URL: UIImage] = [:]
 
     public init() {}
