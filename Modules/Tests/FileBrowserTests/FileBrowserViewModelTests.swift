@@ -259,4 +259,45 @@ struct FileBrowserViewModelTests {
     func init_defaultsToJpegAndRawSaveFormat_whenStorageEmpty() {
         #expect(viewModel.saveFormat == .jpegAndRaw)
     }
+
+    // MARK: - グリッド列数
+
+    @Test
+    func init_defaultsToThreeColumns_whenStorageEmpty() {
+        #expect(viewModel.gridColumnCount == 3)
+    }
+
+    @Test
+    func gridColumnCount_persistsToStorage_onChange() {
+        viewModel.gridColumnCount = 4
+        #expect(storage.string(forKey: AppStorageKey.gridColumnCount.rawValue) == "4")
+    }
+
+    @Test
+    func init_restoresGridColumnCount_fromStorage() {
+        storage.set("5", forKey: AppStorageKey.gridColumnCount.rawValue)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        #expect(vm.gridColumnCount == 5)
+    }
+
+    @Test
+    func init_clampsGridColumnCount_belowRange() {
+        storage.set("1", forKey: AppStorageKey.gridColumnCount.rawValue)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        #expect(vm.gridColumnCount == 2)
+    }
+
+    @Test
+    func init_clampsGridColumnCount_aboveRange() {
+        storage.set("10", forKey: AppStorageKey.gridColumnCount.rawValue)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        #expect(vm.gridColumnCount == 5)
+    }
+
+    @Test
+    func init_defaultsToThreeColumns_forInvalidStoredValue() {
+        storage.set("abc", forKey: AppStorageKey.gridColumnCount.rawValue)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        #expect(vm.gridColumnCount == 3)
+    }
 }

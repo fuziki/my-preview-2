@@ -32,6 +32,14 @@ public final class FileBrowserViewModel {
         }
     }
 
+    /// グリッド表示の列数の選択可能範囲
+    public static let gridColumnCountRange = 2...5
+
+    /// グリッド表示の列数。変更時にUserDefaultsへ自動保存される（復元時に範囲内へクランプ）
+    public var gridColumnCount: Int {
+        didSet { storage.set(String(gridColumnCount), forKey: .gridColumnCount) }
+    }
+
     /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
     private var lastViewedFileName: String? {
         didSet { storage.set(lastViewedFileName, forKey: .lastViewedFileName) }
@@ -125,6 +133,11 @@ public final class FileBrowserViewModel {
         self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
         self.saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
         self.sortOrder = FileSortOrder(rawValue: storage.string(forKey: .sortOrder) ?? "") ?? .dateAscending
+        let storedColumnCount = Int(storage.string(forKey: .gridColumnCount) ?? "") ?? 3
+        self.gridColumnCount = min(
+            max(storedColumnCount, Self.gridColumnCountRange.lowerBound),
+            Self.gridColumnCountRange.upperBound
+        )
         self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
     }
 

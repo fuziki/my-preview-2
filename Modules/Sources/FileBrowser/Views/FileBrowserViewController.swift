@@ -199,6 +199,9 @@ public final class FileBrowserViewController: UIViewController {
         )
         viewModeMenu.preferredElementSize = .medium
 
+        // 列数 セクション（グリッド選択時のみ・[−][現在値][＋]のステッパー形式）
+        let columnCountMenu: UIMenu? = viewModel.viewMode == .grid ? makeColumnCountMenu() : nil
+
         // 保存形式 セクション（インライン展開・横並びアイコン+テキスト）
         let jpegAction = UIAction(
             title: "JPEG",
@@ -251,7 +254,46 @@ public final class FileBrowserViewController: UIViewController {
         )
         sortOrderMenu.preferredElementSize = .medium
 
-        return [viewModeMenu, sortOrderMenu, saveFormatMenu]
+        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu].compactMap { $0 }
+    }
+
+    /// グリッドの列数を増減するステッパー形式のメニューセクションを生成する
+    private func makeColumnCountMenu() -> UIMenu {
+        let count = viewModel.gridColumnCount
+        let range = FileBrowserViewModel.gridColumnCountRange
+
+        let decrementAction = UIAction(
+            title: "列数を減らす",
+            image: UIImage(systemName: "minus.circle"),
+            attributes: count <= range.lowerBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
+        ) { [weak self] _ in
+            guard let self else { return }
+            viewModel.gridColumnCount = max(count - 1, range.lowerBound)
+            refreshSettingsMenu()
+        }
+        // 現在の列数表示（タップ不可）
+        let currentAction = UIAction(
+            title: "\(count)列",
+            image: UIImage(systemName: "\(count).square"),
+            attributes: .disabled
+        ) { _ in }
+        let incrementAction = UIAction(
+            title: "列数を増やす",
+            image: UIImage(systemName: "plus.circle"),
+            attributes: count >= range.upperBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
+        ) { [weak self] _ in
+            guard let self else { return }
+            viewModel.gridColumnCount = min(count + 1, range.upperBound)
+            refreshSettingsMenu()
+        }
+
+        let menu = UIMenu(
+            title: "列数",
+            options: .displayInline,
+            children: [decrementAction, currentAction, incrementAction]
+        )
+        menu.preferredElementSize = .small
+        return menu
     }
 
     private func configureDataSource() {
@@ -383,20 +425,22 @@ public final class FileBrowserViewController: UIViewController {
     }
 
     private func makeGridLayout() -> UICollectionViewLayout {
-        UICollectionViewCompositionalLayout { _, _ in
+        let columnCount = viewModel.gridColumnCount
+        return UICollectionViewCompositionalLayout { _, _ in
+            let fraction = 1 / CGFloat(columnCount)
             let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1 / 3),
-                heightDimension: .fractionalWidth(1 / 3)
+                widthDimension: .fractionalWidth(fraction),
+                heightDimension: .fractionalWidth(fraction)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
             item.contentInsets = NSDirectionalEdgeInsets(top: 1, leading: 1, bottom: 1, trailing: 1)
 
             let groupSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
-                heightDimension: .fractionalWidth(1 / 3)
+                heightDimension: .fractionalWidth(fraction)
             )
             let group = NSCollectionLayoutGroup.horizontal(
-                layoutSize: groupSize, subitems: [item, item, item]
+                layoutSize: groupSize, repeatingSubitem: item, count: columnCount
             )
 
             let section = NSCollectionLayoutSection(group: group)
@@ -441,10 +485,11 @@ public final class FileBrowserViewController: UIViewController {
         }
     }
 
-    // viewModeの変化のみを独立して監視し、レイアウトを更新する
+    // viewModeと列数の変化を独立して監視し、レイアウトを更新する
     private func startObservingViewMode() {
         withObservationTracking {
             _ = viewModel.viewMode
+            _ = viewModel.gridColumnCount
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
