@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "FileBrowser", targets: ["FileBrowser"]),
         .library(name: "PhotoViewer", targets: ["PhotoViewer"]),
         .library(name: "ToastKit", targets: ["ToastKit"]),
+        .library(name: "Mocks", targets: ["Mocks"]),
         .library(name: "AppMain", targets: ["AppMain"]),
     ],
     targets: [
@@ -35,10 +36,16 @@ let package = Package(
             dependencies: ["Core", "ToastKit"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
+        // シミュレータビルド用のモックサービス（Coreに依存）
+        .target(
+            name: "Mocks",
+            dependencies: ["Core"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         // アプリエントリーポイント（全モジュールに依存）
         .target(
             name: "AppMain",
-            dependencies: ["Core", "FileBrowser", "PhotoViewer", "ToastKit"],
+            dependencies: ["Core", "FileBrowser", "PhotoViewer", "ToastKit", "Mocks"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
 

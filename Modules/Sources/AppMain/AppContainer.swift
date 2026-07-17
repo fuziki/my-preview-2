@@ -2,6 +2,9 @@ import UIKit
 import Core
 import FileBrowser
 import PhotoViewer
+#if targetEnvironment(simulator)
+import Mocks
+#endif
 
 /// ViewControllerの生成とサービスの依存解決を担うコンテナ。
 /// ViewControllerレイヤー（SceneDelegate）でのみ保持し、機能モジュール間の循環参照を防ぐ。
@@ -16,11 +19,19 @@ final class AppContainer {
     /// セッションをまたいで保存日時を保持するため、AppContainerが所有する
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
 
+    #if targetEnvironment(simulator)
+    /// シミュレータでは実ファイルが存在しないため、ファイルIO系サービスをモックに差し替える
+    private lazy var fileSystemService: any FileSystemServiceProtocol = MockFileSystemService()
+    private lazy var imageLoaderService: any ImageLoaderServiceProtocol = MockImageLoaderService()
+    private lazy var exifService: any ExifServiceProtocol = MockExifService()
+    private lazy var thumbnailService: any ThumbnailServiceProtocol = MockThumbnailService()
+    #else
     /// tracker 注入済みのサービス群。全モジュールへはここから伝播させる。
     private lazy var fileSystemService: any FileSystemServiceProtocol = FileSystemService(tracker: tracker)
     private lazy var imageLoaderService: any ImageLoaderServiceProtocol = ImageLoaderService(tracker: tracker)
     private lazy var exifService: any ExifServiceProtocol = ExifService(tracker: tracker)
     private lazy var thumbnailService: any ThumbnailServiceProtocol = ThumbnailService(tracker: tracker)
+    #endif
 
     // MARK: - ファクトリ
 
