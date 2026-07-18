@@ -43,6 +43,12 @@ public enum L10n {
             tr("file_browser.rating_filter_star_value", stars)
         }
 
+        /// 「レーティング (オン)」「レーティング (オフ)」のように現在の状態を括弧書きで付加したタイトルを返す
+        public static func ratingFeatureTitle(isEnabled: Bool) -> String {
+            let state = isEnabled ? tr("file_browser.state_on") : tr("file_browser.state_off")
+            return tr("file_browser.rating_feature_title", ratingFeature, state)
+        }
+
         public static func columnCountValue(_ count: Int) -> String {
             tr("file_browser.column_count_value", count)
         }

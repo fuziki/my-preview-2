@@ -28,6 +28,9 @@
 "file_browser.rating_filter_at_most" = "以下";
 "file_browser.rating_filter_exactly" = "同値";
 "file_browser.color_label" = "カラーラベル";
+"file_browser.rating_feature_title" = "%@ (%@)";
+"file_browser.state_on" = "オン";
+"file_browser.state_off" = "オフ";
 "file_browser.section_title_with_count" = "%@ (%d枚)";
 "file_browser.empty_state.no_folder" = "フォルダを選択してください";
 "file_browser.empty_state.loading" = "読み込み中...";

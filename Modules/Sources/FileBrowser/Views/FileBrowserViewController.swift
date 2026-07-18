@@ -393,11 +393,11 @@ public final class FileBrowserViewController: UIViewController {
         sortOrderMenu.preferredElementSize = .medium
 
         // レーティング機能 セクション（オンオフトグル）
+        // チェックマークではなく、タイトルに現在の状態を括弧書きで示すトグル表現にする
         let ratingToggleAction = UIAction(
-            title: L10n.FileBrowser.ratingFeature,
-            image: UIImage(systemName: "star"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.isRatingEnabled ? .on : .off
+            title: L10n.FileBrowser.ratingFeatureTitle(isEnabled: viewModel.isRatingEnabled),
+            image: UIImage(systemName: viewModel.isRatingEnabled ? "star.fill" : "star"),
+            attributes: .keepsMenuPresented
         ) { [weak self] _ in
             guard let self else { return }
             viewModel.isRatingEnabled.toggle()
