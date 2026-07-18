@@ -334,7 +334,7 @@ public final class PhotoViewerViewController: UIViewController {
         if viewModel.isRatingEnabled {
             view.addSubview(ratingLabelBarView)
             NSLayoutConstraint.activate([
-                ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -12),
+                ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -16),
                 ratingLabelBarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ])
         }
@@ -354,24 +354,24 @@ public final class PhotoViewerViewController: UIViewController {
             lastSavedDateLabel.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
         ])
 
-        // 前へタッチ領域: ガラスボタンより広い四角形（88×88）。ガラスボタンの上に重ねて前面に配置する。
-        // leadingをそろえることで、タッチ領域がガラスボタンの右・上方向に広がる。
+        // 前へタッチ領域: 44×44のアイコンを中心に上下左右16pt拡張した76×76の正方形。
+        // ガラスボタンの上に重ねて前面に配置する。
         view.addSubview(prevHitAreaButton)
         NSLayoutConstraint.activate([
-            prevHitAreaButton.widthAnchor.constraint(equalToConstant: 88),
-            prevHitAreaButton.heightAnchor.constraint(equalToConstant: 88),
-            prevHitAreaButton.bottomAnchor.constraint(equalTo: prevButtonView.bottomAnchor),
-            prevHitAreaButton.leadingAnchor.constraint(equalTo: prevButtonView.leadingAnchor),
+            prevHitAreaButton.widthAnchor.constraint(equalToConstant: 76),
+            prevHitAreaButton.heightAnchor.constraint(equalToConstant: 76),
+            prevHitAreaButton.centerXAnchor.constraint(equalTo: prevButtonView.centerXAnchor),
+            prevHitAreaButton.centerYAnchor.constraint(equalTo: prevButtonView.centerYAnchor),
         ])
 
-        // 次へタッチ領域: ガラスボタンより広い四角形（88×88）。ガラスボタンの上に重ねて前面に配置する。
-        // trailingをそろえることで、タッチ領域がガラスボタンの左・上方向に広がる。
+        // 次へタッチ領域: 44×44のアイコンを中心に上下左右16pt拡張した76×76の正方形。
+        // ガラスボタンの上に重ねて前面に配置する。
         view.addSubview(nextHitAreaButton)
         NSLayoutConstraint.activate([
-            nextHitAreaButton.widthAnchor.constraint(equalToConstant: 88),
-            nextHitAreaButton.heightAnchor.constraint(equalToConstant: 88),
-            nextHitAreaButton.bottomAnchor.constraint(equalTo: nextButtonView.bottomAnchor),
-            nextHitAreaButton.trailingAnchor.constraint(equalTo: nextButtonView.trailingAnchor),
+            nextHitAreaButton.widthAnchor.constraint(equalToConstant: 76),
+            nextHitAreaButton.heightAnchor.constraint(equalToConstant: 76),
+            nextHitAreaButton.centerXAnchor.constraint(equalTo: nextButtonView.centerXAnchor),
+            nextHitAreaButton.centerYAnchor.constraint(equalTo: nextButtonView.centerYAnchor),
         ])
     }
 

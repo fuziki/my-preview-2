@@ -1,4 +1,5 @@
 import Foundation
+import Resources
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -43,7 +44,7 @@ public extension PhotoColorLabel {
         case .green: return .systemGreen
         case .yellow: return .systemYellow
         case .blue: return .systemBlue
-        case .pink: return .systemPink
+        case .pink: return .customPink
         case .red: return .systemRed
         case .white: return .white
         }

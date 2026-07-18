@@ -20,7 +20,7 @@ public final class RatingLabelBarView: UIView {
         view.translatesAutoresizingMaskIntoConstraints = false
         view.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
         view.layer.borderWidth = 0.5
-        view.layer.cornerRadius = 22
+        view.layer.cornerRadius = 16
         view.clipsToBounds = true
         return view
     }()
@@ -30,7 +30,7 @@ public final class RatingLabelBarView: UIView {
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .horizontal
         stack.spacing = 0
-        stack.alignment = .fill
+        stack.alignment = .center
         return stack
     }()
 
@@ -62,16 +62,23 @@ public final class RatingLabelBarView: UIView {
         addSubview(blurView)
         blurView.contentView.addSubview(stackView)
 
-        // 星ボタン（1〜5）
+        // ボタン幅24ptに収まるよう、シンボルのpointSizeは実際の描画幅より小さめに指定する
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 12)
+
+        // 星ボタン（1〜5）: 24×32、アイコン12pt（幅24ptに収まるサイズ）
         for position in 1...5 {
             var config = UIButton.Configuration.borderless()
             config.image = UIImage(systemName: "star")
+            config.preferredSymbolConfigurationForImage = iconConfig
             config.baseForegroundColor = .white
             config.contentInsets = .zero
             let button = UIButton(configuration: config)
             button.tag = position
             button.addTarget(self, action: #selector(starTapped(_:)), for: .touchUpInside)
-            button.widthAnchor.constraint(equalToConstant: 36).isActive = true
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 24),
+                button.heightAnchor.constraint(equalToConstant: 32),
+            ])
             starButtons.append(button)
             stackView.addArrangedSubview(button)
         }
@@ -81,24 +88,28 @@ public final class RatingLabelBarView: UIView {
         separatorContainer.addSubview(separatorView)
         NSLayoutConstraint.activate([
             separatorContainer.widthAnchor.constraint(equalToConstant: 9),
+            separatorContainer.heightAnchor.constraint(equalToConstant: 32),
             separatorView.centerXAnchor.constraint(equalTo: separatorContainer.centerXAnchor),
             separatorView.centerYAnchor.constraint(equalTo: separatorContainer.centerYAnchor),
             separatorView.widthAnchor.constraint(equalToConstant: 1),
-            separatorView.heightAnchor.constraint(equalToConstant: 20),
+            separatorView.heightAnchor.constraint(equalToConstant: 16),
         ])
         stackView.addArrangedSubview(separatorContainer)
 
-        // カラーラベルボタン（6色）
+        // カラーラベルボタン（6色）: 24×32、アイコン12pt（幅24ptに収まるサイズ）
         for (index, label) in PhotoColorLabel.allCases.enumerated() {
             var config = UIButton.Configuration.borderless()
             config.image = UIImage(systemName: "circle.fill")
-            config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 13)
+            config.preferredSymbolConfigurationForImage = iconConfig
             config.baseForegroundColor = label.uiColor
             config.contentInsets = .zero
             let button = UIButton(configuration: config)
             button.tag = index
             button.addTarget(self, action: #selector(colorTapped(_:)), for: .touchUpInside)
-            button.widthAnchor.constraint(equalToConstant: 25).isActive = true
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 24),
+                button.heightAnchor.constraint(equalToConstant: 32),
+            ])
             colorButtons.append(button)
             stackView.addArrangedSubview(button)
         }
@@ -108,12 +119,11 @@ public final class RatingLabelBarView: UIView {
             blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
             blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            heightAnchor.constraint(equalToConstant: 44),
+            heightAnchor.constraint(equalToConstant: 32),
 
-            stackView.topAnchor.constraint(equalTo: blurView.contentView.topAnchor),
-            stackView.bottomAnchor.constraint(equalTo: blurView.contentView.bottomAnchor),
-            stackView.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 10),
-            stackView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -10),
+            stackView.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+            stackView.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 6),
+            stackView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -6),
         ])
     }
 
@@ -125,7 +135,7 @@ public final class RatingLabelBarView: UIView {
             let filled = index < rating
             var config = button.configuration ?? .borderless()
             config.image = UIImage(systemName: filled ? "star.fill" : "star")
-            config.baseForegroundColor = filled ? .systemYellow : .white
+            config.baseForegroundColor = .white
             button.configuration = config
         }
     }

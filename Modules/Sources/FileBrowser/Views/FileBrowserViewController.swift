@@ -502,7 +502,7 @@ public final class FileBrowserViewController: UIViewController {
                 if rating > 0 {
                     secondaryParts.append(NSAttributedString(
                         string: String(repeating: "★", count: rating),
-                        attributes: [.font: caption, .foregroundColor: UIColor.systemBlue]
+                        attributes: [.font: caption, .foregroundColor: UIColor.secondaryLabel]
                     ))
                 }
                 if let label = s.viewModel.colorLabel(for: url) {

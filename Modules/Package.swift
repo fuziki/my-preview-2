@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.iOS(.v26)],
     products: [
         .library(name: "Core", targets: ["Core"]),
+        .library(name: "Resources", targets: ["Resources"]),
         .library(name: "Localization", targets: ["Localization"]),
         .library(name: "FileBrowser", targets: ["FileBrowser"]),
         .library(name: "PhotoViewer", targets: ["PhotoViewer"]),
@@ -16,9 +17,16 @@ let package = Package(
         .library(name: "AppMain", targets: ["AppMain"]),
     ],
     targets: [
+        // アセット（カラー等）のタイプセーフアクセサモジュール
+        .target(
+            name: "Resources",
+            resources: [.process("Resources")],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         // 共有サービス・モデル層
         .target(
             name: "Core",
+            dependencies: ["Resources"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // 多言語対応のタイプセーフ文言モジュール（en/jaのみ対応、デフォルトはen）

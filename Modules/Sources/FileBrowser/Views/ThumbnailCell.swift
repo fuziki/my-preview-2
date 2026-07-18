@@ -36,7 +36,7 @@ public final class ThumbnailCell: UICollectionViewCell {
     private let ratingLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.textColor = .systemYellow
+        label.textColor = .white
         label.font = .systemFont(ofSize: 10, weight: .semibold)
         label.backgroundColor = UIColor.black.withAlphaComponent(0.65)
         label.layer.cornerRadius = 4
