@@ -4,9 +4,11 @@ import PackageDescription
 
 let package = Package(
     name: "Modules",
+    defaultLocalization: "en",
     platforms: [.iOS(.v26)],
     products: [
         .library(name: "Core", targets: ["Core"]),
+        .library(name: "Localization", targets: ["Localization"]),
         .library(name: "FileBrowser", targets: ["FileBrowser"]),
         .library(name: "PhotoViewer", targets: ["PhotoViewer"]),
         .library(name: "ToastKit", targets: ["ToastKit"]),
@@ -19,10 +21,15 @@ let package = Package(
             name: "Core",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        // ファイルブラウザー機能モジュール（Coreに依存）
+        // 多言語対応のタイプセーフ文言モジュール（en/jaのみ対応、デフォルトはen）
+        .target(
+            name: "Localization",
+            resources: [.process("Resources")]
+        ),
+        // ファイルブラウザー機能モジュール（Core / Localizationに依存）
         .target(
             name: "FileBrowser",
-            dependencies: ["Core"],
+            dependencies: ["Core", "Localization"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // トースト通知UI（UIKit / SwiftUI のみに依存）
@@ -30,10 +37,10 @@ let package = Package(
             name: "ToastKit",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        // フォトビューアー機能モジュール（Core / ToastKit に依存）
+        // フォトビューアー機能モジュール（Core / ToastKit / Localizationに依存）
         .target(
             name: "PhotoViewer",
-            dependencies: ["Core", "ToastKit"],
+            dependencies: ["Core", "ToastKit", "Localization"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // シミュレータビルド用のモックサービス（Coreに依存）

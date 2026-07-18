@@ -1,0 +1,34 @@
+/* Common */
+"common.cancel" = "Cancel";
+"common.clear" = "Clear";
+"common.copied_to_clipboard" = "Copied to clipboard";
+
+/* FileBrowser */
+"file_browser.open_folder" = "Open Folder";
+"file_browser.view_mode" = "View Mode";
+"file_browser.view_mode_list" = "List";
+"file_browser.view_mode_grid" = "Grid";
+"file_browser.save_format" = "Save Format";
+"file_browser.sort_order" = "Sort Order";
+"file_browser.sort_order_newest_first" = "Newest First";
+"file_browser.sort_order_oldest_first" = "Oldest First";
+"file_browser.clear_cache" = "Clear Cache";
+"file_browser.clear_cache_alert_message" = "This will delete settings and browsing history and reset to the initial state. Are you sure?";
+"file_browser.column_count" = "Columns";
+"file_browser.column_count_decrement" = "Decrease Columns";
+"file_browser.column_count_increment" = "Increase Columns";
+"file_browser.column_count_value" = "%d Columns";
+"file_browser.jump_to_last_viewed" = "Last Viewed";
+"file_browser.section_title_with_count" = "%@ (%d photos)";
+"file_browser.empty_state.no_folder" = "Please select a folder";
+"file_browser.empty_state.loading" = "Loading...";
+"file_browser.empty_state.no_photos" = "This folder contains no photos";
+
+/* PhotoViewer */
+"photo_viewer.save_idle" = "↓ Save";
+"photo_viewer.save_saving" = "⏳ Saving...";
+"photo_viewer.save_completed" = "✓ Saved";
+"photo_viewer.save_failed" = "✕ Failed";
+"photo_viewer.exif_f_number_label" = "F";
+"photo_viewer.exif_focal_length_label" = "Focal Length";
+"photo_viewer.exif_flash_fired_label" = "Flash Fired";

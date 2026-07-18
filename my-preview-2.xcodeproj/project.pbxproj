@@ -125,6 +125,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				ja,
 				Base,
 			);
 			mainGroup = 47D00D622FA2085100F217FE;
@@ -163,7 +164,7 @@
 		47D00D7F2FA2085200F217FE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = 47D00E0C2FA25E3B00F217FE /* Config */;
-			baseConfigurationReferenceRelativePath = Local.xcconfig;
+			baseConfigurationReferenceRelativePath = Shared.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -195,7 +196,7 @@
 		47D00D802FA2085200F217FE /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = 47D00E0C2FA25E3B00F217FE /* Config */;
-			baseConfigurationReferenceRelativePath = Local.xcconfig;
+			baseConfigurationReferenceRelativePath = Shared.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;

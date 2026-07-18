@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import Core
+import Localization
 
 @Observable
 public final class FileBrowserViewModel {
@@ -81,13 +82,13 @@ public final class FileBrowserViewModel {
 
     private let sectionDisplayFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ja_JP")
+        f.locale = L10n.currentLocale
         f.dateStyle = .long
         f.timeStyle = .none
         return f
     }()
 
-    /// Section.IDをローカライズされた日本語日付文字列に変換する
+    /// Section.IDをローカライズされた日付文字列に変換する
     public func sectionTitle(for id: FileBrowserSection.ID) -> String {
         if let date = sectionKeyFormatter.date(from: id.dateKey) {
             return sectionDisplayFormatter.string(from: date)
@@ -111,7 +112,7 @@ public final class FileBrowserViewModel {
             showsLastViewed = false
         }
         let sectionData = sections.map { section in
-            (id: section.id, title: "\(sectionTitle(for: section.id)) (\(section.items.count)枚)")
+            (id: section.id, title: L10n.FileBrowser.sectionTitleWithCount(sectionTitle(for: section.id), section.items.count))
         }
         return (showsLastViewed: showsLastViewed, sections: sectionData)
     }

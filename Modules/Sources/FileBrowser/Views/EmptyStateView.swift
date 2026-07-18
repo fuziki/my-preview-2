@@ -1,4 +1,5 @@
 import UIKit
+import Localization
 
 public final class EmptyStateView: UIView {
 
@@ -62,13 +63,13 @@ public final class EmptyStateView: UIView {
         switch state {
         case .noFolder:
             activityIndicator.stopAnimating()
-            label.text = "フォルダを選択してください"
+            label.text = L10n.FileBrowser.EmptyState.noFolder
         case .loading:
             activityIndicator.startAnimating()
-            label.text = "読み込み中..."
+            label.text = L10n.FileBrowser.EmptyState.loading
         case .noPhotos:
             activityIndicator.stopAnimating()
-            label.text = "このフォルダには写真が含まれていません"
+            label.text = L10n.FileBrowser.EmptyState.noPhotos
         }
     }
 }

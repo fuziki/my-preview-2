@@ -1,6 +1,7 @@
 import UIKit
 import UniformTypeIdentifiers
 import Core
+import Localization
 
 // MARK: - FileBrowserViewController
 
@@ -64,7 +65,7 @@ public final class FileBrowserViewController: UIViewController {
     private lazy var folderButton: UIButton = {
         var config = UIButton.Configuration.prominentGlass()
         config.image = UIImage(systemName: "folder")
-        config.title = "フォルダを開く"
+        config.title = L10n.FileBrowser.openFolder
         config.imagePlacement = .leading
         config.imagePadding = 8
         let button = UIButton(configuration: config)
@@ -175,7 +176,7 @@ public final class FileBrowserViewController: UIViewController {
     private func buildSettingsMenuElements() -> [UIMenuElement] {
         // 表示モード セクション（インライン展開・横並びアイコン+テキスト）
         let listAction = UIAction(
-            title: "リスト",
+            title: L10n.FileBrowser.viewModeList,
             image: UIImage(systemName: "list.bullet"),
             attributes: .keepsMenuPresented,
             state: viewModel.viewMode == .list ? .on : .off
@@ -184,7 +185,7 @@ public final class FileBrowserViewController: UIViewController {
             self?.refreshSettingsMenu()
         }
         let gridAction = UIAction(
-            title: "グリッド",
+            title: L10n.FileBrowser.viewModeGrid,
             image: UIImage(systemName: "square.grid.2x2"),
             attributes: .keepsMenuPresented,
             state: viewModel.viewMode == .grid ? .on : .off
@@ -193,7 +194,7 @@ public final class FileBrowserViewController: UIViewController {
             self?.refreshSettingsMenu()
         }
         let viewModeMenu = UIMenu(
-            title: "表示モード",
+            title: L10n.FileBrowser.viewMode,
             options: [.displayInline, .singleSelection],
             children: [listAction, gridAction]
         )
@@ -222,7 +223,7 @@ public final class FileBrowserViewController: UIViewController {
             self?.refreshSettingsMenu()
         }
         let saveFormatMenu = UIMenu(
-            title: "保存形式",
+            title: L10n.FileBrowser.saveFormat,
             options: [.displayInline, .singleSelection],
             children: [jpegAction, jpegAndRawAction]
         )
@@ -230,7 +231,7 @@ public final class FileBrowserViewController: UIViewController {
 
         // ソート順 セクション
         let newestFirstAction = UIAction(
-            title: "新しい順",
+            title: L10n.FileBrowser.sortOrderNewestFirst,
             image: UIImage(systemName: "arrow.down"),
             attributes: .keepsMenuPresented,
             state: viewModel.sortOrder == FileSortOrder.dateDescending ? .on : .off
@@ -239,7 +240,7 @@ public final class FileBrowserViewController: UIViewController {
             self?.refreshSettingsMenu()
         }
         let oldestFirstAction = UIAction(
-            title: "古い順",
+            title: L10n.FileBrowser.sortOrderOldestFirst,
             image: UIImage(systemName: "arrow.up"),
             attributes: .keepsMenuPresented,
             state: viewModel.sortOrder == FileSortOrder.dateAscending ? .on : .off
@@ -248,7 +249,7 @@ public final class FileBrowserViewController: UIViewController {
             self?.refreshSettingsMenu()
         }
         let sortOrderMenu = UIMenu(
-            title: "ソート順",
+            title: L10n.FileBrowser.sortOrder,
             options: [.displayInline, .singleSelection],
             children: [oldestFirstAction, newestFirstAction]
         )
@@ -256,7 +257,7 @@ public final class FileBrowserViewController: UIViewController {
 
         // キャッシュクリア セクション（最下部）
         let clearCacheAction = UIAction(
-            title: "キャッシュクリア",
+            title: L10n.FileBrowser.clearCache,
             image: UIImage(systemName: "trash"),
             attributes: .destructive
         ) { [weak self] _ in
@@ -274,12 +275,12 @@ public final class FileBrowserViewController: UIViewController {
     /// キャッシュクリアの確認アラートを表示し、承認された場合のみ初期状態へ戻す
     private func presentClearCacheConfirmation() {
         let alert = UIAlertController(
-            title: "キャッシュクリア",
-            message: "設定と閲覧履歴を削除して初期状態に戻します。よろしいですか？",
+            title: L10n.FileBrowser.clearCache,
+            message: L10n.FileBrowser.clearCacheAlertMessage,
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "クリア", style: .destructive) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.Common.clear, style: .destructive) { [weak self] _ in
             self?.viewModel.resetToDefaults()
             self?.refreshSettingsMenu()
         })
@@ -292,7 +293,7 @@ public final class FileBrowserViewController: UIViewController {
         let range = FileBrowserViewModel.gridColumnCountRange
 
         let decrementAction = UIAction(
-            title: "列数を減らす",
+            title: L10n.FileBrowser.columnCountDecrement,
             image: UIImage(systemName: "minus.circle"),
             attributes: count <= range.lowerBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
         ) { [weak self] _ in
@@ -302,12 +303,12 @@ public final class FileBrowserViewController: UIViewController {
         }
         // 現在の列数表示（タップ不可）
         let currentAction = UIAction(
-            title: "\(count)列",
+            title: L10n.FileBrowser.columnCountValue(count),
             image: UIImage(systemName: "\(count).square"),
             attributes: .disabled
         ) { _ in }
         let incrementAction = UIAction(
-            title: "列数を増やす",
+            title: L10n.FileBrowser.columnCountIncrement,
             image: UIImage(systemName: "plus.circle"),
             attributes: count >= range.upperBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
         ) { [weak self] _ in
@@ -317,7 +318,7 @@ public final class FileBrowserViewController: UIViewController {
         }
 
         let menu = UIMenu(
-            title: "列数",
+            title: L10n.FileBrowser.columnCount,
             options: .displayInline,
             children: [decrementAction, currentAction, incrementAction]
         )
@@ -338,7 +339,7 @@ public final class FileBrowserViewController: UIViewController {
             let isLastViewed = self.map { s in
                 s.viewModel.items.first(where: { $0.url == url })?.id == s.viewModel.lastViewedItemID
             } ?? false
-            config.secondaryText = isLastViewed ? "最後に表示" : nil
+            config.secondaryText = isLastViewed ? L10n.FileBrowser.jumpToLastViewed : nil
             config.secondaryTextProperties.color = .systemBlue
             config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
 
@@ -372,14 +373,14 @@ public final class FileBrowserViewController: UIViewController {
             let sectionID = snapshot.sectionIdentifiers[indexPath.section]
             guard let section = viewModel.section(for: sectionID) else { return }
 
-            let title = "\(viewModel.sectionTitle(for: sectionID)) (\(section.items.count)枚)"
+            let title = L10n.FileBrowser.sectionTitleWithCount(viewModel.sectionTitle(for: sectionID), section.items.count)
             headerView.configure(title: title) { [weak self] in
                 guard let self else { return [] }
                 let (showsLastViewed, sections) = viewModel.makeMenuData()
                 var actions: [UIMenuElement] = []
 
                 if showsLastViewed {
-                    let action = UIAction(title: "最後に表示") { [weak self] _ in
+                    let action = UIAction(title: L10n.FileBrowser.jumpToLastViewed) { [weak self] _ in
                         self?.jumpToLastViewed()
                     }
                     actions.append(action)
@@ -559,7 +560,7 @@ public final class FileBrowserViewController: UIViewController {
         } else {
             var config = UIButton.Configuration.prominentGlass()
             config.image = UIImage(systemName: "folder")
-            config.title = "フォルダを開く"
+            config.title = L10n.FileBrowser.openFolder
             config.imagePlacement = .leading
             config.imagePadding = 8
             folderButton.configuration = config

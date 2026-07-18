@@ -1,0 +1,8 @@
+// プロジェクト共通のビルド設定（コミット対象）
+
+// ローカライズ: 開発言語（優先言語）は英語
+// 対応言語一覧（英語・日本語）は my-preview-2/Info.plist の CFBundleLocalizations で宣言する
+// （INFOPLIST_KEY_CFBundleLocalizations はXcodeが認識しないため使用不可）
+DEVELOPMENT_LANGUAGE = en
+
+#include "Local.xcconfig"

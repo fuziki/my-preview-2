@@ -1,5 +1,6 @@
 import UIKit
 import Core
+import Localization
 
 public final class PhotoViewerViewController: UIViewController {
 
@@ -95,7 +96,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let saveButtonView: GlassButtonView = {
         var config = UIButton.Configuration.borderless()
-        config.title = "↓ 保存"
+        config.title = L10n.PhotoViewer.saveIdle
         config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20)
         config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
             var updated = attributes
@@ -412,16 +413,16 @@ public final class PhotoViewerViewController: UIViewController {
     private func updateSaveButton(status: SaveStatus) {
         switch status {
         case .idle:
-            saveButtonView.button.configuration?.title = "↓ 保存"
+            saveButtonView.button.configuration?.title = L10n.PhotoViewer.saveIdle
             saveButtonView.button.isEnabled = true
         case .saving:
-            saveButtonView.button.configuration?.title = "⏳ 保存中..."
+            saveButtonView.button.configuration?.title = L10n.PhotoViewer.saveSaving
             saveButtonView.button.isEnabled = false
         case .success:
-            saveButtonView.button.configuration?.title = "✓ 保存完了"
+            saveButtonView.button.configuration?.title = L10n.PhotoViewer.saveCompleted
             saveButtonView.button.isEnabled = false
         case .failure:
-            saveButtonView.button.configuration?.title = "✕ 失敗"
+            saveButtonView.button.configuration?.title = L10n.PhotoViewer.saveFailed
             saveButtonView.button.isEnabled = true
         }
     }

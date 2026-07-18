@@ -2,6 +2,7 @@ import UIKit
 import SwiftUI
 import Core
 import ToastKit
+import Localization
 
 // MARK: - PhotoInfoPillView
 
@@ -138,7 +139,7 @@ final class PhotoInfoPillView: UIView {
         ToastKit.show {
             HStack(spacing: 8) {
                 Image(systemName: "doc.on.clipboard")
-                Text("クリップボードにコピーしました")
+                Text(L10n.Common.copiedToClipboard)
             }
         }
     }
@@ -151,11 +152,11 @@ final class PhotoInfoPillView: UIView {
             let value = iso.replacingOccurrences(of: "ISO ", with: "")
             parts.append("ISO: \(value)")
         }
-        if let fn = exifInfo.fNumber  { parts.append("F値: \(fn)") }
+        if let fn = exifInfo.fNumber  { parts.append("\(L10n.PhotoViewer.exifFNumberLabel): \(fn)") }
         if let ss = exifInfo.shutterSpeed { parts.append("SS: \(ss)") }
-        if let fl = exifInfo.focalLength { parts.append("焦点距離: \(fl)") }
+        if let fl = exifInfo.focalLength { parts.append("\(L10n.PhotoViewer.exifFocalLengthLabel): \(fl)") }
         if let ev = exifInfo.exposureValue { parts.append("EV: \(ev)") }
-        if exifInfo.flashFired { parts.append("フラッシュあり") }
+        if exifInfo.flashFired { parts.append(L10n.PhotoViewer.exifFlashFiredLabel) }
         return parts.joined(separator: ", ")
     }
 }
