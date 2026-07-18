@@ -200,7 +200,7 @@ public final class PhotoViewerViewController: UIViewController {
             dismiss(animated: true)
         }
         if let date = viewModel.lastSavedDate {
-            lastSavedDateLabel.text = "最終保存: " + Self.savedDateFormatter.string(from: date)
+            lastSavedDateLabel.text = L10n.PhotoViewer.lastSavedLabel(Self.savedDateFormatter.string(from: date))
             lastSavedDateLabel.isHidden = false
         } else {
             lastSavedDateLabel.isHidden = true

@@ -153,14 +153,32 @@ public final class FileBrowserViewController: UIViewController {
 
     // MARK: - ナビゲーションバーアイテム
 
+    /// 設定・フィルターメニューのUIMenuElement構築を担当する。選択後の画面更新はコールバック経由で受け取る。
+    private lazy var menuBuilder = FileBrowserMenuBuilder(
+        viewModel: viewModel,
+        onSettingsMenuChanged: { [weak self] in self?.refreshSettingsMenu() },
+        onRatingToggled: { [weak self] in
+            guard let self else { return }
+            updateNavigationBarItems()
+            applySnapshot(reconfiguringAllItems: true)
+            refreshSettingsMenu()
+        },
+        onFilterMenuChanged: { [weak self] in
+            guard let self else { return }
+            refreshFilterMenu()
+            updateFilterButtonAppearance()
+        },
+        onClearCacheRequested: { [weak self] in self?.presentClearCacheConfirmation() }
+    )
+
     private lazy var settingsBarButtonItem = UIBarButtonItem(
         image: UIImage(systemName: "gear"),
-        menu: makeSettingsMenu()
+        menu: menuBuilder.makeSettingsMenu()
     )
 
     private lazy var filterBarButtonItem = UIBarButtonItem(
         image: UIImage(systemName: "line.3.horizontal.decrease.circle"),
-        menu: makeFilterMenu()
+        menu: menuBuilder.makeFilterMenu()
     )
 
     private func setupNavigationBar() {
@@ -186,246 +204,14 @@ public final class FileBrowserViewController: UIViewController {
         filterBarButtonItem.image = UIImage(systemName: name)
     }
 
-    /// 設定メニューを生成する。UIDeferredMenuElement.uncached でメニュー表示のたびに最新状態を反映する。
-    private func makeSettingsMenu() -> UIMenu {
-        let deferred = UIDeferredMenuElement.uncached { [weak self] completion in
-            let elements = self?.buildSettingsMenuElements() ?? []
-            completion(elements)
-        }
-        return UIMenu(title: "", children: [deferred])
-    }
-
     /// アクション選択後、keepsMenuPresented でメニューが開いたままの状態でも
     /// チェックマークを更新するため、menu プロパティを再代入して再評価させる。
     private func refreshSettingsMenu() {
-        settingsBarButtonItem.menu = makeSettingsMenu()
-    }
-
-    // MARK: - レーティングフィルターメニュー
-
-    /// フィルターメニューを生成する。UIDeferredMenuElement.uncached でメニュー表示のたびに最新状態を反映する。
-    private func makeFilterMenu() -> UIMenu {
-        let deferred = UIDeferredMenuElement.uncached { [weak self] completion in
-            completion(self?.buildFilterMenuElements() ?? [])
-        }
-        return UIMenu(title: "", children: [deferred])
+        settingsBarButtonItem.menu = menuBuilder.makeSettingsMenu()
     }
 
     private func refreshFilterMenu() {
-        filterBarButtonItem.menu = makeFilterMenu()
-    }
-
-    private func buildFilterMenuElements() -> [UIMenuElement] {
-        let current = viewModel.ratingFilter
-        // 星・条件の選択時に引き継ぐベース値（フィルターなしの場合はデフォルト値）
-        let base = current ?? RatingFilter(stars: 0, comparison: .atLeast)
-
-        // フィルターなし（レーティング・カラーラベルの両方を解除）
-        let offAction = UIAction(
-            title: L10n.FileBrowser.ratingFilterOff,
-            image: UIImage(systemName: "xmark.circle"),
-            state: current == nil && viewModel.colorLabelFilter.isEmpty ? .on : .off
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.ratingFilter = nil
-            viewModel.colorLabelFilter = []
-            refreshFilterMenu()
-            updateFilterButtonAppearance()
-        }
-        let offMenu = UIMenu(title: "", options: .displayInline, children: [offAction])
-
-        // 星の数（0〜5）
-        let starActions = RatingFilter.starsRange.map { stars in
-            UIAction(
-                title: L10n.FileBrowser.ratingFilterStarValue(stars),
-                image: UIImage(systemName: stars == 0 ? "star.slash" : "star.fill"),
-                attributes: .keepsMenuPresented,
-                state: current?.stars == stars ? .on : .off
-            ) { [weak self] _ in
-                self?.applyRatingFilter(RatingFilter(stars: stars, comparison: base.comparison))
-            }
-        }
-        let starsMenu = UIMenu(
-            title: L10n.FileBrowser.ratingFilterStars,
-            options: [.displayInline, .singleSelection],
-            children: starActions
-        )
-
-        // 条件（以上・以下・同値）
-        let comparisonData: [(RatingFilter.Comparison, String, String)] = [
-            (.atLeast, L10n.FileBrowser.ratingFilterAtLeast, "greaterthanorequalto"),
-            (.atMost, L10n.FileBrowser.ratingFilterAtMost, "lessthanorequalto"),
-            (.exactly, L10n.FileBrowser.ratingFilterExactly, "equal"),
-        ]
-        let comparisonActions = comparisonData.map { comparison, title, imageName in
-            UIAction(
-                title: title,
-                image: UIImage(systemName: imageName),
-                attributes: .keepsMenuPresented,
-                state: current?.comparison == comparison ? .on : .off
-            ) { [weak self] _ in
-                self?.applyRatingFilter(RatingFilter(stars: base.stars, comparison: comparison))
-            }
-        }
-        let comparisonMenu = UIMenu(
-            title: L10n.FileBrowser.ratingFilterComparison,
-            options: [.displayInline, .singleSelection],
-            children: comparisonActions
-        )
-
-        // カラーラベル（複数選択・0〜6個）
-        let colorActions = PhotoColorLabel.allCases.map { label in
-            UIAction(
-                title: L10n.ColorLabel.name(forRawValue: label.rawValue),
-                image: UIImage(systemName: "circle.fill")?
-                    .withTintColor(label.uiColor, renderingMode: .alwaysOriginal),
-                attributes: .keepsMenuPresented,
-                state: viewModel.colorLabelFilter.contains(label) ? .on : .off
-            ) { [weak self] _ in
-                guard let self else { return }
-                var selection = viewModel.colorLabelFilter
-                if selection.contains(label) {
-                    selection.remove(label)
-                } else {
-                    selection.insert(label)
-                }
-                viewModel.colorLabelFilter = selection
-                refreshFilterMenu()
-                updateFilterButtonAppearance()
-            }
-        }
-        let colorMenu = UIMenu(
-            title: L10n.FileBrowser.colorLabel,
-            options: .displayInline,
-            children: colorActions
-        )
-
-        return [offMenu, starsMenu, comparisonMenu, colorMenu]
-    }
-
-    /// フィルターを適用してメニューとボタン表示を更新する（セクション再構築は didSet 経由で行われる）
-    private func applyRatingFilter(_ filter: RatingFilter?) {
-        viewModel.ratingFilter = filter
-        refreshFilterMenu()
-        updateFilterButtonAppearance()
-    }
-
-    private func buildSettingsMenuElements() -> [UIMenuElement] {
-        // 表示モード セクション（インライン展開・横並びアイコン+テキスト）
-        let listAction = UIAction(
-            title: L10n.FileBrowser.viewModeList,
-            image: UIImage(systemName: "list.bullet"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.viewMode == .list ? .on : .off
-        ) { [weak self] _ in
-            self?.viewModel.viewMode = .list
-            self?.refreshSettingsMenu()
-        }
-        let gridAction = UIAction(
-            title: L10n.FileBrowser.viewModeGrid,
-            image: UIImage(systemName: "square.grid.2x2"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.viewMode == .grid ? .on : .off
-        ) { [weak self] _ in
-            self?.viewModel.viewMode = .grid
-            self?.refreshSettingsMenu()
-        }
-        let viewModeMenu = UIMenu(
-            title: L10n.FileBrowser.viewMode,
-            options: [.displayInline, .singleSelection],
-            children: [listAction, gridAction]
-        )
-        viewModeMenu.preferredElementSize = .medium
-
-        // 列数 セクション（グリッド選択時のみ・[−][現在値][＋]のステッパー形式）
-        let columnCountMenu: UIMenu? = viewModel.viewMode == .grid ? makeColumnCountMenu() : nil
-
-        // 保存形式 セクション（インライン展開・横並びアイコン+テキスト）
-        let jpegAction = UIAction(
-            title: "JPEG",
-            image: UIImage(systemName: "photo"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.saveFormat == .jpeg ? .on : .off
-        ) { [weak self] _ in
-            self?.viewModel.saveFormat = .jpeg
-            self?.refreshSettingsMenu()
-        }
-        let jpegAndRawAction = UIAction(
-            title: "JPEG + RAW",
-            image: UIImage(systemName: "photo.on.rectangle.angled"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.saveFormat == .jpegAndRaw ? .on : .off
-        ) { [weak self] _ in
-            self?.viewModel.saveFormat = .jpegAndRaw
-            self?.refreshSettingsMenu()
-        }
-        let saveFormatMenu = UIMenu(
-            title: L10n.FileBrowser.saveFormat,
-            options: [.displayInline, .singleSelection],
-            children: [jpegAction, jpegAndRawAction]
-        )
-        saveFormatMenu.preferredElementSize = .medium
-
-        // ソート順 セクション
-        let newestFirstAction = UIAction(
-            title: L10n.FileBrowser.sortOrderNewestFirst,
-            image: UIImage(systemName: "arrow.down"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.sortOrder == FileSortOrder.dateDescending ? .on : .off
-        ) { [weak self] _ in
-            self?.viewModel.sortOrder = .dateDescending
-            self?.refreshSettingsMenu()
-        }
-        let oldestFirstAction = UIAction(
-            title: L10n.FileBrowser.sortOrderOldestFirst,
-            image: UIImage(systemName: "arrow.up"),
-            attributes: .keepsMenuPresented,
-            state: viewModel.sortOrder == FileSortOrder.dateAscending ? .on : .off
-        ) { [weak self] _ in
-            self?.viewModel.sortOrder = .dateAscending
-            self?.refreshSettingsMenu()
-        }
-        let sortOrderMenu = UIMenu(
-            title: L10n.FileBrowser.sortOrder,
-            options: [.displayInline, .singleSelection],
-            children: [oldestFirstAction, newestFirstAction]
-        )
-        sortOrderMenu.preferredElementSize = .medium
-
-        // レーティング機能 セクション（オンオフトグル）
-        // チェックマークではなく、タイトルに現在の状態を括弧書きで示すトグル表現にする
-        let ratingToggleAction = UIAction(
-            title: L10n.FileBrowser.ratingFeatureTitle(isEnabled: viewModel.isRatingEnabled),
-            image: UIImage(systemName: viewModel.isRatingEnabled ? "star.fill" : "star"),
-            attributes: .keepsMenuPresented
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.isRatingEnabled.toggle()
-            updateNavigationBarItems()
-            applySnapshot(reconfiguringAllItems: true)
-            refreshSettingsMenu()
-        }
-        let ratingMenu = UIMenu(
-            title: "",
-            options: .displayInline,
-            children: [ratingToggleAction]
-        )
-
-        // キャッシュクリア セクション（最下部）
-        let clearCacheAction = UIAction(
-            title: L10n.FileBrowser.clearCache,
-            image: UIImage(systemName: "trash"),
-            attributes: .destructive
-        ) { [weak self] _ in
-            self?.presentClearCacheConfirmation()
-        }
-        let clearCacheMenu = UIMenu(
-            title: "",
-            options: .displayInline,
-            children: [clearCacheAction]
-        )
-
-        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu, ratingMenu, clearCacheMenu].compactMap { $0 }
+        filterBarButtonItem.menu = menuBuilder.makeFilterMenu()
     }
 
     /// キャッシュクリアの確認アラートを表示し、承認された場合のみ初期状態へ戻す
@@ -444,45 +230,6 @@ public final class FileBrowserViewController: UIViewController {
             refreshSettingsMenu()
         })
         present(alert, animated: true)
-    }
-
-    /// グリッドの列数を増減するステッパー形式のメニューセクションを生成する
-    private func makeColumnCountMenu() -> UIMenu {
-        let count = viewModel.gridColumnCount
-        let range = FileBrowserViewModel.gridColumnCountRange
-
-        let decrementAction = UIAction(
-            title: L10n.FileBrowser.columnCountDecrement,
-            image: UIImage(systemName: "minus.circle"),
-            attributes: count <= range.lowerBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.gridColumnCount = max(count - 1, range.lowerBound)
-            refreshSettingsMenu()
-        }
-        // 現在の列数表示（タップ不可）
-        let currentAction = UIAction(
-            title: L10n.FileBrowser.columnCountValue(count),
-            image: UIImage(systemName: "\(count).square"),
-            attributes: .disabled
-        ) { _ in }
-        let incrementAction = UIAction(
-            title: L10n.FileBrowser.columnCountIncrement,
-            image: UIImage(systemName: "plus.circle"),
-            attributes: count >= range.upperBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.gridColumnCount = min(count + 1, range.upperBound)
-            refreshSettingsMenu()
-        }
-
-        let menu = UIMenu(
-            title: L10n.FileBrowser.columnCount,
-            options: .displayInline,
-            children: [decrementAction, currentAction, incrementAction]
-        )
-        menu.preferredElementSize = .small
-        return menu
     }
 
     private func configureDataSource() {
@@ -644,67 +391,7 @@ public final class FileBrowserViewController: UIViewController {
     // MARK: - レイアウトファクトリ
 
     private func makeLayout(for mode: ViewMode) -> UICollectionViewLayout {
-        mode == .grid ? makeGridLayout() : makeListLayout()
-    }
-
-    private func makeListLayout() -> UICollectionViewLayout {
-        UICollectionViewCompositionalLayout { _, layoutEnvironment in
-            var listConfig = UICollectionLayoutListConfiguration(appearance: .plain)
-            listConfig.showsSeparators = true
-            let section = NSCollectionLayoutSection.list(using: listConfig, layoutEnvironment: layoutEnvironment)
-
-            let headerSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1.0),
-                heightDimension: .estimated(44)
-            )
-            let header = NSCollectionLayoutBoundarySupplementaryItem(
-                layoutSize: headerSize,
-                elementKind: UICollectionView.elementKindSectionHeader,
-                alignment: .top
-            )
-            header.pinToVisibleBounds = true
-            section.boundarySupplementaryItems = [header]
-
-            return section
-        }
-    }
-
-    private func makeGridLayout() -> UICollectionViewLayout {
-        let columnCount = viewModel.gridColumnCount
-        return UICollectionViewCompositionalLayout { _, _ in
-            let fraction = 1 / CGFloat(columnCount)
-            let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(fraction),
-                heightDimension: .fractionalWidth(fraction)
-            )
-            let item = NSCollectionLayoutItem(layoutSize: itemSize)
-            item.contentInsets = NSDirectionalEdgeInsets(top: 1, leading: 1, bottom: 1, trailing: 1)
-
-            let groupSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1),
-                heightDimension: .fractionalWidth(fraction)
-            )
-            let group = NSCollectionLayoutGroup.horizontal(
-                layoutSize: groupSize, repeatingSubitem: item, count: columnCount
-            )
-
-            let section = NSCollectionLayoutSection(group: group)
-            section.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0)
-
-            let headerSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1.0),
-                heightDimension: .estimated(44)
-            )
-            let header = NSCollectionLayoutBoundarySupplementaryItem(
-                layoutSize: headerSize,
-                elementKind: UICollectionView.elementKindSectionHeader,
-                alignment: .top
-            )
-            header.pinToVisibleBounds = true
-            section.boundarySupplementaryItems = [header]
-
-            return section
-        }
+        mode == .grid ? .fileBrowserGrid(columnCount: viewModel.gridColumnCount) : .fileBrowserList()
     }
 
     // MARK: - 監視
@@ -918,91 +605,5 @@ extension FileBrowserViewController: UIDocumentPickerDelegate {
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
         Task { await viewModel.selectFolder(url) }
-    }
-}
-
-// MARK: - SectionHeaderView
-
-private final class SectionHeaderView: UICollectionReusableView {
-
-    private let glassView: UIVisualEffectView = {
-        let v = UIVisualEffectView(effect: UIGlassEffect())
-        v.translatesAutoresizingMaskIntoConstraints = false
-        v.layer.cornerRadius = 16
-        v.layer.cornerCurve = .continuous
-        v.clipsToBounds = true
-        return v
-    }()
-
-    private let label: UILabel = {
-        let l = UILabel()
-        l.translatesAutoresizingMaskIntoConstraints = false
-        l.font = .preferredFont(forTextStyle: .subheadline)
-        l.textColor = .label
-        return l
-    }()
-
-    // 日付ジャンプが可能であることを示すシェブロンアイコン
-    private let chevronImageView: UIImageView = {
-        let iv = UIImageView(image: UIImage(systemName: "chevron.up.chevron.down"))
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        iv.tintColor = .secondaryLabel
-        iv.contentMode = .scaleAspectFit
-        return iv
-    }()
-
-    // ガラスビューの前面に重ねる透明タッチ領域。タップ時にコンテキストメニューを表示する。
-    private let menuButton: UIButton = {
-        let button = UIButton(type: .custom)
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.showsMenuAsPrimaryAction = true
-        return button
-    }()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = .clear
-
-        addSubview(glassView)
-        glassView.contentView.addSubview(label)
-        glassView.contentView.addSubview(chevronImageView)
-        addSubview(menuButton)  // ガラスビューの前面に配置
-
-        NSLayoutConstraint.activate([
-            glassView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            glassView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            glassView.heightAnchor.constraint(equalToConstant: 32),
-
-            label.leadingAnchor.constraint(equalTo: glassView.contentView.leadingAnchor, constant: 12),
-            label.centerYAnchor.constraint(equalTo: glassView.contentView.centerYAnchor),
-            label.trailingAnchor.constraint(equalTo: chevronImageView.leadingAnchor, constant: -6),
-
-            chevronImageView.centerYAnchor.constraint(equalTo: glassView.contentView.centerYAnchor),
-            chevronImageView.trailingAnchor.constraint(equalTo: glassView.contentView.trailingAnchor, constant: -10),
-            chevronImageView.widthAnchor.constraint(equalToConstant: 12),
-            chevronImageView.heightAnchor.constraint(equalToConstant: 12),
-
-            glassView.trailingAnchor.constraint(equalTo: chevronImageView.trailingAnchor, constant: 10),
-
-            // menuButtonをglassViewと同じ範囲に重ねる
-            menuButton.leadingAnchor.constraint(equalTo: glassView.leadingAnchor),
-            menuButton.trailingAnchor.constraint(equalTo: glassView.trailingAnchor),
-            menuButton.topAnchor.constraint(equalTo: glassView.topAnchor),
-            menuButton.bottomAnchor.constraint(equalTo: glassView.bottomAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError()
-    }
-
-    func configure(title: String, menuProvider: @escaping () -> [UIMenuElement]) {
-        label.text = title
-        // UIDeferredMenuElement.uncached を使うことで、メニューが表示されるたびに
-        // menuProvider が呼ばれ、常に最新の内容が反映される
-        let deferred = UIDeferredMenuElement.uncached { completion in
-            completion(menuProvider())
-        }
-        menuButton.menu = UIMenu(title: "", children: [deferred])
     }
 }

@@ -83,6 +83,10 @@ public enum L10n {
         public static var exifFNumberLabel: String { tr("photo_viewer.exif_f_number_label") }
         public static var exifFocalLengthLabel: String { tr("photo_viewer.exif_focal_length_label") }
         public static var exifFlashFiredLabel: String { tr("photo_viewer.exif_flash_fired_label") }
+
+        public static func lastSavedLabel(_ dateString: String) -> String {
+            tr("photo_viewer.last_saved_label", dateString)
+        }
     }
 
     // MARK: - 現在の言語

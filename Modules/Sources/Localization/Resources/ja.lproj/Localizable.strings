@@ -52,3 +52,4 @@
 "photo_viewer.exif_f_number_label" = "F値";
 "photo_viewer.exif_focal_length_label" = "焦点距離";
 "photo_viewer.exif_flash_fired_label" = "フラッシュあり";
+"photo_viewer.last_saved_label" = "最終保存: %@";

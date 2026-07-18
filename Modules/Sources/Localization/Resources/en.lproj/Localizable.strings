@@ -52,3 +52,4 @@
 "photo_viewer.exif_f_number_label" = "F";
 "photo_viewer.exif_focal_length_label" = "Focal Length";
 "photo_viewer.exif_flash_fired_label" = "Flash Fired";
+"photo_viewer.last_saved_label" = "Last saved: %@";
