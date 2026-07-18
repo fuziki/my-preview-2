@@ -9,6 +9,9 @@ public enum AppStorageKey: String, CaseIterable {
     case saveFormat = "AppSettings.saveFormat"
     case sortOrder = "AppSettings.sortOrder"
     case gridColumnCount = "AppSettings.gridColumnCount"
+    // レーティング
+    case isRatingEnabled = "AppSettings.isRatingEnabled"
+    case ratingFilter = "FileBrowser.ratingFilter"
     // ファイルブラウザ状態
     case lastViewedFileName = "FileBrowser.lastViewedFileName"
 }

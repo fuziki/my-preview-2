@@ -19,6 +19,14 @@
 "file_browser.column_count_increment" = "列数を増やす";
 "file_browser.column_count_value" = "%d列";
 "file_browser.jump_to_last_viewed" = "最後に表示";
+"file_browser.rating_feature" = "レーティング";
+"file_browser.rating_filter_off" = "フィルターなし";
+"file_browser.rating_filter_stars" = "星の数";
+"file_browser.rating_filter_star_value" = "星%d";
+"file_browser.rating_filter_comparison" = "条件";
+"file_browser.rating_filter_at_least" = "以上";
+"file_browser.rating_filter_at_most" = "以下";
+"file_browser.rating_filter_exactly" = "同値";
 "file_browser.section_title_with_count" = "%@ (%d枚)";
 "file_browser.empty_state.no_folder" = "フォルダを選択してください";
 "file_browser.empty_state.loading" = "読み込み中...";

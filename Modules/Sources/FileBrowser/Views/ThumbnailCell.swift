@@ -32,6 +32,20 @@ public final class ThumbnailCell: UICollectionViewCell {
         return v
     }()
 
+    // レーティングの星表示ラベル（左上・半透明の黒背景）
+    private let ratingLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.textColor = .systemYellow
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.65)
+        label.layer.cornerRadius = 4
+        label.clipsToBounds = true
+        label.textAlignment = .center
+        label.isHidden = true
+        return label
+    }()
+
     private var loadingTask: Task<Void, Never>?
 
     override public init(frame: CGRect) {
@@ -41,6 +55,7 @@ public final class ThumbnailCell: UICollectionViewCell {
         contentView.addSubview(imageView)
         contentView.addSubview(lastViewedBadge)
         lastViewedBadge.addSubview(lastViewedLabel)
+        contentView.addSubview(ratingLabel)
 
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -56,6 +71,10 @@ public final class ThumbnailCell: UICollectionViewCell {
             lastViewedLabel.bottomAnchor.constraint(equalTo: lastViewedBadge.bottomAnchor, constant: -3),
             lastViewedLabel.leadingAnchor.constraint(equalTo: lastViewedBadge.leadingAnchor, constant: 4),
             lastViewedLabel.trailingAnchor.constraint(equalTo: lastViewedBadge.trailingAnchor, constant: -4),
+
+            ratingLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
+            ratingLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
+            ratingLabel.heightAnchor.constraint(equalToConstant: 16),
         ])
     }
 
@@ -67,6 +86,7 @@ public final class ThumbnailCell: UICollectionViewCell {
         loadingTask = nil
         imageView.image = nil
         lastViewedBadge.isHidden = true
+        ratingLabel.isHidden = true
     }
 
     public func configure(with url: URL, thumbnailPixelSize: Int, thumbnailService: any ThumbnailServiceProtocol) {
@@ -86,5 +106,16 @@ public final class ThumbnailCell: UICollectionViewCell {
     /// 「最後に表示」バッジの表示状態を設定する
     public func setLastViewed(_ show: Bool) {
         lastViewedBadge.isHidden = !show
+    }
+
+    /// レーティングの星表示を設定する（星0は非表示）
+    public func setRating(_ rating: Int) {
+        guard rating > 0 else {
+            ratingLabel.isHidden = true
+            return
+        }
+        // 前後に余白を入れて黒背景のバッジ風に見せる
+        ratingLabel.text = " " + String(repeating: "★", count: rating) + " "
+        ratingLabel.isHidden = false
     }
 }

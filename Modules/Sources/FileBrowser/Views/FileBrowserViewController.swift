@@ -151,11 +151,38 @@ public final class FileBrowserViewController: UIViewController {
         ])
     }
 
+    // MARK: - ナビゲーションバーアイテム
+
+    private lazy var settingsBarButtonItem = UIBarButtonItem(
+        image: UIImage(systemName: "gear"),
+        menu: makeSettingsMenu()
+    )
+
+    private lazy var filterBarButtonItem = UIBarButtonItem(
+        image: UIImage(systemName: "line.3.horizontal.decrease.circle"),
+        menu: makeFilterMenu()
+    )
+
     private func setupNavigationBar() {
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "gear"),
-            menu: makeSettingsMenu()
-        )
+        updateNavigationBarItems()
+    }
+
+    /// レーティング設定に応じてフィルターボタン（設定ボタンの左）の表示を切り替える
+    private func updateNavigationBarItems() {
+        if viewModel.isRatingEnabled {
+            navigationItem.rightBarButtonItems = [settingsBarButtonItem, filterBarButtonItem]
+        } else {
+            navigationItem.rightBarButtonItems = [settingsBarButtonItem]
+        }
+        updateFilterButtonAppearance()
+    }
+
+    /// フィルター適用中はアイコンを塗りつぶし表示にする
+    private func updateFilterButtonAppearance() {
+        let name = viewModel.ratingFilter != nil
+            ? "line.3.horizontal.decrease.circle.fill"
+            : "line.3.horizontal.decrease.circle"
+        filterBarButtonItem.image = UIImage(systemName: name)
     }
 
     /// 設定メニューを生成する。UIDeferredMenuElement.uncached でメニュー表示のたびに最新状態を反映する。
@@ -170,7 +197,85 @@ public final class FileBrowserViewController: UIViewController {
     /// アクション選択後、keepsMenuPresented でメニューが開いたままの状態でも
     /// チェックマークを更新するため、menu プロパティを再代入して再評価させる。
     private func refreshSettingsMenu() {
-        navigationItem.rightBarButtonItem?.menu = makeSettingsMenu()
+        settingsBarButtonItem.menu = makeSettingsMenu()
+    }
+
+    // MARK: - レーティングフィルターメニュー
+
+    /// フィルターメニューを生成する。UIDeferredMenuElement.uncached でメニュー表示のたびに最新状態を反映する。
+    private func makeFilterMenu() -> UIMenu {
+        let deferred = UIDeferredMenuElement.uncached { [weak self] completion in
+            completion(self?.buildFilterMenuElements() ?? [])
+        }
+        return UIMenu(title: "", children: [deferred])
+    }
+
+    private func refreshFilterMenu() {
+        filterBarButtonItem.menu = makeFilterMenu()
+    }
+
+    private func buildFilterMenuElements() -> [UIMenuElement] {
+        let current = viewModel.ratingFilter
+        // 星・条件の選択時に引き継ぐベース値（フィルターなしの場合はデフォルト値）
+        let base = current ?? RatingFilter(stars: 0, comparison: .atLeast)
+
+        // フィルターなし
+        let offAction = UIAction(
+            title: L10n.FileBrowser.ratingFilterOff,
+            image: UIImage(systemName: "xmark.circle"),
+            state: current == nil ? .on : .off
+        ) { [weak self] _ in
+            self?.applyRatingFilter(nil)
+        }
+        let offMenu = UIMenu(title: "", options: .displayInline, children: [offAction])
+
+        // 星の数（0〜5）
+        let starActions = RatingFilter.starsRange.map { stars in
+            UIAction(
+                title: L10n.FileBrowser.ratingFilterStarValue(stars),
+                image: UIImage(systemName: stars == 0 ? "star.slash" : "star.fill"),
+                attributes: .keepsMenuPresented,
+                state: current?.stars == stars ? .on : .off
+            ) { [weak self] _ in
+                self?.applyRatingFilter(RatingFilter(stars: stars, comparison: base.comparison))
+            }
+        }
+        let starsMenu = UIMenu(
+            title: L10n.FileBrowser.ratingFilterStars,
+            options: [.displayInline, .singleSelection],
+            children: starActions
+        )
+
+        // 条件（以上・以下・同値）
+        let comparisonData: [(RatingFilter.Comparison, String, String)] = [
+            (.atLeast, L10n.FileBrowser.ratingFilterAtLeast, "greaterthanorequalto"),
+            (.atMost, L10n.FileBrowser.ratingFilterAtMost, "lessthanorequalto"),
+            (.exactly, L10n.FileBrowser.ratingFilterExactly, "equal"),
+        ]
+        let comparisonActions = comparisonData.map { comparison, title, imageName in
+            UIAction(
+                title: title,
+                image: UIImage(systemName: imageName),
+                attributes: .keepsMenuPresented,
+                state: current?.comparison == comparison ? .on : .off
+            ) { [weak self] _ in
+                self?.applyRatingFilter(RatingFilter(stars: base.stars, comparison: comparison))
+            }
+        }
+        let comparisonMenu = UIMenu(
+            title: L10n.FileBrowser.ratingFilterComparison,
+            options: [.displayInline, .singleSelection],
+            children: comparisonActions
+        )
+
+        return [offMenu, starsMenu, comparisonMenu]
+    }
+
+    /// フィルターを適用してメニューとボタン表示を更新する（セクション再構築は didSet 経由で行われる）
+    private func applyRatingFilter(_ filter: RatingFilter?) {
+        viewModel.ratingFilter = filter
+        refreshFilterMenu()
+        updateFilterButtonAppearance()
     }
 
     private func buildSettingsMenuElements() -> [UIMenuElement] {
@@ -255,6 +360,25 @@ public final class FileBrowserViewController: UIViewController {
         )
         sortOrderMenu.preferredElementSize = .medium
 
+        // レーティング機能 セクション（オンオフトグル）
+        let ratingToggleAction = UIAction(
+            title: L10n.FileBrowser.ratingFeature,
+            image: UIImage(systemName: "star"),
+            attributes: .keepsMenuPresented,
+            state: viewModel.isRatingEnabled ? .on : .off
+        ) { [weak self] _ in
+            guard let self else { return }
+            viewModel.isRatingEnabled.toggle()
+            updateNavigationBarItems()
+            applySnapshot(reconfiguringAllItems: true)
+            refreshSettingsMenu()
+        }
+        let ratingMenu = UIMenu(
+            title: "",
+            options: .displayInline,
+            children: [ratingToggleAction]
+        )
+
         // キャッシュクリア セクション（最下部）
         let clearCacheAction = UIAction(
             title: L10n.FileBrowser.clearCache,
@@ -269,7 +393,7 @@ public final class FileBrowserViewController: UIViewController {
             children: [clearCacheAction]
         )
 
-        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu, clearCacheMenu].compactMap { $0 }
+        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu, ratingMenu, clearCacheMenu].compactMap { $0 }
     }
 
     /// キャッシュクリアの確認アラートを表示し、承認された場合のみ初期状態へ戻す
@@ -281,8 +405,11 @@ public final class FileBrowserViewController: UIViewController {
         )
         alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
         alert.addAction(UIAlertAction(title: L10n.Common.clear, style: .destructive) { [weak self] _ in
-            self?.viewModel.resetToDefaults()
-            self?.refreshSettingsMenu()
+            guard let self else { return }
+            viewModel.resetToDefaults()
+            updateNavigationBarItems()
+            applySnapshot(reconfiguringAllItems: true)
+            refreshSettingsMenu()
         })
         present(alert, animated: true)
     }
@@ -335,11 +462,21 @@ public final class FileBrowserViewController: UIViewController {
             config.textProperties.lineBreakMode = .byTruncatingMiddle
             config.textProperties.numberOfLines = 1
 
-            // 最後に閲覧したアイテムにセカンダリテキストを付ける
+            // レーティング（星1以上）と最後に閲覧したアイテムをセカンダリテキストで表示する
+            var secondaryParts: [String] = []
+            if let s = self, s.viewModel.isRatingEnabled {
+                let rating = s.viewModel.rating(for: url)
+                if rating > 0 {
+                    secondaryParts.append(String(repeating: "★", count: rating))
+                }
+            }
             let isLastViewed = self.map { s in
                 s.viewModel.items.first(where: { $0.url == url })?.id == s.viewModel.lastViewedItemID
             } ?? false
-            config.secondaryText = isLastViewed ? L10n.FileBrowser.jumpToLastViewed : nil
+            if isLastViewed {
+                secondaryParts.append(L10n.FileBrowser.jumpToLastViewed)
+            }
+            config.secondaryText = secondaryParts.isEmpty ? nil : secondaryParts.joined(separator: " · ")
             config.secondaryTextProperties.color = .systemBlue
             config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
 
@@ -362,6 +499,12 @@ public final class FileBrowserViewController: UIViewController {
                 s.viewModel.items.first(where: { $0.url == url })?.id == s.viewModel.lastViewedItemID
             } ?? false
             cell.setLastViewed(isLastViewed)
+
+            // レーティング（星1以上）のバッジを付ける
+            let rating = self.map { s in
+                s.viewModel.isRatingEnabled ? s.viewModel.rating(for: url) : 0
+            } ?? 0
+            cell.setRating(rating)
         }
 
         let headerRegistration = UICollectionView.SupplementaryRegistration<SectionHeaderView>(
@@ -417,11 +560,15 @@ public final class FileBrowserViewController: UIViewController {
         }
     }
 
-    private func applySnapshot() {
+    private func applySnapshot(reconfiguringAllItems: Bool = false) {
         var snapshot = NSDiffableDataSourceSnapshot<FileBrowserSection.ID, FileItem.ID>()
         for section in viewModel.sections {
             snapshot.appendSections([section.id])
             snapshot.appendItems(section.items.map(\.id), toSection: section.id)
+        }
+        if reconfiguringAllItems {
+            // レーティング変更など、既存セルの表示内容が変わった可能性がある場合に全セルを再設定する
+            snapshot.reconfigureItems(snapshot.itemIdentifiers)
         }
         dataSource.apply(snapshot, animatingDifferences: true)
     }
@@ -659,7 +806,12 @@ extension FileBrowserViewController: UICollectionViewDelegate {
               let selectedItem = viewModel.items.first(where: { $0.id == selectedID }) else { return }
         let allURLs = viewModel.items.map(\.url)
 
-        let input = PhotoViewerInput(initialURL: selectedItem.url, allURLs: allURLs)
+        let input = PhotoViewerInput(
+            initialURL: selectedItem.url,
+            allURLs: allURLs,
+            isRatingEnabled: viewModel.isRatingEnabled,
+            ratingFilter: viewModel.ratingFilter
+        )
         let photoViewer = photoViewerFactory(input)
 
         // ステータスバーの制御をPhotoViewerViewControllerに委譲する
@@ -674,28 +826,16 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             return self.cellViewForURL(currentURLProvider.currentURL)
         }
 
-        // 閉じる時: 最後に表示したアイテムを記録してセルを更新する
+        // 閉じる時: 最後に表示したアイテムを記録し、レーティング変更を反映してセルを更新する
         if var dismissable = photoViewer as? DismissNotifiable {
             dismissable.onDismiss = { [weak self] currentURL in
                 guard let self else { return }
-                let oldItemID = viewModel.lastViewedItemID
                 // ファイル名をViewModelを通じてUserDefaultsに永続化し、lastViewedItemIDも更新する
                 viewModel.saveLastViewed(url: currentURL)
-                let newItemID = viewModel.lastViewedItemID
-
-                // 変化のあったセルのみを再設定する（不要な再描画を避けるため）
-                var snapshot = self.dataSource.snapshot()
-                var toReconfigure: [FileItem.ID] = []
-                if let old = oldItemID, snapshot.itemIdentifiers.contains(old) {
-                    toReconfigure.append(old)
-                }
-                if let new = newItemID, new != oldItemID, snapshot.itemIdentifiers.contains(new) {
-                    toReconfigure.append(new)
-                }
-                if !toReconfigure.isEmpty {
-                    snapshot.reconfigureItems(toReconfigure)
-                    self.dataSource.apply(snapshot, animatingDifferences: false)
-                }
+                // ビューアー内でレーティングが変更された可能性があるため、
+                // ストアから再読み込みしてフィルタ適用済みセクションと全セルを更新する
+                viewModel.refreshRatings()
+                applySnapshot(reconfiguringAllItems: true)
             }
         }
 

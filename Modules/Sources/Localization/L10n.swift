@@ -30,6 +30,17 @@ public enum L10n {
         public static var columnCountDecrement: String { tr("file_browser.column_count_decrement") }
         public static var columnCountIncrement: String { tr("file_browser.column_count_increment") }
         public static var jumpToLastViewed: String { tr("file_browser.jump_to_last_viewed") }
+        public static var ratingFeature: String { tr("file_browser.rating_feature") }
+        public static var ratingFilterOff: String { tr("file_browser.rating_filter_off") }
+        public static var ratingFilterStars: String { tr("file_browser.rating_filter_stars") }
+        public static var ratingFilterComparison: String { tr("file_browser.rating_filter_comparison") }
+        public static var ratingFilterAtLeast: String { tr("file_browser.rating_filter_at_least") }
+        public static var ratingFilterAtMost: String { tr("file_browser.rating_filter_at_most") }
+        public static var ratingFilterExactly: String { tr("file_browser.rating_filter_exactly") }
+
+        public static func ratingFilterStarValue(_ stars: Int) -> String {
+            tr("file_browser.rating_filter_star_value", stars)
+        }
 
         public static func columnCountValue(_ count: Int) -> String {
             tr("file_browser.column_count_value", count)

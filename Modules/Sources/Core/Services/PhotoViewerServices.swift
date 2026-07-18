@@ -9,6 +9,7 @@ public struct PhotoViewerServices {
     public let exifService: any ExifServiceProtocol
     public let photoLibrary: any PhotoLibraryServiceProtocol
     public let savedDateStore: any SavedDateStoreProtocol
+    public let ratingStore: any PhotoRatingStoreProtocol
     public let hapticsService: any HapticsServiceProtocol
 
     public init(
@@ -16,12 +17,14 @@ public struct PhotoViewerServices {
         exifService: any ExifServiceProtocol,
         photoLibrary: any PhotoLibraryServiceProtocol,
         savedDateStore: any SavedDateStoreProtocol,
+        ratingStore: any PhotoRatingStoreProtocol,
         hapticsService: any HapticsServiceProtocol
     ) {
         self.imageLoader = imageLoader
         self.exifService = exifService
         self.photoLibrary = photoLibrary
         self.savedDateStore = savedDateStore
+        self.ratingStore = ratingStore
         self.hapticsService = hapticsService
     }
 }

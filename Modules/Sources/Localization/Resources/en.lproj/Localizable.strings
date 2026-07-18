@@ -19,6 +19,14 @@
 "file_browser.column_count_increment" = "Increase Columns";
 "file_browser.column_count_value" = "%d Columns";
 "file_browser.jump_to_last_viewed" = "Last Viewed";
+"file_browser.rating_feature" = "Rating";
+"file_browser.rating_filter_off" = "No Filter";
+"file_browser.rating_filter_stars" = "Stars";
+"file_browser.rating_filter_star_value" = "%d Stars";
+"file_browser.rating_filter_comparison" = "Condition";
+"file_browser.rating_filter_at_least" = "Or More";
+"file_browser.rating_filter_at_most" = "Or Less";
+"file_browser.rating_filter_exactly" = "Exactly";
 "file_browser.section_title_with_count" = "%@ (%d photos)";
 "file_browser.empty_state.no_folder" = "Please select a folder";
 "file_browser.empty_state.loading" = "Loading...";

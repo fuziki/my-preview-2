@@ -19,6 +19,9 @@ final class AppContainer {
     /// セッションをまたいで保存日時を保持するため、AppContainerが所有する
     private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
 
+    /// セッションをまたいでレーティングを保持するため、AppContainerが所有する
+    private let ratingStore: any PhotoRatingStoreProtocol = PhotoRatingStore()
+
     #if targetEnvironment(simulator)
     /// シミュレータでは実ファイルが存在しないため、ファイルIO系サービスをモックに差し替える
     private lazy var fileSystemService: any FileSystemServiceProtocol = MockFileSystemService()
@@ -38,7 +41,11 @@ final class AppContainer {
     /// FileBrowserViewControllerを生成する。
     /// PhotoViewerViewControllerの生成はクロージャとして注入する。
     func makeFileBrowserViewController() -> UIViewController {
-        let viewModel = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore)
+        let viewModel = FileBrowserViewModel(
+            fileSystemService: fileSystemService,
+            savedDateStore: savedDateStore,
+            ratingStore: ratingStore
+        )
         return FileBrowserViewController(
             viewModel: viewModel,
             thumbnailService: thumbnailService,
@@ -56,6 +63,7 @@ final class AppContainer {
             exifService: exifService,
             photoLibrary: PhotoLibraryService(),
             savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
             hapticsService: HapticsService()
         )
         return PhotoViewerViewController(input: input, services: services)

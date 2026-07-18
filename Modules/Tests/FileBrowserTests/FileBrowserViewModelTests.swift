@@ -12,15 +12,28 @@ struct FileBrowserViewModelTests {
     let fileSystemService: MockFileSystemService
     let storage: MockUserDefaultsStorage
     let savedDateStore: MockSavedDateStore
+    let ratingStore: MockPhotoRatingStore
     let viewModel: FileBrowserViewModel
 
     init() {
         fileSystemService = MockFileSystemService()
         storage = MockUserDefaultsStorage()
         savedDateStore = MockSavedDateStore()
+        ratingStore = MockPhotoRatingStore()
         viewModel = FileBrowserViewModel(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
+            storage: storage
+        )
+    }
+
+    /// 現在のモックを使ってViewModelを生成し直すヘルパー（ストレージ復元のテストに使用）
+    private func makeViewModel() -> FileBrowserViewModel {
+        FileBrowserViewModel(
+            fileSystemService: fileSystemService,
+            savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
             storage: storage
         )
     }
@@ -245,14 +258,14 @@ struct FileBrowserViewModelTests {
     @Test
     func init_restoresViewMode_fromStorage() {
         storage.set(ViewMode.grid.rawValue, forKey: AppStorageKey.viewMode.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
+        let vm = makeViewModel()
         #expect(vm.viewMode == .grid)
     }
 
     @Test
     func init_restoresSaveFormat_fromStorage() {
         storage.set(SaveFormat.jpeg.rawValue, forKey: AppStorageKey.saveFormat.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
+        let vm = makeViewModel()
         #expect(vm.saveFormat == .jpeg)
     }
 
@@ -282,28 +295,28 @@ struct FileBrowserViewModelTests {
     @Test
     func init_restoresGridColumnCount_fromStorage() {
         storage.set("5", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
+        let vm = makeViewModel()
         #expect(vm.gridColumnCount == 5)
     }
 
     @Test
     func init_clampsGridColumnCount_belowRange() {
         storage.set("1", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
+        let vm = makeViewModel()
         #expect(vm.gridColumnCount == 2)
     }
 
     @Test
     func init_clampsGridColumnCount_aboveRange() {
         storage.set("10", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
+        let vm = makeViewModel()
         #expect(vm.gridColumnCount == 5)
     }
 
     @Test
     func init_defaultsToThreeColumns_forInvalidStoredValue() {
         storage.set("abc", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
+        let vm = makeViewModel()
         #expect(vm.gridColumnCount == 3)
     }
 
@@ -315,5 +328,189 @@ struct FileBrowserViewModelTests {
         viewModel.resetToDefaults()
         #expect(savedDateStore.removeAllCallCount == 1)
         #expect(savedDateStore.dates.isEmpty)
+    }
+
+    @Test
+    func resetToDefaults_clearsRatingStore() {
+        ratingStore.setRating(3, for: URL(fileURLWithPath: "/tmp/a.jpg"))
+        viewModel.resetToDefaults()
+        #expect(ratingStore.removeAllCallCount == 1)
+        #expect(ratingStore.ratings.isEmpty)
+    }
+
+    @Test
+    func resetToDefaults_disablesRatingAndClearsFilter() {
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
+        viewModel.resetToDefaults()
+        #expect(viewModel.isRatingEnabled == false)
+        #expect(viewModel.ratingFilter == nil)
+    }
+
+    // MARK: - レーティング
+
+    @Test
+    func init_defaultsToRatingDisabled_whenStorageEmpty() {
+        #expect(viewModel.isRatingEnabled == false)
+        #expect(viewModel.ratingFilter == nil)
+    }
+
+    @Test
+    func isRatingEnabled_persistsToStorage_onChange() {
+        viewModel.isRatingEnabled = true
+        #expect(storage.string(forKey: AppStorageKey.isRatingEnabled.rawValue) == "true")
+    }
+
+    @Test
+    func init_restoresIsRatingEnabled_fromStorage() {
+        storage.set("true", forKey: AppStorageKey.isRatingEnabled.rawValue)
+        let vm = makeViewModel()
+        #expect(vm.isRatingEnabled == true)
+    }
+
+    @Test
+    func ratingFilter_persistsToStorage_onChange() {
+        viewModel.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
+        #expect(storage.string(forKey: AppStorageKey.ratingFilter.rawValue) == "atLeast:3")
+    }
+
+    @Test
+    func init_restoresRatingFilter_fromStorage() {
+        storage.set("exactly:2", forKey: AppStorageKey.ratingFilter.rawValue)
+        let vm = makeViewModel()
+        #expect(vm.ratingFilter == RatingFilter(stars: 2, comparison: .exactly))
+    }
+
+    @Test
+    func init_ignoresInvalidRatingFilter_fromStorage() {
+        storage.set("garbage", forKey: AppStorageKey.ratingFilter.rawValue)
+        let vm = makeViewModel()
+        #expect(vm.ratingFilter == nil)
+    }
+
+    @Test
+    func rating_returnsStoredRating_afterFolderLoad() async {
+        let itemURL = URL(fileURLWithPath: "/tmp/a.jpg")
+        ratingStore.setRating(4, for: itemURL)
+        fileSystemService.stubbedItems = [FileItem(url: itemURL)]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        #expect(viewModel.rating(for: itemURL) == 4)
+    }
+
+    // MARK: - レーティングフィルター適用
+
+    /// 星3・星1・星0の3枚を読み込むヘルパー
+    private func loadRatedItems() async -> (rated3: URL, rated1: URL, unrated: URL) {
+        let rated3 = URL(fileURLWithPath: "/tmp/a.jpg")
+        let rated1 = URL(fileURLWithPath: "/tmp/b.jpg")
+        let unrated = URL(fileURLWithPath: "/tmp/c.jpg")
+        ratingStore.setRating(3, for: rated3)
+        ratingStore.setRating(1, for: rated1)
+        // ソート順を決定的にするため撮影時刻をずらす（同日内で昇順）
+        let date = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10, hour: 10))!
+        fileSystemService.stubbedItems = [
+            FileItem(url: rated3, captureDate: date),
+            FileItem(url: rated1, captureDate: date.addingTimeInterval(60)),
+            FileItem(url: unrated, captureDate: date.addingTimeInterval(120)),
+        ]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        return (rated3, rated1, unrated)
+    }
+
+    @Test
+    func ratingFilter_atLeast_filtersItems() async {
+        let (rated3, _, _) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 2, comparison: .atLeast)
+        #expect(viewModel.items.map(\.url) == [rated3])
+    }
+
+    @Test
+    func ratingFilter_atMost_filtersItems() async {
+        let (_, rated1, unrated) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 1, comparison: .atMost)
+        #expect(viewModel.items.map(\.url) == [rated1, unrated])
+    }
+
+    @Test
+    func ratingFilter_exactly_filtersItems() async {
+        let (_, _, unrated) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 0, comparison: .exactly)
+        #expect(viewModel.items.map(\.url) == [unrated])
+    }
+
+    @Test
+    func ratingFilter_notApplied_whenRatingDisabled() async {
+        _ = await loadRatedItems()
+        viewModel.isRatingEnabled = false
+        viewModel.ratingFilter = RatingFilter(stars: 5, comparison: .exactly)
+        #expect(viewModel.items.count == 3)
+    }
+
+    @Test
+    func ratingFilter_nil_showsAllItems() async {
+        _ = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = nil
+        #expect(viewModel.items.count == 3)
+    }
+
+    @Test
+    func refreshRatings_reflectsStoreChanges() async {
+        let (rated3, rated1, _) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 2, comparison: .atLeast)
+        #expect(viewModel.items.map(\.url) == [rated3])
+
+        // ビューアー側での変更を想定してストアを直接更新する
+        ratingStore.setRating(5, for: rated1)
+        viewModel.refreshRatings()
+        #expect(viewModel.items.map(\.url) == [rated3, rated1])
+    }
+}
+
+// MARK: - RatingFilterテスト
+
+@Suite
+struct RatingFilterTests {
+
+    @Test
+    func matches_atLeast() {
+        let filter = RatingFilter(stars: 3, comparison: .atLeast)
+        #expect(filter.matches(3) == true)
+        #expect(filter.matches(5) == true)
+        #expect(filter.matches(2) == false)
+    }
+
+    @Test
+    func matches_atMost() {
+        let filter = RatingFilter(stars: 3, comparison: .atMost)
+        #expect(filter.matches(3) == true)
+        #expect(filter.matches(0) == true)
+        #expect(filter.matches(4) == false)
+    }
+
+    @Test
+    func matches_exactly() {
+        let filter = RatingFilter(stars: 3, comparison: .exactly)
+        #expect(filter.matches(3) == true)
+        #expect(filter.matches(2) == false)
+        #expect(filter.matches(4) == false)
+    }
+
+    @Test
+    func rawValue_roundTrips() {
+        let filter = RatingFilter(stars: 4, comparison: .atMost)
+        #expect(RatingFilter(rawValue: filter.rawValue) == filter)
+    }
+
+    @Test
+    func initWithRawValue_rejectsInvalidStrings() {
+        #expect(RatingFilter(rawValue: "") == nil)
+        #expect(RatingFilter(rawValue: "atLeast") == nil)
+        #expect(RatingFilter(rawValue: "atLeast:9") == nil)
+        #expect(RatingFilter(rawValue: "unknown:3") == nil)
     }
 }

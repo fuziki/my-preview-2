@@ -18,6 +18,7 @@ struct PhotoViewerViewModelTests {
     let exifService: MockExifService
     let photoLibrary: MockPhotoLibraryService
     let savedDateStore: MockSavedDateStore
+    let ratingStore: MockPhotoRatingStore
     let hapticsService: MockHapticsService
     let viewModel: PhotoViewerViewModel
 
@@ -26,6 +27,7 @@ struct PhotoViewerViewModelTests {
         exifService = MockExifService()
         photoLibrary = MockPhotoLibraryService()
         savedDateStore = MockSavedDateStore()
+        ratingStore = MockPhotoRatingStore()
         hapticsService = MockHapticsService()
 
         let urls = [
@@ -39,19 +41,30 @@ struct PhotoViewerViewModelTests {
             exifService: exifService,
             photoLibrary: photoLibrary,
             savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
             hapticsService: hapticsService
         )
         viewModel = PhotoViewerViewModel(input: input, services: services)
     }
 
-    /// テスト用のViewModelを指定のURLで生成するヘルパー
-    private func makeViewModel(initialURL: URL) -> PhotoViewerViewModel {
-        let input = PhotoViewerInput(initialURL: initialURL, allURLs: [url1, url2, url3])
+    /// テスト用のViewModelを指定のURL・レーティング設定で生成するヘルパー
+    private func makeViewModel(
+        initialURL: URL,
+        isRatingEnabled: Bool = false,
+        ratingFilter: RatingFilter? = nil
+    ) -> PhotoViewerViewModel {
+        let input = PhotoViewerInput(
+            initialURL: initialURL,
+            allURLs: [url1, url2, url3],
+            isRatingEnabled: isRatingEnabled,
+            ratingFilter: ratingFilter
+        )
         let services = PhotoViewerServices(
             imageLoader: imageLoader,
             exifService: exifService,
             photoLibrary: photoLibrary,
             savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
             hapticsService: hapticsService
         )
         return PhotoViewerViewModel(input: input, services: services)
@@ -329,6 +342,117 @@ struct PhotoViewerViewModelTests {
         await viewModel.loadInitial()
         await viewModel.save()
         #expect(viewModel.lastSavedDate == nil)
+    }
+
+    // MARK: - レーティング
+
+    @Test
+    func initialState_currentRatingIsZero() {
+        #expect(viewModel.currentRating == 0)
+    }
+
+    @Test
+    func init_restoresRating_fromStore() {
+        ratingStore.setRating(4, for: url2)
+        let vm = makeViewModel(initialURL: url2)
+        #expect(vm.currentRating == 4)
+    }
+
+    @Test
+    func setRating_updatesCurrentRatingAndStore() async {
+        await viewModel.setRating(3)
+        #expect(viewModel.currentRating == 3)
+        #expect(ratingStore.rating(for: url1) == 3)
+    }
+
+    @Test
+    func setRating_sameStars_resetsToZero() async {
+        await viewModel.setRating(3)
+        await viewModel.setRating(3)
+        #expect(viewModel.currentRating == 0)
+        #expect(ratingStore.rating(for: url1) == 0)
+    }
+
+    @Test
+    func setRating_differentStars_overwrites() async {
+        await viewModel.setRating(3)
+        await viewModel.setRating(5)
+        #expect(viewModel.currentRating == 5)
+        #expect(ratingStore.rating(for: url1) == 5)
+    }
+
+    @Test
+    func navigateNext_updatesCurrentRating() async {
+        ratingStore.setRating(2, for: url2)
+        await viewModel.navigateNext()
+        #expect(viewModel.currentRating == 2)
+    }
+
+    @Test
+    func didSwipeTo_updatesCurrentRating() async {
+        ratingStore.setRating(5, for: url3)
+        await viewModel.didSwipeTo(index: 2, image: nil)
+        #expect(viewModel.currentRating == 5)
+    }
+
+    // MARK: - レーティングフィルターによる自動遷移
+
+    @Test
+    func setRating_stillMatchingFilter_staysOnCurrentPhoto() async {
+        let filter = RatingFilter(stars: 3, comparison: .atLeast)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter)
+        await vm.setRating(4)
+        #expect(vm.currentIndex == 0)
+        #expect(vm.shouldDismiss == false)
+    }
+
+    @Test
+    func setRating_unmatchingFilter_advancesToNextMatchingPhoto() async {
+        // フィルター: 星3以上。url2は不適合、url3は適合
+        ratingStore.setRating(1, for: url2)
+        ratingStore.setRating(4, for: url3)
+        let filter = RatingFilter(stars: 3, comparison: .atLeast)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter)
+
+        await vm.setRating(1)  // url1が星1になりフィルターに不適合
+
+        #expect(vm.currentURL == url3)
+        #expect(vm.currentRating == 4)
+    }
+
+    @Test
+    func setRating_noNextMatch_fallsBackToPreviousPhoto() async {
+        // フィルター: 星3以上。前方のurl1のみ適合
+        ratingStore.setRating(4, for: url1)
+        ratingStore.setRating(3, for: url2)
+        let filter = RatingFilter(stars: 3, comparison: .atLeast)
+        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, ratingFilter: filter)
+
+        await vm.setRating(1)  // url2が星1になりフィルターに不適合
+
+        #expect(vm.currentURL == url1)
+        #expect(vm.shouldDismiss == false)
+    }
+
+    @Test
+    func setRating_noMatchesAtAll_requestsDismiss() async {
+        // フィルター: 星3以上。唯一適合していたurl1を星1に変更する
+        ratingStore.setRating(4, for: url1)
+        let filter = RatingFilter(stars: 3, comparison: .atLeast)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter)
+
+        await vm.setRating(1)
+
+        #expect(vm.shouldDismiss == true)
+        #expect(vm.currentURL == url1)
+    }
+
+    @Test
+    func setRating_withoutFilter_doesNotNavigate() async {
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: nil)
+        await vm.setRating(1)
+        #expect(vm.currentIndex == 0)
+        #expect(vm.shouldDismiss == false)
     }
 
     // MARK: - toggleOverlay

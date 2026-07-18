@@ -15,7 +15,13 @@ public final class PhotoViewerViewModel {
     public private(set) var exifInfo: ExifInfo? = nil
     public private(set) var saveStatus: SaveStatus = .idle
     public private(set) var lastSavedDate: Date? = nil
+    public private(set) var currentRating: Int = 0
+    /// フィルタに適合する写真が1枚も無くなった場合にtrueになる（VCはこれを見てdismissする）
+    public private(set) var shouldDismiss: Bool = false
     public var isOverlayVisible: Bool = true
+
+    /// レーティング機能が有効か（星ボタンの表示可否）
+    public let isRatingEnabled: Bool
 
     // MARK: - 派生状態
 
@@ -30,19 +36,25 @@ public final class PhotoViewerViewModel {
     private let exifService: any ExifServiceProtocol
     private let photoLibrary: any PhotoLibraryServiceProtocol
     private let savedDateStore: any SavedDateStoreProtocol
+    private let ratingStore: any PhotoRatingStoreProtocol
     private let hapticsService: any HapticsServiceProtocol
+    private let ratingFilter: RatingFilter?
 
     // MARK: - 初期化
 
     public init(input: PhotoViewerInput, services: PhotoViewerServices) {
         allURLs = input.allURLs
         currentIndex = input.allURLs.firstIndex(of: input.initialURL) ?? 0
+        isRatingEnabled = input.isRatingEnabled
+        ratingFilter = input.ratingFilter
         imageLoader = services.imageLoader
         exifService = services.exifService
         photoLibrary = services.photoLibrary
         savedDateStore = services.savedDateStore
+        ratingStore = services.ratingStore
         hapticsService = services.hapticsService
         lastSavedDate = services.savedDateStore.date(for: input.allURLs[currentIndex])
+        currentRating = services.ratingStore.rating(for: input.allURLs[currentIndex])
     }
 
     // MARK: - ライフサイクル
@@ -56,19 +68,21 @@ public final class PhotoViewerViewModel {
 
     public func navigatePrevious() async {
         guard canGoPrevious else { return }
-        previousOrientation = currentImage?.photoOrientation
-        currentIndex -= 1
-        saveStatus = .idle
-        lastSavedDate = savedDateStore.date(for: currentURL)
-        await loadImageAndExif(for: currentURL)
+        await navigate(to: currentIndex - 1)
     }
 
     public func navigateNext() async {
         guard canGoNext else { return }
+        await navigate(to: currentIndex + 1)
+    }
+
+    /// 任意のインデックスへ遷移する（ボタンナビゲーションとレーティング変更による自動遷移で使用）
+    private func navigate(to index: Int) async {
         previousOrientation = currentImage?.photoOrientation
-        currentIndex += 1
+        currentIndex = index
         saveStatus = .idle
         lastSavedDate = savedDateStore.date(for: currentURL)
+        currentRating = ratingStore.rating(for: currentURL)
         await loadImageAndExif(for: currentURL)
     }
 
@@ -80,7 +94,40 @@ public final class PhotoViewerViewModel {
         saveStatus = .idle
         currentImage = image
         lastSavedDate = savedDateStore.date(for: currentURL)
+        currentRating = ratingStore.rating(for: currentURL)
         await loadExif(for: currentURL)
+    }
+
+    // MARK: - レーティング
+
+    /// 星をタップした時の処理。現在と同じ星の位置なら星0に戻す。
+    /// 現在の写真がフィルタに合わなくなった場合、後方→前方の順で適合写真へ自動遷移し、
+    /// 適合写真が1枚も無ければshouldDismissを立てる。
+    public func setRating(_ stars: Int) async {
+        let newRating = stars == currentRating ? 0 : stars
+        currentRating = newRating
+        ratingStore.setRating(newRating, for: currentURL)
+
+        guard let filter = ratingFilter, !filter.matches(newRating) else { return }
+        if let nextIndex = firstMatchingIndex(after: currentIndex) {
+            await navigate(to: nextIndex)
+        } else if let previousIndex = firstMatchingIndex(before: currentIndex) {
+            await navigate(to: previousIndex)
+        } else {
+            shouldDismiss = true
+        }
+    }
+
+    /// 指定インデックスより後方で、フィルタに適合する最初のインデックスを返す
+    private func firstMatchingIndex(after index: Int) -> Int? {
+        guard let filter = ratingFilter else { return nil }
+        return ((index + 1)..<allURLs.count).first { filter.matches(ratingStore.rating(for: allURLs[$0])) }
+    }
+
+    /// 指定インデックスより前方で、フィルタに適合する直近のインデックスを返す
+    private func firstMatchingIndex(before index: Int) -> Int? {
+        guard let filter = ratingFilter else { return nil }
+        return (0..<index).reversed().first { filter.matches(ratingStore.rating(for: allURLs[$0])) }
     }
 
     // MARK: - 保存

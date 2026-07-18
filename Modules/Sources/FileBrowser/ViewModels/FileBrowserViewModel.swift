@@ -41,9 +41,42 @@ public final class FileBrowserViewModel {
         didSet { storage.set(String(gridColumnCount), forKey: .gridColumnCount) }
     }
 
+    /// レーティング機能のオンオフ。変更時にUserDefaultsへ自動保存し、セクションを再構築する
+    public var isRatingEnabled: Bool {
+        didSet {
+            storage.set(isRatingEnabled ? "true" : "false", forKey: .isRatingEnabled)
+            updateSections()
+        }
+    }
+
+    /// レーティングフィルター（nilはフィルターなし）。変更時にUserDefaultsへ自動保存し、セクションを再構築する
+    public var ratingFilter: RatingFilter? {
+        didSet {
+            storage.set(ratingFilter?.rawValue, forKey: .ratingFilter)
+            updateSections()
+        }
+    }
+
     /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
     private var lastViewedFileName: String? {
         didSet { storage.set(lastViewedFileName, forKey: .lastViewedFileName) }
+    }
+
+    // MARK: - レーティング
+
+    /// URLごとのレーティングのキャッシュ（セルの星表示とフィルタ判定に使用）
+    private var ratingsByURL: [URL: Int] = [:]
+
+    /// 指定URLのレーティング（星0〜5）を返す
+    public func rating(for url: URL) -> Int {
+        ratingsByURL[url] ?? 0
+    }
+
+    /// 永続化ストアからレーティングを再読み込みし、フィルタ適用済みセクションを再構築する。
+    /// フォトビューアーでレーティングが変更された後に呼ぶ。
+    public func refreshRatings() {
+        ratingsByURL = ratingStore.allRatings()
+        updateSections()
     }
 
     // MARK: - 派生状態
@@ -122,16 +155,19 @@ public final class FileBrowserViewModel {
     private let fileSystemService: any FileSystemServiceProtocol
     private let storage: any UserDefaultsStorageProtocol
     private let savedDateStore: any SavedDateStoreProtocol
+    private let ratingStore: any PhotoRatingStoreProtocol
 
     // MARK: - 初期化
 
     public init(
         fileSystemService: any FileSystemServiceProtocol,
         savedDateStore: any SavedDateStoreProtocol,
+        ratingStore: any PhotoRatingStoreProtocol,
         storage: any UserDefaultsStorageProtocol = UserDefaultsStorage.shared
     ) {
         self.fileSystemService = fileSystemService
         self.savedDateStore = savedDateStore
+        self.ratingStore = ratingStore
         self.storage = storage
         // UserDefaultsから復元する
         self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
@@ -142,6 +178,8 @@ public final class FileBrowserViewModel {
             max(storedColumnCount, Self.gridColumnCountRange.lowerBound),
             Self.gridColumnCountRange.upperBound
         )
+        self.isRatingEnabled = storage.string(forKey: .isRatingEnabled) == "true"
+        self.ratingFilter = RatingFilter(rawValue: storage.string(forKey: .ratingFilter) ?? "")
         self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
     }
 
@@ -156,17 +194,22 @@ public final class FileBrowserViewModel {
         await loadItems()
     }
 
-    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと永続化済みの保存日時を削除する
+    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと永続化済みの保存日時・レーティングを削除する
     public func resetToDefaults() {
         // 各プロパティを初期値へ戻す（didSetで一時的に再保存されるが、最後にまとめて削除する）
         viewMode = .list
         saveFormat = .jpegAndRaw
         sortOrder = .dateAscending
         gridColumnCount = 3
+        isRatingEnabled = false
+        ratingFilter = nil
         lastViewedFileName = nil
         lastViewedItemID = nil
+        ratingsByURL = [:]
         storage.removeAll()
         savedDateStore.removeAll()
+        ratingStore.removeAll()
+        updateSections()
     }
 
     /// 閲覧したURLをUserDefaultsに保存し、lastViewedItemIDも更新する
@@ -181,15 +224,23 @@ public final class FileBrowserViewModel {
         guard let url = rootURL else { return }
         isLoading = true
         loadedItems = await fileSystemService.scanForJPEGs(in: url)
+        ratingsByURL = ratingStore.allRatings()
         updateSections()
         restoreLastViewedItemIDIfNeeded()
         isLoading = false
     }
 
-    /// loadedItemsを日付キーでグループ化し、sortOrderに従ってセクションとアイテムを並べてsectionsを更新する
+    /// loadedItemsへレーティングフィルタを適用後、日付キーでグループ化し、
+    /// sortOrderに従ってセクションとアイテムを並べてsectionsを更新する
     private func updateSections() {
+        let visibleItems: [FileItem]
+        if isRatingEnabled, let filter = ratingFilter {
+            visibleItems = loadedItems.filter { filter.matches(rating(for: $0.url)) }
+        } else {
+            visibleItems = loadedItems
+        }
         var sectionMap: [String: [FileItem]] = [:]
-        for item in loadedItems {
+        for item in visibleItems {
             let date = item.captureDate ?? Date.distantFuture
             let key = sectionKeyFormatter.string(from: date)
             if sectionMap[key] == nil { sectionMap[key] = [] }
