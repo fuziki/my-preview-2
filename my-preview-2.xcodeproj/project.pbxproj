@@ -11,6 +11,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		47B8EA17300BCA030089E8DD /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
+		47B8EA18300BCA030089E8DD /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		47B8EA19300BCA030089E8DD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		47D00D6B2FA2085100F217FE /* my-preview-2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "my-preview-2.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		47D00ECD2FC2DD3600F217FE /* Modules */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Modules; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -56,6 +59,9 @@
 		47D00D622FA2085100F217FE = {
 			isa = PBXGroup;
 			children = (
+				47B8EA17300BCA030089E8DD /* CLAUDE.md */,
+				47B8EA18300BCA030089E8DD /* Makefile */,
+				47B8EA19300BCA030089E8DD /* README.md */,
 				47D00ECD2FC2DD3600F217FE /* Modules */,
 				47D00E0C2FA25E3B00F217FE /* Config */,
 				47D00D6D2FA2085100F217FE /* my-preview-2 */,
