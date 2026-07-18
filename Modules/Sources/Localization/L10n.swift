@@ -37,6 +37,7 @@ public enum L10n {
         public static var ratingFilterAtLeast: String { tr("file_browser.rating_filter_at_least") }
         public static var ratingFilterAtMost: String { tr("file_browser.rating_filter_at_most") }
         public static var ratingFilterExactly: String { tr("file_browser.rating_filter_exactly") }
+        public static var colorLabel: String { tr("file_browser.color_label") }
 
         public static func ratingFilterStarValue(_ stars: Int) -> String {
             tr("file_browser.rating_filter_star_value", stars)
@@ -54,6 +55,15 @@ public enum L10n {
             public static var noFolder: String { tr("file_browser.empty_state.no_folder") }
             public static var loading: String { tr("file_browser.empty_state.loading") }
             public static var noPhotos: String { tr("file_browser.empty_state.no_photos") }
+        }
+    }
+
+    // MARK: - ColorLabel
+
+    public enum ColorLabel {
+        /// カラーラベルのrawValue（"green"等）から表示名を引く
+        public static func name(forRawValue rawValue: String) -> String {
+            tr("color_label.\(rawValue)")
         }
     }
 

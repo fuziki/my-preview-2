@@ -13,6 +13,7 @@ struct FileBrowserViewModelTests {
     let storage: MockUserDefaultsStorage
     let savedDateStore: MockSavedDateStore
     let ratingStore: MockPhotoRatingStore
+    let colorLabelStore: MockColorLabelStore
     let viewModel: FileBrowserViewModel
 
     init() {
@@ -20,10 +21,12 @@ struct FileBrowserViewModelTests {
         storage = MockUserDefaultsStorage()
         savedDateStore = MockSavedDateStore()
         ratingStore = MockPhotoRatingStore()
+        colorLabelStore = MockColorLabelStore()
         viewModel = FileBrowserViewModel(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
             storage: storage
         )
     }
@@ -34,6 +37,7 @@ struct FileBrowserViewModelTests {
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
             storage: storage
         )
     }
@@ -458,7 +462,7 @@ struct FileBrowserViewModelTests {
     }
 
     @Test
-    func refreshRatings_reflectsStoreChanges() async {
+    func refreshRatingsAndLabels_reflectsStoreChanges() async {
         let (rated3, rated1, _) = await loadRatedItems()
         viewModel.isRatingEnabled = true
         viewModel.ratingFilter = RatingFilter(stars: 2, comparison: .atLeast)
@@ -466,8 +470,133 @@ struct FileBrowserViewModelTests {
 
         // ビューアー側での変更を想定してストアを直接更新する
         ratingStore.setRating(5, for: rated1)
-        viewModel.refreshRatings()
+        viewModel.refreshRatingsAndLabels()
         #expect(viewModel.items.map(\.url) == [rated3, rated1])
+    }
+
+    // MARK: - カラーラベルフィルター
+
+    @Test
+    func colorLabelFilter_persistsToStorage_onChange() {
+        viewModel.colorLabelFilter = [.green, .red]
+        #expect(storage.string(forKey: AppStorageKey.colorLabelFilter.rawValue) == "green,red")
+    }
+
+    @Test
+    func colorLabelFilter_emptySelection_removesStorageValue() {
+        viewModel.colorLabelFilter = [.green]
+        viewModel.colorLabelFilter = []
+        #expect(storage.string(forKey: AppStorageKey.colorLabelFilter.rawValue) == nil)
+    }
+
+    @Test
+    func init_restoresColorLabelFilter_fromStorage() {
+        storage.set("blue,white", forKey: AppStorageKey.colorLabelFilter.rawValue)
+        let vm = makeViewModel()
+        #expect(vm.colorLabelFilter == [.blue, .white])
+    }
+
+    @Test
+    func init_ignoresInvalidColorLabelFilter_fromStorage() {
+        storage.set("blue,unknown", forKey: AppStorageKey.colorLabelFilter.rawValue)
+        let vm = makeViewModel()
+        #expect(vm.colorLabelFilter == [.blue])
+    }
+
+    @Test
+    func colorLabel_returnsStoredLabel_afterFolderLoad() async {
+        let itemURL = URL(fileURLWithPath: "/tmp/a.jpg")
+        colorLabelStore.setLabel(.pink, for: itemURL)
+        fileSystemService.stubbedItems = [FileItem(url: itemURL)]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        #expect(viewModel.colorLabel(for: itemURL) == .pink)
+    }
+
+    @Test
+    func colorLabelFilter_filtersItems() async {
+        let (rated3, rated1, unrated) = await loadRatedItems()
+        colorLabelStore.setLabel(.green, for: rated3)
+        colorLabelStore.setLabel(.red, for: rated1)
+        viewModel.isRatingEnabled = true
+        viewModel.refreshRatingsAndLabels()
+
+        viewModel.colorLabelFilter = [.green]
+        #expect(viewModel.items.map(\.url) == [rated3])
+
+        viewModel.colorLabelFilter = [.green, .red]
+        #expect(viewModel.items.map(\.url) == [rated3, rated1])
+
+        // ラベル未設定の写真は非空フィルタに適合しない
+        #expect(viewModel.items.map(\.url).contains(unrated) == false)
+    }
+
+    @Test
+    func colorLabelFilter_emptySelection_showsAllItems() async {
+        let (rated3, _, _) = await loadRatedItems()
+        colorLabelStore.setLabel(.green, for: rated3)
+        viewModel.isRatingEnabled = true
+        viewModel.refreshRatingsAndLabels()
+        viewModel.colorLabelFilter = []
+        #expect(viewModel.items.count == 3)
+    }
+
+    @Test
+    func colorLabelFilter_notApplied_whenRatingDisabled() async {
+        let (rated3, _, _) = await loadRatedItems()
+        colorLabelStore.setLabel(.green, for: rated3)
+        viewModel.isRatingEnabled = false
+        viewModel.refreshRatingsAndLabels()
+        viewModel.colorLabelFilter = [.blue]
+        #expect(viewModel.items.count == 3)
+    }
+
+    @Test
+    func combinedFilter_requiresBothRatingAndColorMatch() async {
+        // rated3は星3、rated1は星1。rated3とrated1に緑ラベルを付ける
+        let (rated3, rated1, _) = await loadRatedItems()
+        colorLabelStore.setLabel(.green, for: rated3)
+        colorLabelStore.setLabel(.green, for: rated1)
+        viewModel.isRatingEnabled = true
+        viewModel.refreshRatingsAndLabels()
+
+        // 星2以上 かつ 緑 → rated3のみ
+        viewModel.ratingFilter = RatingFilter(stars: 2, comparison: .atLeast)
+        viewModel.colorLabelFilter = [.green]
+        #expect(viewModel.items.map(\.url) == [rated3])
+    }
+
+    @Test
+    func resetToDefaults_clearsColorLabelStoreAndFilter() {
+        colorLabelStore.setLabel(.green, for: URL(fileURLWithPath: "/tmp/a.jpg"))
+        viewModel.colorLabelFilter = [.green]
+        viewModel.resetToDefaults()
+        #expect(colorLabelStore.removeAllCallCount == 1)
+        #expect(colorLabelStore.labels.isEmpty)
+        #expect(viewModel.colorLabelFilter.isEmpty)
+    }
+}
+
+// MARK: - PhotoColorLabelテスト
+
+@Suite
+struct PhotoColorLabelTests {
+
+    @Test
+    func filterRawValue_roundTrips() {
+        let selection: Set<PhotoColorLabel> = [.yellow, .white, .green]
+        #expect(Set(colorLabelFilterRawValue: selection.colorLabelFilterRawValue) == selection)
+    }
+
+    @Test
+    func filterRawValue_usesCanonicalOrder() {
+        let selection: Set<PhotoColorLabel> = [.white, .green]
+        #expect(selection.colorLabelFilterRawValue == "green,white")
+    }
+
+    @Test
+    func initWithFilterRawValue_ignoresInvalidElements() {
+        #expect(Set(colorLabelFilterRawValue: "") == Set<PhotoColorLabel>())
+        #expect(Set(colorLabelFilterRawValue: "green,bogus") == Set<PhotoColorLabel>([.green]))
     }
 }
 

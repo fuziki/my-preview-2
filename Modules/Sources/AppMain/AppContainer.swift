@@ -22,6 +22,9 @@ final class AppContainer {
     /// セッションをまたいでレーティングを保持するため、AppContainerが所有する
     private let ratingStore: any PhotoRatingStoreProtocol = PhotoRatingStore()
 
+    /// セッションをまたいでカラーラベルを保持するため、AppContainerが所有する
+    private let colorLabelStore: any ColorLabelStoreProtocol = ColorLabelStore()
+
     #if targetEnvironment(simulator)
     /// シミュレータでは実ファイルが存在しないため、ファイルIO系サービスをモックに差し替える
     private lazy var fileSystemService: any FileSystemServiceProtocol = MockFileSystemService()
@@ -44,7 +47,8 @@ final class AppContainer {
         let viewModel = FileBrowserViewModel(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
-            ratingStore: ratingStore
+            ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore
         )
         return FileBrowserViewController(
             viewModel: viewModel,
@@ -64,6 +68,7 @@ final class AppContainer {
             photoLibrary: PhotoLibraryService(),
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
             hapticsService: HapticsService()
         )
         return PhotoViewerViewController(input: input, services: services)

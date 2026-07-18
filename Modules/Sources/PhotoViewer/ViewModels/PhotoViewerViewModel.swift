@@ -16,11 +16,12 @@ public final class PhotoViewerViewModel {
     public private(set) var saveStatus: SaveStatus = .idle
     public private(set) var lastSavedDate: Date? = nil
     public private(set) var currentRating: Int = 0
+    public private(set) var currentColorLabel: PhotoColorLabel? = nil
     /// フィルタに適合する写真が1枚も無くなった場合にtrueになる（VCはこれを見てdismissする）
     public private(set) var shouldDismiss: Bool = false
     public var isOverlayVisible: Bool = true
 
-    /// レーティング機能が有効か（星ボタンの表示可否）
+    /// レーティング機能が有効か（星ボタン・カラーラベルの表示可否）
     public let isRatingEnabled: Bool
 
     // MARK: - 派生状態
@@ -37,8 +38,10 @@ public final class PhotoViewerViewModel {
     private let photoLibrary: any PhotoLibraryServiceProtocol
     private let savedDateStore: any SavedDateStoreProtocol
     private let ratingStore: any PhotoRatingStoreProtocol
+    private let colorLabelStore: any ColorLabelStoreProtocol
     private let hapticsService: any HapticsServiceProtocol
     private let ratingFilter: RatingFilter?
+    private let colorLabelFilter: Set<PhotoColorLabel>
 
     // MARK: - 初期化
 
@@ -47,14 +50,17 @@ public final class PhotoViewerViewModel {
         currentIndex = input.allURLs.firstIndex(of: input.initialURL) ?? 0
         isRatingEnabled = input.isRatingEnabled
         ratingFilter = input.ratingFilter
+        colorLabelFilter = input.colorLabelFilter
         imageLoader = services.imageLoader
         exifService = services.exifService
         photoLibrary = services.photoLibrary
         savedDateStore = services.savedDateStore
         ratingStore = services.ratingStore
+        colorLabelStore = services.colorLabelStore
         hapticsService = services.hapticsService
         lastSavedDate = services.savedDateStore.date(for: input.allURLs[currentIndex])
         currentRating = services.ratingStore.rating(for: input.allURLs[currentIndex])
+        currentColorLabel = services.colorLabelStore.label(for: input.allURLs[currentIndex])
     }
 
     // MARK: - ライフサイクル
@@ -83,6 +89,7 @@ public final class PhotoViewerViewModel {
         saveStatus = .idle
         lastSavedDate = savedDateStore.date(for: currentURL)
         currentRating = ratingStore.rating(for: currentURL)
+        currentColorLabel = colorLabelStore.label(for: currentURL)
         await loadImageAndExif(for: currentURL)
     }
 
@@ -95,20 +102,46 @@ public final class PhotoViewerViewModel {
         currentImage = image
         lastSavedDate = savedDateStore.date(for: currentURL)
         currentRating = ratingStore.rating(for: currentURL)
+        currentColorLabel = colorLabelStore.label(for: currentURL)
         await loadExif(for: currentURL)
     }
 
-    // MARK: - レーティング
+    // MARK: - レーティング・カラーラベル
 
     /// 星をタップした時の処理。現在と同じ星の位置なら星0に戻す。
-    /// 現在の写真がフィルタに合わなくなった場合、後方→前方の順で適合写真へ自動遷移し、
-    /// 適合写真が1枚も無ければshouldDismissを立てる。
     public func setRating(_ stars: Int) async {
         let newRating = stars == currentRating ? 0 : stars
         currentRating = newRating
         ratingStore.setRating(newRating, for: currentURL)
+        await autoNavigateIfFilteredOut()
+    }
 
-        guard let filter = ratingFilter, !filter.matches(newRating) else { return }
+    /// カラーラベルをタップした時の処理。現在と同じ色ならラベルなしに戻す。
+    public func setColorLabel(_ label: PhotoColorLabel) async {
+        let newLabel = label == currentColorLabel ? nil : label
+        currentColorLabel = newLabel
+        colorLabelStore.setLabel(newLabel, for: currentURL)
+        await autoNavigateIfFilteredOut()
+    }
+
+    /// レーティング・カラーラベルのいずれかのフィルタが有効か
+    private var hasActiveFilter: Bool {
+        ratingFilter != nil || !colorLabelFilter.isEmpty
+    }
+
+    /// 指定URLが現在のフィルタ（レーティング・カラーラベルの複合条件）に適合するかを返す
+    private func matchesFilters(url: URL) -> Bool {
+        if let filter = ratingFilter, !filter.matches(ratingStore.rating(for: url)) { return false }
+        if !colorLabelFilter.isEmpty {
+            guard let label = colorLabelStore.label(for: url), colorLabelFilter.contains(label) else { return false }
+        }
+        return true
+    }
+
+    /// 現在の写真がフィルタに合わなくなった場合、後方→前方の順で適合写真へ自動遷移し、
+    /// 適合写真が1枚も無ければshouldDismissを立てる。
+    private func autoNavigateIfFilteredOut() async {
+        guard hasActiveFilter, !matchesFilters(url: currentURL) else { return }
         if let nextIndex = firstMatchingIndex(after: currentIndex) {
             await navigate(to: nextIndex)
         } else if let previousIndex = firstMatchingIndex(before: currentIndex) {
@@ -120,14 +153,12 @@ public final class PhotoViewerViewModel {
 
     /// 指定インデックスより後方で、フィルタに適合する最初のインデックスを返す
     private func firstMatchingIndex(after index: Int) -> Int? {
-        guard let filter = ratingFilter else { return nil }
-        return ((index + 1)..<allURLs.count).first { filter.matches(ratingStore.rating(for: allURLs[$0])) }
+        ((index + 1)..<allURLs.count).first { matchesFilters(url: allURLs[$0]) }
     }
 
     /// 指定インデックスより前方で、フィルタに適合する直近のインデックスを返す
     private func firstMatchingIndex(before index: Int) -> Int? {
-        guard let filter = ratingFilter else { return nil }
-        return (0..<index).reversed().first { filter.matches(ratingStore.rating(for: allURLs[$0])) }
+        (0..<index).reversed().first { matchesFilters(url: allURLs[$0]) }
     }
 
     // MARK: - 保存

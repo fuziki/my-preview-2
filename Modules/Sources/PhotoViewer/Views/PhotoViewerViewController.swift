@@ -107,7 +107,7 @@ public final class PhotoViewerViewController: UIViewController {
         return GlassButtonView(button: button, cornerRadius: 22)
     }()
 
-    private let ratingStarsView = RatingStarsView()
+    private let ratingLabelBarView = RatingLabelBarView()
 
     private let lastSavedDateLabel: UILabel = {
         let label = UILabel()
@@ -193,7 +193,8 @@ public final class PhotoViewerViewController: UIViewController {
         nextButtonView.button.tintColor = viewModel.canGoNext ? .white : .systemGray
         nextHitAreaButton.isEnabled = viewModel.canGoNext
         updateSaveButton(status: viewModel.saveStatus)
-        ratingStarsView.setRating(viewModel.currentRating)
+        ratingLabelBarView.setRating(viewModel.currentRating)
+        ratingLabelBarView.setColorLabel(viewModel.currentColorLabel)
         if viewModel.shouldDismiss, !isBeingDismissed {
             // フィルタに適合する写真が1枚も無くなったのでビューアーを閉じる
             dismiss(animated: true)
@@ -329,18 +330,18 @@ public final class PhotoViewerViewController: UIViewController {
             saveButtonView.button.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
         ])
 
-        // レーティング星ボタン: 保存ボタンの上のカプセル（レーティング有効時のみ）
+        // レーティング星 + カラーラベル: 保存ボタンの上のカプセル（レーティング有効時のみ）
         if viewModel.isRatingEnabled {
-            view.addSubview(ratingStarsView)
+            view.addSubview(ratingLabelBarView)
             NSLayoutConstraint.activate([
-                ratingStarsView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -12),
-                ratingStarsView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -12),
+                ratingLabelBarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ])
         }
 
-        // ローディングインジケーター: 保存ボタン（レーティング有効時は星ボタン）の上
+        // ローディングインジケーター: 保存ボタン（レーティング有効時は星 + カラーラベル）の上
         view.addSubview(loadingIndicator)
-        let loadingIndicatorAnchor = viewModel.isRatingEnabled ? ratingStarsView.topAnchor : saveButtonView.topAnchor
+        let loadingIndicatorAnchor = viewModel.isRatingEnabled ? ratingLabelBarView.topAnchor : saveButtonView.topAnchor
         NSLayoutConstraint.activate([
             loadingIndicator.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
             loadingIndicator.bottomAnchor.constraint(equalTo: loadingIndicatorAnchor, constant: -8),
@@ -380,8 +381,11 @@ public final class PhotoViewerViewController: UIViewController {
         prevHitAreaButton.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
         nextHitAreaButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
         saveButtonView.button.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
-        ratingStarsView.onStarTapped = { [weak self] stars in
+        ratingLabelBarView.onStarTapped = { [weak self] stars in
             Task { await self?.viewModel.setRating(stars) }
+        }
+        ratingLabelBarView.onColorTapped = { [weak self] label in
+            Task { await self?.viewModel.setColorLabel(label) }
         }
 
         // disabled 状態でも文字色を白に保つ。baseForegroundColor は UIKit が状態に応じて調整するが、
@@ -423,7 +427,7 @@ public final class PhotoViewerViewController: UIViewController {
             self.photoInfoPillView.alpha = alpha
             self.thumbnailImageView.alpha = alpha
             self.saveButtonView.alpha = alpha
-            self.ratingStarsView.alpha = alpha
+            self.ratingLabelBarView.alpha = alpha
             self.lastSavedDateLabel.alpha = alpha
         }
         setNeedsStatusBarAppearanceUpdate()

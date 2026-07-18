@@ -19,6 +19,7 @@ struct PhotoViewerViewModelTests {
     let photoLibrary: MockPhotoLibraryService
     let savedDateStore: MockSavedDateStore
     let ratingStore: MockPhotoRatingStore
+    let colorLabelStore: MockColorLabelStore
     let hapticsService: MockHapticsService
     let viewModel: PhotoViewerViewModel
 
@@ -28,6 +29,7 @@ struct PhotoViewerViewModelTests {
         photoLibrary = MockPhotoLibraryService()
         savedDateStore = MockSavedDateStore()
         ratingStore = MockPhotoRatingStore()
+        colorLabelStore = MockColorLabelStore()
         hapticsService = MockHapticsService()
 
         let urls = [
@@ -42,6 +44,7 @@ struct PhotoViewerViewModelTests {
             photoLibrary: photoLibrary,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
             hapticsService: hapticsService
         )
         viewModel = PhotoViewerViewModel(input: input, services: services)
@@ -51,13 +54,15 @@ struct PhotoViewerViewModelTests {
     private func makeViewModel(
         initialURL: URL,
         isRatingEnabled: Bool = false,
-        ratingFilter: RatingFilter? = nil
+        ratingFilter: RatingFilter? = nil,
+        colorLabelFilter: Set<PhotoColorLabel> = []
     ) -> PhotoViewerViewModel {
         let input = PhotoViewerInput(
             initialURL: initialURL,
             allURLs: [url1, url2, url3],
             isRatingEnabled: isRatingEnabled,
-            ratingFilter: ratingFilter
+            ratingFilter: ratingFilter,
+            colorLabelFilter: colorLabelFilter
         )
         let services = PhotoViewerServices(
             imageLoader: imageLoader,
@@ -65,6 +70,7 @@ struct PhotoViewerViewModelTests {
             photoLibrary: photoLibrary,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
             hapticsService: hapticsService
         )
         return PhotoViewerViewModel(input: input, services: services)
@@ -453,6 +459,126 @@ struct PhotoViewerViewModelTests {
         await vm.setRating(1)
         #expect(vm.currentIndex == 0)
         #expect(vm.shouldDismiss == false)
+    }
+
+    // MARK: - カラーラベル
+
+    @Test
+    func initialState_currentColorLabelIsNil() {
+        #expect(viewModel.currentColorLabel == nil)
+    }
+
+    @Test
+    func init_restoresColorLabel_fromStore() {
+        colorLabelStore.setLabel(.blue, for: url2)
+        let vm = makeViewModel(initialURL: url2)
+        #expect(vm.currentColorLabel == .blue)
+    }
+
+    @Test
+    func setColorLabel_updatesCurrentLabelAndStore() async {
+        await viewModel.setColorLabel(.green)
+        #expect(viewModel.currentColorLabel == .green)
+        #expect(colorLabelStore.label(for: url1) == .green)
+    }
+
+    @Test
+    func setColorLabel_sameLabel_resetsToNil() async {
+        await viewModel.setColorLabel(.green)
+        await viewModel.setColorLabel(.green)
+        #expect(viewModel.currentColorLabel == nil)
+        #expect(colorLabelStore.label(for: url1) == nil)
+    }
+
+    @Test
+    func setColorLabel_differentLabel_overwrites() async {
+        await viewModel.setColorLabel(.green)
+        await viewModel.setColorLabel(.red)
+        #expect(viewModel.currentColorLabel == .red)
+        #expect(colorLabelStore.label(for: url1) == .red)
+    }
+
+    @Test
+    func navigateNext_updatesCurrentColorLabel() async {
+        colorLabelStore.setLabel(.pink, for: url2)
+        await viewModel.navigateNext()
+        #expect(viewModel.currentColorLabel == .pink)
+    }
+
+    @Test
+    func didSwipeTo_updatesCurrentColorLabel() async {
+        colorLabelStore.setLabel(.white, for: url3)
+        await viewModel.didSwipeTo(index: 2, image: nil)
+        #expect(viewModel.currentColorLabel == .white)
+    }
+
+    // MARK: - カラーラベルフィルターによる自動遷移
+
+    @Test
+    func setColorLabel_stillMatchingFilter_staysOnCurrentPhoto() async {
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green, .red])
+        await vm.setColorLabel(.red)
+        #expect(vm.currentIndex == 0)
+        #expect(vm.shouldDismiss == false)
+    }
+
+    @Test
+    func setColorLabel_unmatchingFilter_advancesToNextMatchingPhoto() async {
+        // フィルター: 緑のみ。url2は不適合（赤）、url3は適合（緑）
+        colorLabelStore.setLabel(.green, for: url1)
+        colorLabelStore.setLabel(.red, for: url2)
+        colorLabelStore.setLabel(.green, for: url3)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green])
+
+        await vm.setColorLabel(.blue)  // url1が青になりフィルターに不適合
+
+        #expect(vm.currentURL == url3)
+        #expect(vm.currentColorLabel == .green)
+    }
+
+    @Test
+    func setColorLabel_noNextMatch_fallsBackToPreviousPhoto() async {
+        // フィルター: 緑のみ。前方のurl1のみ適合
+        colorLabelStore.setLabel(.green, for: url1)
+        colorLabelStore.setLabel(.green, for: url2)
+        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, colorLabelFilter: [.green])
+
+        await vm.setColorLabel(.red)  // url2が赤になりフィルターに不適合
+
+        #expect(vm.currentURL == url1)
+        #expect(vm.shouldDismiss == false)
+    }
+
+    @Test
+    func setColorLabel_noMatchesAtAll_requestsDismiss() async {
+        // フィルター: 緑のみ。唯一適合していたurl1のラベルを解除する
+        colorLabelStore.setLabel(.green, for: url1)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green])
+
+        await vm.setColorLabel(.green)  // 同色タップでラベル解除
+
+        #expect(vm.shouldDismiss == true)
+        #expect(vm.currentURL == url1)
+    }
+
+    @Test
+    func setRating_combinedFilter_advancesWhenColorFilterUnmatched() async {
+        // 複合フィルター: 星2以上 かつ 緑。url3のみ両方適合
+        ratingStore.setRating(3, for: url1)
+        colorLabelStore.setLabel(.green, for: url1)
+        ratingStore.setRating(5, for: url2)  // 星は適合するがラベルなし
+        ratingStore.setRating(2, for: url3)
+        colorLabelStore.setLabel(.green, for: url3)
+        let vm = makeViewModel(
+            initialURL: url1,
+            isRatingEnabled: true,
+            ratingFilter: RatingFilter(stars: 2, comparison: .atLeast),
+            colorLabelFilter: [.green]
+        )
+
+        await vm.setRating(1)  // url1が星1になり複合フィルターに不適合
+
+        #expect(vm.currentURL == url3)
     }
 
     // MARK: - toggleOverlay

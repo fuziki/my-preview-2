@@ -57,26 +57,56 @@ public final class FileBrowserViewModel {
         }
     }
 
+    /// カラーラベルフィルター（選択中ラベルの集合。空はフィルターなし）。
+    /// 変更時にUserDefaultsへ自動保存し、セクションを再構築する
+    public var colorLabelFilter: Set<PhotoColorLabel> {
+        didSet {
+            storage.set(
+                colorLabelFilter.isEmpty ? nil : colorLabelFilter.colorLabelFilterRawValue,
+                forKey: .colorLabelFilter
+            )
+            updateSections()
+        }
+    }
+
     /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
     private var lastViewedFileName: String? {
         didSet { storage.set(lastViewedFileName, forKey: .lastViewedFileName) }
     }
 
-    // MARK: - レーティング
+    // MARK: - レーティング・カラーラベル
 
     /// URLごとのレーティングのキャッシュ（セルの星表示とフィルタ判定に使用）
     private var ratingsByURL: [URL: Int] = [:]
+
+    /// URLごとのカラーラベルのキャッシュ（セルのドット表示とフィルタ判定に使用）
+    private var labelsByURL: [URL: PhotoColorLabel] = [:]
 
     /// 指定URLのレーティング（星0〜5）を返す
     public func rating(for url: URL) -> Int {
         ratingsByURL[url] ?? 0
     }
 
-    /// 永続化ストアからレーティングを再読み込みし、フィルタ適用済みセクションを再構築する。
-    /// フォトビューアーでレーティングが変更された後に呼ぶ。
-    public func refreshRatings() {
+    /// 指定URLのカラーラベルを返す（未設定はnil）
+    public func colorLabel(for url: URL) -> PhotoColorLabel? {
+        labelsByURL[url]
+    }
+
+    /// 永続化ストアからレーティングとカラーラベルを再読み込みし、フィルタ適用済みセクションを再構築する。
+    /// フォトビューアーで変更された後に呼ぶ。
+    public func refreshRatingsAndLabels() {
         ratingsByURL = ratingStore.allRatings()
+        labelsByURL = colorLabelStore.allLabels()
         updateSections()
+    }
+
+    /// レーティングとカラーラベルの両フィルタに適合するかを返す
+    private func matchesFilters(_ url: URL) -> Bool {
+        if let filter = ratingFilter, !filter.matches(rating(for: url)) { return false }
+        if !colorLabelFilter.isEmpty {
+            guard let label = colorLabel(for: url), colorLabelFilter.contains(label) else { return false }
+        }
+        return true
     }
 
     // MARK: - 派生状態
@@ -156,6 +186,7 @@ public final class FileBrowserViewModel {
     private let storage: any UserDefaultsStorageProtocol
     private let savedDateStore: any SavedDateStoreProtocol
     private let ratingStore: any PhotoRatingStoreProtocol
+    private let colorLabelStore: any ColorLabelStoreProtocol
 
     // MARK: - 初期化
 
@@ -163,11 +194,13 @@ public final class FileBrowserViewModel {
         fileSystemService: any FileSystemServiceProtocol,
         savedDateStore: any SavedDateStoreProtocol,
         ratingStore: any PhotoRatingStoreProtocol,
+        colorLabelStore: any ColorLabelStoreProtocol,
         storage: any UserDefaultsStorageProtocol = UserDefaultsStorage.shared
     ) {
         self.fileSystemService = fileSystemService
         self.savedDateStore = savedDateStore
         self.ratingStore = ratingStore
+        self.colorLabelStore = colorLabelStore
         self.storage = storage
         // UserDefaultsから復元する
         self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
@@ -180,6 +213,7 @@ public final class FileBrowserViewModel {
         )
         self.isRatingEnabled = storage.string(forKey: .isRatingEnabled) == "true"
         self.ratingFilter = RatingFilter(rawValue: storage.string(forKey: .ratingFilter) ?? "")
+        self.colorLabelFilter = Set(colorLabelFilterRawValue: storage.string(forKey: .colorLabelFilter) ?? "")
         self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
     }
 
@@ -194,7 +228,8 @@ public final class FileBrowserViewModel {
         await loadItems()
     }
 
-    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと永続化済みの保存日時・レーティングを削除する
+    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと
+    /// 永続化済みの保存日時・レーティング・カラーラベルを削除する
     public func resetToDefaults() {
         // 各プロパティを初期値へ戻す（didSetで一時的に再保存されるが、最後にまとめて削除する）
         viewMode = .list
@@ -203,12 +238,15 @@ public final class FileBrowserViewModel {
         gridColumnCount = 3
         isRatingEnabled = false
         ratingFilter = nil
+        colorLabelFilter = []
         lastViewedFileName = nil
         lastViewedItemID = nil
         ratingsByURL = [:]
+        labelsByURL = [:]
         storage.removeAll()
         savedDateStore.removeAll()
         ratingStore.removeAll()
+        colorLabelStore.removeAll()
         updateSections()
     }
 
@@ -225,17 +263,18 @@ public final class FileBrowserViewModel {
         isLoading = true
         loadedItems = await fileSystemService.scanForJPEGs(in: url)
         ratingsByURL = ratingStore.allRatings()
+        labelsByURL = colorLabelStore.allLabels()
         updateSections()
         restoreLastViewedItemIDIfNeeded()
         isLoading = false
     }
 
-    /// loadedItemsへレーティングフィルタを適用後、日付キーでグループ化し、
+    /// loadedItemsへレーティング・カラーラベルフィルタを適用後、日付キーでグループ化し、
     /// sortOrderに従ってセクションとアイテムを並べてsectionsを更新する
     private func updateSections() {
         let visibleItems: [FileItem]
-        if isRatingEnabled, let filter = ratingFilter {
-            visibleItems = loadedItems.filter { filter.matches(rating(for: $0.url)) }
+        if isRatingEnabled, ratingFilter != nil || !colorLabelFilter.isEmpty {
+            visibleItems = loadedItems.filter { matchesFilters($0.url) }
         } else {
             visibleItems = loadedItems
         }

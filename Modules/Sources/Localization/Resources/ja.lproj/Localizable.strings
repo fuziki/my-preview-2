@@ -27,10 +27,19 @@
 "file_browser.rating_filter_at_least" = "以上";
 "file_browser.rating_filter_at_most" = "以下";
 "file_browser.rating_filter_exactly" = "同値";
+"file_browser.color_label" = "カラーラベル";
 "file_browser.section_title_with_count" = "%@ (%d枚)";
 "file_browser.empty_state.no_folder" = "フォルダを選択してください";
 "file_browser.empty_state.loading" = "読み込み中...";
 "file_browser.empty_state.no_photos" = "このフォルダには写真が含まれていません";
+
+/* ColorLabel */
+"color_label.green" = "緑";
+"color_label.yellow" = "黄色";
+"color_label.blue" = "青";
+"color_label.pink" = "ピンク";
+"color_label.red" = "赤";
+"color_label.white" = "白";
 
 /* PhotoViewer */
 "photo_viewer.save_idle" = "↓ 保存";

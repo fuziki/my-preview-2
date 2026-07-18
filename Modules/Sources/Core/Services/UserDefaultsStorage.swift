@@ -12,6 +12,7 @@ public enum AppStorageKey: String, CaseIterable {
     // レーティング
     case isRatingEnabled = "AppSettings.isRatingEnabled"
     case ratingFilter = "FileBrowser.ratingFilter"
+    case colorLabelFilter = "FileBrowser.colorLabelFilter"
     // ファイルブラウザ状態
     case lastViewedFileName = "FileBrowser.lastViewedFileName"
 }

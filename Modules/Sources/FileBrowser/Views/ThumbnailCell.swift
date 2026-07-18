@@ -46,6 +46,18 @@ public final class ThumbnailCell: UICollectionViewCell {
         return label
     }()
 
+    // カラーラベルのドット（右上）
+    private let colorLabelDotView: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        v.layer.cornerRadius = 6
+        // 白ラベルや明るい写真でも視認できるよう暗い縁取りを付ける
+        v.layer.borderWidth = 1
+        v.layer.borderColor = UIColor.black.withAlphaComponent(0.4).cgColor
+        v.isHidden = true
+        return v
+    }()
+
     private var loadingTask: Task<Void, Never>?
 
     override public init(frame: CGRect) {
@@ -56,6 +68,7 @@ public final class ThumbnailCell: UICollectionViewCell {
         contentView.addSubview(lastViewedBadge)
         lastViewedBadge.addSubview(lastViewedLabel)
         contentView.addSubview(ratingLabel)
+        contentView.addSubview(colorLabelDotView)
 
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -75,6 +88,11 @@ public final class ThumbnailCell: UICollectionViewCell {
             ratingLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
             ratingLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 4),
             ratingLabel.heightAnchor.constraint(equalToConstant: 16),
+
+            colorLabelDotView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
+            colorLabelDotView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -4),
+            colorLabelDotView.widthAnchor.constraint(equalToConstant: 12),
+            colorLabelDotView.heightAnchor.constraint(equalToConstant: 12),
         ])
     }
 
@@ -87,6 +105,7 @@ public final class ThumbnailCell: UICollectionViewCell {
         imageView.image = nil
         lastViewedBadge.isHidden = true
         ratingLabel.isHidden = true
+        colorLabelDotView.isHidden = true
     }
 
     public func configure(with url: URL, thumbnailPixelSize: Int, thumbnailService: any ThumbnailServiceProtocol) {
@@ -117,5 +136,15 @@ public final class ThumbnailCell: UICollectionViewCell {
         // 前後に余白を入れて黒背景のバッジ風に見せる
         ratingLabel.text = " " + String(repeating: "★", count: rating) + " "
         ratingLabel.isHidden = false
+    }
+
+    /// カラーラベルのドット表示を設定する（nilは非表示）
+    public func setColorLabel(_ label: PhotoColorLabel?) {
+        guard let label else {
+            colorLabelDotView.isHidden = true
+            return
+        }
+        colorLabelDotView.backgroundColor = label.uiColor
+        colorLabelDotView.isHidden = false
     }
 }

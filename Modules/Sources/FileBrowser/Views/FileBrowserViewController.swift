@@ -177,9 +177,10 @@ public final class FileBrowserViewController: UIViewController {
         updateFilterButtonAppearance()
     }
 
-    /// フィルター適用中はアイコンを塗りつぶし表示にする
+    /// フィルター（レーティング・カラーラベルのいずれか）適用中はアイコンを塗りつぶし表示にする
     private func updateFilterButtonAppearance() {
-        let name = viewModel.ratingFilter != nil
+        let isActive = viewModel.ratingFilter != nil || !viewModel.colorLabelFilter.isEmpty
+        let name = isActive
             ? "line.3.horizontal.decrease.circle.fill"
             : "line.3.horizontal.decrease.circle"
         filterBarButtonItem.image = UIImage(systemName: name)
@@ -219,13 +220,17 @@ public final class FileBrowserViewController: UIViewController {
         // 星・条件の選択時に引き継ぐベース値（フィルターなしの場合はデフォルト値）
         let base = current ?? RatingFilter(stars: 0, comparison: .atLeast)
 
-        // フィルターなし
+        // フィルターなし（レーティング・カラーラベルの両方を解除）
         let offAction = UIAction(
             title: L10n.FileBrowser.ratingFilterOff,
             image: UIImage(systemName: "xmark.circle"),
-            state: current == nil ? .on : .off
+            state: current == nil && viewModel.colorLabelFilter.isEmpty ? .on : .off
         ) { [weak self] _ in
-            self?.applyRatingFilter(nil)
+            guard let self else { return }
+            viewModel.ratingFilter = nil
+            viewModel.colorLabelFilter = []
+            refreshFilterMenu()
+            updateFilterButtonAppearance()
         }
         let offMenu = UIMenu(title: "", options: .displayInline, children: [offAction])
 
@@ -268,7 +273,34 @@ public final class FileBrowserViewController: UIViewController {
             children: comparisonActions
         )
 
-        return [offMenu, starsMenu, comparisonMenu]
+        // カラーラベル（複数選択・0〜6個）
+        let colorActions = PhotoColorLabel.allCases.map { label in
+            UIAction(
+                title: L10n.ColorLabel.name(forRawValue: label.rawValue),
+                image: UIImage(systemName: "circle.fill")?
+                    .withTintColor(label.uiColor, renderingMode: .alwaysOriginal),
+                attributes: .keepsMenuPresented,
+                state: viewModel.colorLabelFilter.contains(label) ? .on : .off
+            ) { [weak self] _ in
+                guard let self else { return }
+                var selection = viewModel.colorLabelFilter
+                if selection.contains(label) {
+                    selection.remove(label)
+                } else {
+                    selection.insert(label)
+                }
+                viewModel.colorLabelFilter = selection
+                refreshFilterMenu()
+                updateFilterButtonAppearance()
+            }
+        }
+        let colorMenu = UIMenu(
+            title: L10n.FileBrowser.colorLabel,
+            options: .displayInline,
+            children: colorActions
+        )
+
+        return [offMenu, starsMenu, comparisonMenu, colorMenu]
     }
 
     /// フィルターを適用してメニューとボタン表示を更新する（セクション再構築は didSet 経由で行われる）
@@ -462,23 +494,53 @@ public final class FileBrowserViewController: UIViewController {
             config.textProperties.lineBreakMode = .byTruncatingMiddle
             config.textProperties.numberOfLines = 1
 
-            // レーティング（星1以上）と最後に閲覧したアイテムをセカンダリテキストで表示する
-            var secondaryParts: [String] = []
+            // レーティング（星1以上）・カラーラベル・最後に閲覧をセカンダリ行で表示する
+            let caption = UIFont.preferredFont(forTextStyle: .caption1)
+            var secondaryParts: [NSAttributedString] = []
             if let s = self, s.viewModel.isRatingEnabled {
                 let rating = s.viewModel.rating(for: url)
                 if rating > 0 {
-                    secondaryParts.append(String(repeating: "★", count: rating))
+                    secondaryParts.append(NSAttributedString(
+                        string: String(repeating: "★", count: rating),
+                        attributes: [.font: caption, .foregroundColor: UIColor.systemBlue]
+                    ))
+                }
+                if let label = s.viewModel.colorLabel(for: url) {
+                    // 白ラベルは背景に紛れるため縁取りを付ける（負のstrokeWidthは塗り+縁取り）
+                    var attributes: [NSAttributedString.Key: Any] = [
+                        .font: caption, .foregroundColor: label.uiColor,
+                    ]
+                    if label == .white {
+                        attributes[.strokeColor] = UIColor.systemGray3
+                        attributes[.strokeWidth] = -3.0
+                    }
+                    secondaryParts.append(NSAttributedString(string: "●", attributes: attributes))
                 }
             }
             let isLastViewed = self.map { s in
                 s.viewModel.items.first(where: { $0.url == url })?.id == s.viewModel.lastViewedItemID
             } ?? false
             if isLastViewed {
-                secondaryParts.append(L10n.FileBrowser.jumpToLastViewed)
+                secondaryParts.append(NSAttributedString(
+                    string: L10n.FileBrowser.jumpToLastViewed,
+                    attributes: [.font: caption, .foregroundColor: UIColor.systemBlue]
+                ))
             }
-            config.secondaryText = secondaryParts.isEmpty ? nil : secondaryParts.joined(separator: " · ")
-            config.secondaryTextProperties.color = .systemBlue
-            config.secondaryTextProperties.font = .preferredFont(forTextStyle: .caption1)
+            if secondaryParts.isEmpty {
+                config.secondaryAttributedText = nil
+            } else {
+                let joined = NSMutableAttributedString()
+                for (index, part) in secondaryParts.enumerated() {
+                    if index > 0 {
+                        joined.append(NSAttributedString(
+                            string: " · ",
+                            attributes: [.font: caption, .foregroundColor: UIColor.secondaryLabel]
+                        ))
+                    }
+                    joined.append(part)
+                }
+                config.secondaryAttributedText = joined
+            }
 
             cell.contentConfiguration = config
         }
@@ -505,6 +567,12 @@ public final class FileBrowserViewController: UIViewController {
                 s.viewModel.isRatingEnabled ? s.viewModel.rating(for: url) : 0
             } ?? 0
             cell.setRating(rating)
+
+            // カラーラベルのドットを付ける
+            let colorLabel = self.flatMap { s in
+                s.viewModel.isRatingEnabled ? s.viewModel.colorLabel(for: url) : nil
+            }
+            cell.setColorLabel(colorLabel)
         }
 
         let headerRegistration = UICollectionView.SupplementaryRegistration<SectionHeaderView>(
@@ -810,7 +878,8 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             initialURL: selectedItem.url,
             allURLs: allURLs,
             isRatingEnabled: viewModel.isRatingEnabled,
-            ratingFilter: viewModel.ratingFilter
+            ratingFilter: viewModel.ratingFilter,
+            colorLabelFilter: viewModel.colorLabelFilter
         )
         let photoViewer = photoViewerFactory(input)
 
@@ -832,9 +901,9 @@ extension FileBrowserViewController: UICollectionViewDelegate {
                 guard let self else { return }
                 // ファイル名をViewModelを通じてUserDefaultsに永続化し、lastViewedItemIDも更新する
                 viewModel.saveLastViewed(url: currentURL)
-                // ビューアー内でレーティングが変更された可能性があるため、
+                // ビューアー内でレーティング・カラーラベルが変更された可能性があるため、
                 // ストアから再読み込みしてフィルタ適用済みセクションと全セルを更新する
-                viewModel.refreshRatings()
+                viewModel.refreshRatingsAndLabels()
                 applySnapshot(reconfiguringAllItems: true)
             }
         }
