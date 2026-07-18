@@ -11,12 +11,18 @@ struct FileBrowserViewModelTests {
 
     let fileSystemService: MockFileSystemService
     let storage: MockUserDefaultsStorage
+    let savedDateStore: MockSavedDateStore
     let viewModel: FileBrowserViewModel
 
     init() {
         fileSystemService = MockFileSystemService()
         storage = MockUserDefaultsStorage()
-        viewModel = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        savedDateStore = MockSavedDateStore()
+        viewModel = FileBrowserViewModel(
+            fileSystemService: fileSystemService,
+            savedDateStore: savedDateStore,
+            storage: storage
+        )
     }
 
     // MARK: - 初期状態
@@ -239,14 +245,14 @@ struct FileBrowserViewModelTests {
     @Test
     func init_restoresViewMode_fromStorage() {
         storage.set(ViewMode.grid.rawValue, forKey: AppStorageKey.viewMode.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
         #expect(vm.viewMode == .grid)
     }
 
     @Test
     func init_restoresSaveFormat_fromStorage() {
         storage.set(SaveFormat.jpeg.rawValue, forKey: AppStorageKey.saveFormat.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
         #expect(vm.saveFormat == .jpeg)
     }
 
@@ -276,28 +282,38 @@ struct FileBrowserViewModelTests {
     @Test
     func init_restoresGridColumnCount_fromStorage() {
         storage.set("5", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
         #expect(vm.gridColumnCount == 5)
     }
 
     @Test
     func init_clampsGridColumnCount_belowRange() {
         storage.set("1", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
         #expect(vm.gridColumnCount == 2)
     }
 
     @Test
     func init_clampsGridColumnCount_aboveRange() {
         storage.set("10", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
         #expect(vm.gridColumnCount == 5)
     }
 
     @Test
     func init_defaultsToThreeColumns_forInvalidStoredValue() {
         storage.set("abc", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, storage: storage)
+        let vm = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore, storage: storage)
         #expect(vm.gridColumnCount == 3)
+    }
+
+    // MARK: - resetToDefaults
+
+    @Test
+    func resetToDefaults_clearsSavedDateStore() {
+        savedDateStore.setDate(Date(), for: URL(fileURLWithPath: "/tmp/a.jpg"))
+        viewModel.resetToDefaults()
+        #expect(savedDateStore.removeAllCallCount == 1)
+        #expect(savedDateStore.dates.isEmpty)
     }
 }

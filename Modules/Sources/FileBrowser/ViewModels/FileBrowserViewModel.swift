@@ -121,14 +121,17 @@ public final class FileBrowserViewModel {
 
     private let fileSystemService: any FileSystemServiceProtocol
     private let storage: any UserDefaultsStorageProtocol
+    private let savedDateStore: any SavedDateStoreProtocol
 
     // MARK: - 初期化
 
     public init(
         fileSystemService: any FileSystemServiceProtocol,
+        savedDateStore: any SavedDateStoreProtocol,
         storage: any UserDefaultsStorageProtocol = UserDefaultsStorage.shared
     ) {
         self.fileSystemService = fileSystemService
+        self.savedDateStore = savedDateStore
         self.storage = storage
         // UserDefaultsから復元する
         self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
@@ -153,7 +156,7 @@ public final class FileBrowserViewModel {
         await loadItems()
     }
 
-    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーを削除する
+    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと永続化済みの保存日時を削除する
     public func resetToDefaults() {
         // 各プロパティを初期値へ戻す（didSetで一時的に再保存されるが、最後にまとめて削除する）
         viewMode = .list
@@ -163,6 +166,7 @@ public final class FileBrowserViewModel {
         lastViewedFileName = nil
         lastViewedItemID = nil
         storage.removeAll()
+        savedDateStore.removeAll()
     }
 
     /// 閲覧したURLをUserDefaultsに保存し、lastViewedItemIDも更新する

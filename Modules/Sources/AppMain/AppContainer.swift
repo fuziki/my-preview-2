@@ -38,7 +38,7 @@ final class AppContainer {
     /// FileBrowserViewControllerを生成する。
     /// PhotoViewerViewControllerの生成はクロージャとして注入する。
     func makeFileBrowserViewController() -> UIViewController {
-        let viewModel = FileBrowserViewModel(fileSystemService: fileSystemService)
+        let viewModel = FileBrowserViewModel(fileSystemService: fileSystemService, savedDateStore: savedDateStore)
         return FileBrowserViewController(
             viewModel: viewModel,
             thumbnailService: thumbnailService,
