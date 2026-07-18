@@ -3,7 +3,7 @@ import Foundation
 // MARK: - AppStorageKey
 
 /// UserDefaultsで使用するキーを一元管理する
-public enum AppStorageKey: String {
+public enum AppStorageKey: String, CaseIterable {
     // 表示設定
     case viewMode = "AppSettings.viewMode"
     case saveFormat = "AppSettings.saveFormat"
@@ -18,6 +18,7 @@ public enum AppStorageKey: String {
 public protocol UserDefaultsStorageProtocol {
     func string(forKey key: String) -> String?
     func set(_ value: String?, forKey key: String)
+    func removeObject(forKey key: String)
 }
 
 public extension UserDefaultsStorageProtocol {
@@ -27,6 +28,13 @@ public extension UserDefaultsStorageProtocol {
 
     func set(_ value: String?, forKey key: AppStorageKey) {
         set(value, forKey: key.rawValue)
+    }
+
+    /// アプリが管理する全キーをUserDefaultsから削除する
+    func removeAll() {
+        for key in AppStorageKey.allCases {
+            removeObject(forKey: key.rawValue)
+        }
     }
 }
 
@@ -47,5 +55,9 @@ public final class UserDefaultsStorage: UserDefaultsStorageProtocol {
 
     public func set(_ value: String?, forKey key: String) {
         defaults.set(value, forKey: key)
+    }
+
+    public func removeObject(forKey key: String) {
+        defaults.removeObject(forKey: key)
     }
 }

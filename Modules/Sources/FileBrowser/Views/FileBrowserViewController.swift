@@ -254,7 +254,36 @@ public final class FileBrowserViewController: UIViewController {
         )
         sortOrderMenu.preferredElementSize = .medium
 
-        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu].compactMap { $0 }
+        // キャッシュクリア セクション（最下部）
+        let clearCacheAction = UIAction(
+            title: "キャッシュクリア",
+            image: UIImage(systemName: "trash"),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.presentClearCacheConfirmation()
+        }
+        let clearCacheMenu = UIMenu(
+            title: "",
+            options: .displayInline,
+            children: [clearCacheAction]
+        )
+
+        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu, clearCacheMenu].compactMap { $0 }
+    }
+
+    /// キャッシュクリアの確認アラートを表示し、承認された場合のみ初期状態へ戻す
+    private func presentClearCacheConfirmation() {
+        let alert = UIAlertController(
+            title: "キャッシュクリア",
+            message: "設定と閲覧履歴を削除して初期状態に戻します。よろしいですか？",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "クリア", style: .destructive) { [weak self] _ in
+            self?.viewModel.resetToDefaults()
+            self?.refreshSettingsMenu()
+        })
+        present(alert, animated: true)
     }
 
     /// グリッドの列数を増減するステッパー形式のメニューセクションを生成する

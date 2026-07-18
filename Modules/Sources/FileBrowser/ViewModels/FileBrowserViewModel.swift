@@ -152,6 +152,18 @@ public final class FileBrowserViewModel {
         await loadItems()
     }
 
+    /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーを削除する
+    public func resetToDefaults() {
+        // 各プロパティを初期値へ戻す（didSetで一時的に再保存されるが、最後にまとめて削除する）
+        viewMode = .list
+        saveFormat = .jpegAndRaw
+        sortOrder = .dateAscending
+        gridColumnCount = 3
+        lastViewedFileName = nil
+        lastViewedItemID = nil
+        storage.removeAll()
+    }
+
     /// 閲覧したURLをUserDefaultsに保存し、lastViewedItemIDも更新する
     public func saveLastViewed(url: URL) {
         lastViewedFileName = url.lastPathComponent

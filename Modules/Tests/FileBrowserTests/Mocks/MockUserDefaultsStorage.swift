@@ -13,4 +13,8 @@ final class MockUserDefaultsStorage: UserDefaultsStorageProtocol {
         setCallCount += 1
         store[key] = value
     }
+
+    func removeObject(forKey key: String) {
+        store[key] = nil
+    }
 }
