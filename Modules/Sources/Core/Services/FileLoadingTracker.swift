@@ -3,7 +3,7 @@ import Observation
 
 /// ファイルシステムへの読み込み中フラグを一元管理するトラッカー。
 /// カウンタ方式なので複数の並行読み込みが重なっても正しく isLoading を制御する。
-@Observable @MainActor
+@Observable
 public final class FileLoadingTracker {
     public private(set) var isLoading: Bool = false
     private var activeCount: Int = 0

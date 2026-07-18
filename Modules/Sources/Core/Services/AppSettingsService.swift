@@ -21,8 +21,8 @@ public enum SaveFormat: String {
 
     public var displayName: String {
         switch self {
-        case .jpeg: return "JPEG"
-        case .jpegAndRaw: return "JPEG + RAW"
+        case .jpeg: "JPEG"
+        case .jpegAndRaw: "JPEG + RAW"
         }
     }
 }
