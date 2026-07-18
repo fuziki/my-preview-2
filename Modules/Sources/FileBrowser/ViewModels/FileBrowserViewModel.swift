@@ -203,15 +203,15 @@ public final class FileBrowserViewModel {
         self.colorLabelStore = colorLabelStore
         self.storage = storage
         // UserDefaultsから復元する
-        self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .list
-        self.saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
+        self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .grid
+        self.saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpeg
         self.sortOrder = FileSortOrder(rawValue: storage.string(forKey: .sortOrder) ?? "") ?? .dateAscending
         let storedColumnCount = Int(storage.string(forKey: .gridColumnCount) ?? "") ?? 3
         self.gridColumnCount = min(
             max(storedColumnCount, Self.gridColumnCountRange.lowerBound),
             Self.gridColumnCountRange.upperBound
         )
-        self.isRatingEnabled = storage.string(forKey: .isRatingEnabled) == "true"
+        self.isRatingEnabled = (storage.string(forKey: .isRatingEnabled) ?? "true") == "true"
         self.ratingFilter = RatingFilter(rawValue: storage.string(forKey: .ratingFilter) ?? "")
         self.colorLabelFilter = Set(colorLabelFilterRawValue: storage.string(forKey: .colorLabelFilter) ?? "")
         self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
@@ -232,11 +232,11 @@ public final class FileBrowserViewModel {
     /// 永続化済みの保存日時・レーティング・カラーラベルを削除する
     public func resetToDefaults() {
         // 各プロパティを初期値へ戻す（didSetで一時的に再保存されるが、最後にまとめて削除する）
-        viewMode = .list
-        saveFormat = .jpegAndRaw
+        viewMode = .grid
+        saveFormat = .jpeg
         sortOrder = .dateAscending
         gridColumnCount = 3
-        isRatingEnabled = false
+        isRatingEnabled = true
         ratingFilter = nil
         colorLabelFilter = []
         lastViewedFileName = nil

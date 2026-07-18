@@ -51,8 +51,8 @@ struct FileBrowserViewModelTests {
         #expect(viewModel.hasFolder == false)
         #expect(viewModel.isLoading == false)
         #expect(viewModel.folderName == nil)
-        #expect(viewModel.viewMode == .list)
-        #expect(viewModel.saveFormat == .jpegAndRaw)
+        #expect(viewModel.viewMode == .grid)
+        #expect(viewModel.saveFormat == .jpeg)
         #expect(viewModel.lastViewedItemID == nil)
     }
 
@@ -274,13 +274,13 @@ struct FileBrowserViewModelTests {
     }
 
     @Test
-    func init_defaultsToListViewMode_whenStorageEmpty() {
-        #expect(viewModel.viewMode == .list)
+    func init_defaultsToGridViewMode_whenStorageEmpty() {
+        #expect(viewModel.viewMode == .grid)
     }
 
     @Test
-    func init_defaultsToJpegAndRawSaveFormat_whenStorageEmpty() {
-        #expect(viewModel.saveFormat == .jpegAndRaw)
+    func init_defaultsToJpegSaveFormat_whenStorageEmpty() {
+        #expect(viewModel.saveFormat == .jpeg)
     }
 
     // MARK: - グリッド列数
@@ -343,19 +343,19 @@ struct FileBrowserViewModelTests {
     }
 
     @Test
-    func resetToDefaults_disablesRatingAndClearsFilter() {
-        viewModel.isRatingEnabled = true
+    func resetToDefaults_reenablesRatingAndClearsFilter() {
+        viewModel.isRatingEnabled = false
         viewModel.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
         viewModel.resetToDefaults()
-        #expect(viewModel.isRatingEnabled == false)
+        #expect(viewModel.isRatingEnabled == true)
         #expect(viewModel.ratingFilter == nil)
     }
 
     // MARK: - レーティング
 
     @Test
-    func init_defaultsToRatingDisabled_whenStorageEmpty() {
-        #expect(viewModel.isRatingEnabled == false)
+    func init_defaultsToRatingEnabled_whenStorageEmpty() {
+        #expect(viewModel.isRatingEnabled == true)
         #expect(viewModel.ratingFilter == nil)
     }
 

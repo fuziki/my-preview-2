@@ -9,8 +9,8 @@ public enum ViewMode: String {
 // MARK: - FileSortOrder
 
 public enum FileSortOrder: String {
-    case dateDescending  // 新しい順（デフォルト）
-    case dateAscending   // 古い順
+    case dateDescending  // 新しい順
+    case dateAscending   // 古い順（デフォルト）
 }
 
 // MARK: - SaveFormat
