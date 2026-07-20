@@ -15,15 +15,7 @@ public final class RatingLabelBarView: UIView {
     /// PhotoColorLabel.allCases と同順のカラーボタン
     private var colorButtons: [UIButton] = []
 
-    private let blurView: UIVisualEffectView = {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        view.layer.borderWidth = 0.5
-        view.layer.cornerRadius = 16
-        view.clipsToBounds = true
-        return view
-    }()
+    private let glassBackdrop = GlassBackdropView(cornerRadius: 16)
 
     private let stackView: UIStackView = {
         let stack = UIStackView()
@@ -59,8 +51,8 @@ public final class RatingLabelBarView: UIView {
     // MARK: - セットアップ
 
     private func setupViews() {
-        addSubview(blurView)
-        blurView.contentView.addSubview(stackView)
+        addSubview(glassBackdrop)
+        glassBackdrop.contentView.addSubview(stackView)
 
         // ボタン幅24ptに収まるよう、シンボルのpointSizeは実際の描画幅より小さめに指定する
         let iconConfig = UIImage.SymbolConfiguration(pointSize: 12)
@@ -115,15 +107,15 @@ public final class RatingLabelBarView: UIView {
         }
 
         NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: topAnchor),
-            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            glassBackdrop.topAnchor.constraint(equalTo: topAnchor),
+            glassBackdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glassBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassBackdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
             heightAnchor.constraint(equalToConstant: 32),
 
-            stackView.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
-            stackView.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 6),
-            stackView.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -6),
+            stackView.centerYAnchor.constraint(equalTo: glassBackdrop.contentView.centerYAnchor),
+            stackView.leadingAnchor.constraint(equalTo: glassBackdrop.contentView.leadingAnchor, constant: 6),
+            stackView.trailingAnchor.constraint(equalTo: glassBackdrop.contentView.trailingAnchor, constant: -6),
         ])
     }
 

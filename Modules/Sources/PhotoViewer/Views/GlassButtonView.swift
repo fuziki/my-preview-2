@@ -1,6 +1,6 @@
 import UIKit
 
-/// UIVisualEffectViewとUIButtonをラップするガラスモーフィズムスタイルのコンテナ。
+/// UIVisualEffectViewとUIButtonをラップするLiquid Glassスタイルのコンテナ。
 /// 44×44 アイコンボタンには `circle(systemImageName:)` ファクトリを使用する。
 public final class GlassButtonView: UIView {
 
@@ -8,22 +8,15 @@ public final class GlassButtonView: UIView {
 
     public let button: UIButton
 
-    private let blurView: UIVisualEffectView = {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        view.layer.borderWidth = 0.5
-        view.clipsToBounds = true
-        return view
-    }()
+    private let glassBackdrop: GlassBackdropView
 
     // MARK: - 初期化
 
     public init(button: UIButton, cornerRadius: CGFloat = 22) {
         self.button = button
+        glassBackdrop = GlassBackdropView(cornerRadius: cornerRadius)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        blurView.layer.cornerRadius = cornerRadius
         setupViews()
     }
 
@@ -34,16 +27,16 @@ public final class GlassButtonView: UIView {
     // MARK: - セットアップ
 
     private func setupViews() {
-        addSubview(blurView)
+        addSubview(glassBackdrop)
         button.translatesAutoresizingMaskIntoConstraints = false
-        blurView.contentView.addSubview(button)
+        glassBackdrop.contentView.addSubview(button)
         NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: topAnchor),
-            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            button.centerXAnchor.constraint(equalTo: blurView.contentView.centerXAnchor),
-            button.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
+            glassBackdrop.topAnchor.constraint(equalTo: topAnchor),
+            glassBackdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glassBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassBackdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
+            button.centerXAnchor.constraint(equalTo: glassBackdrop.contentView.centerXAnchor),
+            button.centerYAnchor.constraint(equalTo: glassBackdrop.contentView.centerYAnchor),
         ])
     }
 }

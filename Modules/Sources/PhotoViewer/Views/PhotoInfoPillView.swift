@@ -11,15 +11,7 @@ final class PhotoInfoPillView: UIView {
 
     // MARK: - サブビュー
 
-    private let blurView: UIVisualEffectView = {
-        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        blur.translatesAutoresizingMaskIntoConstraints = false
-        blur.layer.cornerRadius = 16
-        blur.layer.borderColor = UIColor.white.withAlphaComponent(0.15).cgColor
-        blur.layer.borderWidth = 0.5
-        blur.clipsToBounds = true
-        return blur
-    }()
+    private let glassBackdrop = GlassBackdropView(cornerRadius: 16)
 
     private let stack: UIStackView = {
         let stack = UIStackView()
@@ -77,25 +69,25 @@ final class PhotoInfoPillView: UIView {
     private func setup() {
         translatesAutoresizingMaskIntoConstraints = false
 
-        addSubview(blurView)
+        addSubview(glassBackdrop)
         NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: topAnchor),
-            blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            glassBackdrop.topAnchor.constraint(equalTo: topAnchor),
+            glassBackdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
             // コンテンツ幅で右寄せ。leadingは>=にしてスタック幅で決まるようにする
-            blurView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassBackdrop.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            glassBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
             heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
 
         stack.addArrangedSubview(fileNameLabel)
         stack.addArrangedSubview(exifLabel)
-        blurView.contentView.addSubview(stack)
+        glassBackdrop.contentView.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.centerYAnchor.constraint(equalTo: blurView.contentView.centerYAnchor),
-            stack.topAnchor.constraint(greaterThanOrEqualTo: blurView.contentView.topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: blurView.contentView.bottomAnchor, constant: -8),
-            stack.leadingAnchor.constraint(equalTo: blurView.contentView.leadingAnchor, constant: 14),
-            stack.trailingAnchor.constraint(equalTo: blurView.contentView.trailingAnchor, constant: -14),
+            stack.centerYAnchor.constraint(equalTo: glassBackdrop.contentView.centerYAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: glassBackdrop.contentView.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: glassBackdrop.contentView.bottomAnchor, constant: -8),
+            stack.leadingAnchor.constraint(equalTo: glassBackdrop.contentView.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: glassBackdrop.contentView.trailingAnchor, constant: -14),
         ])
 
         // copyButton を最前面に配置し全幅タップ領域を確保する
