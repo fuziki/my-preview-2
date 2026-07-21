@@ -334,7 +334,7 @@ public final class PhotoViewerViewController: UIViewController {
         if viewModel.isRatingEnabled {
             view.addSubview(ratingLabelBarView)
             NSLayoutConstraint.activate([
-                ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -16),
+                ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
                 ratingLabelBarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ])
         }
@@ -354,24 +354,26 @@ public final class PhotoViewerViewController: UIViewController {
             lastSavedDateLabel.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
         ])
 
-        // 前へタッチ領域: 44×44のアイコンを中心に上下左右16pt拡張した76×76の正方形。
+        // 前へタッチ領域: 44×44のアイコンに対して左右下16pt・上8ptだけ拡張する。
+        // 上をレーティングバーとの間隔(8pt)に合わせて重ならないようにしている。
         // ガラスボタンの上に重ねて前面に配置する。
         view.addSubview(prevHitAreaButton)
         NSLayoutConstraint.activate([
-            prevHitAreaButton.widthAnchor.constraint(equalToConstant: 76),
-            prevHitAreaButton.heightAnchor.constraint(equalToConstant: 76),
-            prevHitAreaButton.centerXAnchor.constraint(equalTo: prevButtonView.centerXAnchor),
-            prevHitAreaButton.centerYAnchor.constraint(equalTo: prevButtonView.centerYAnchor),
+            prevHitAreaButton.leadingAnchor.constraint(equalTo: prevButtonView.leadingAnchor, constant: -16),
+            prevHitAreaButton.trailingAnchor.constraint(equalTo: prevButtonView.trailingAnchor, constant: 16),
+            prevHitAreaButton.topAnchor.constraint(equalTo: prevButtonView.topAnchor, constant: -8),
+            prevHitAreaButton.bottomAnchor.constraint(equalTo: prevButtonView.bottomAnchor, constant: 16),
         ])
 
-        // 次へタッチ領域: 44×44のアイコンを中心に上下左右16pt拡張した76×76の正方形。
+        // 次へタッチ領域: 44×44のアイコンに対して左右下16pt・上8ptだけ拡張する。
+        // 上をレーティングバーとの間隔(8pt)に合わせて重ならないようにしている。
         // ガラスボタンの上に重ねて前面に配置する。
         view.addSubview(nextHitAreaButton)
         NSLayoutConstraint.activate([
-            nextHitAreaButton.widthAnchor.constraint(equalToConstant: 76),
-            nextHitAreaButton.heightAnchor.constraint(equalToConstant: 76),
-            nextHitAreaButton.centerXAnchor.constraint(equalTo: nextButtonView.centerXAnchor),
-            nextHitAreaButton.centerYAnchor.constraint(equalTo: nextButtonView.centerYAnchor),
+            nextHitAreaButton.leadingAnchor.constraint(equalTo: nextButtonView.leadingAnchor, constant: -16),
+            nextHitAreaButton.trailingAnchor.constraint(equalTo: nextButtonView.trailingAnchor, constant: 16),
+            nextHitAreaButton.topAnchor.constraint(equalTo: nextButtonView.topAnchor, constant: -8),
+            nextHitAreaButton.bottomAnchor.constraint(equalTo: nextButtonView.bottomAnchor, constant: 16),
         ])
     }
 

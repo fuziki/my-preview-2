@@ -12,13 +12,15 @@ public final class GlassBackdropView: UIView {
     private let backdropView: UIView = {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.backgroundColor = UIColor.black.withAlphaComponent(0.3)
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.4)
         view.clipsToBounds = true
         return view
     }()
 
     private let glassView: UIVisualEffectView = {
-        let view = UIVisualEffectView(effect: UIGlassEffect(style: .regular))
+        let glassEffect = UIGlassEffect(style: .clear)
+        glassEffect.isInteractive = true
+        let view = UIVisualEffectView(effect: glassEffect)
         view.translatesAutoresizingMaskIntoConstraints = false
         // 写真の上に常時オーバーレイ表示するため、システムの外観設定に関わらずダークな見た目に固定する
         view.overrideUserInterfaceStyle = .dark
