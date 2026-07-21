@@ -1,6 +1,7 @@
 import Foundation
 import Core
 
+#if targetEnvironment(simulator)
 /// シミュレータビルド用のFileSystemServiceモック。
 /// 実フォルダを読まず、番号付きのモックFileItemを返す。
 public final class MockFileSystemService: FileSystemServiceProtocol {
@@ -21,3 +22,4 @@ public final class MockFileSystemService: FileSystemServiceProtocol {
         }
     }
 }
+#endif

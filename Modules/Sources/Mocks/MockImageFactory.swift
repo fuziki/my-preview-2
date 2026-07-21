@@ -1,5 +1,6 @@
 import UIKit
 
+#if targetEnvironment(simulator)
 /// モック画像を生成するファクトリ。
 /// 青色背景の中央に黒色で番号を描画する。
 public enum MockImageFactory {
@@ -31,3 +32,4 @@ public enum MockImageFactory {
         return Int(digits) ?? 0
     }
 }
+#endif

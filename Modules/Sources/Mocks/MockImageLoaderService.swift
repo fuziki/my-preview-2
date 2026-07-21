@@ -1,6 +1,7 @@
 import UIKit
 import Core
 
+#if targetEnvironment(simulator)
 /// シミュレータビルド用のImageLoaderServiceモック。
 /// ファイルを読まず、URLの番号を描画したモック画像を返す。
 public final class MockImageLoaderService: ImageLoaderServiceProtocol {
@@ -13,3 +14,4 @@ public final class MockImageLoaderService: ImageLoaderServiceProtocol {
         )
     }
 }
+#endif

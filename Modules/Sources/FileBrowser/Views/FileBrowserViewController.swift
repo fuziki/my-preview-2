@@ -53,6 +53,8 @@ public final class FileBrowserViewController: UIViewController {
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.contentInsetAdjustmentBehavior = .automatic
         cv.delegate = self
+        // ライト/ダークモードに関わらずスクロールバーを白色に固定する
+        cv.indicatorStyle = .white
         return cv
     }()
 

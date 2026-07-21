@@ -1,6 +1,7 @@
 import UIKit
 import Core
 
+#if targetEnvironment(simulator)
 /// シミュレータビルド用のThumbnailServiceモック。
 /// モックサムネイルを生成し、実サービスと同様にキャッシュから同期取得できる。
 @MainActor
@@ -24,3 +25,4 @@ public final class MockThumbnailService: ThumbnailServiceProtocol {
         return image
     }
 }
+#endif

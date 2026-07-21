@@ -1,6 +1,7 @@
 import Foundation
 import Core
 
+#if targetEnvironment(simulator)
 /// シミュレータビルド用のExifServiceモック。固定のExif情報を返す。
 public final class MockExifService: ExifServiceProtocol {
     public init() {}
@@ -16,3 +17,4 @@ public final class MockExifService: ExifServiceProtocol {
         )
     }
 }
+#endif
