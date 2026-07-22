@@ -3,9 +3,9 @@ import Foundation
 // MARK: - RatingFilter
 
 /// レーティングによる絞り込み条件（星の数と比較方法の組み合わせ）
-public struct RatingFilter: Hashable, Codable {
+public struct RatingFilter: Codable {
     /// 比較方法
-    public enum Comparison: String, CaseIterable, Sendable, Codable {
+    public enum Comparison: CaseIterable, Codable {
         case atLeast   // 以上
         case atMost    // 以下
         case exactly   // 同値
@@ -29,21 +29,5 @@ public struct RatingFilter: Hashable, Codable {
         case .atMost: return rating <= stars
         case .exactly: return rating == stars
         }
-    }
-}
-
-// MARK: - UserDefaults永続化用の文字列表現
-
-extension RatingFilter: RawRepresentable {
-    /// "atLeast:3" 形式の文字列表現
-    public var rawValue: String { "\(comparison.rawValue):\(stars)" }
-
-    public init?(rawValue: String) {
-        let parts = rawValue.split(separator: ":")
-        guard parts.count == 2,
-              let comparison = Comparison(rawValue: String(parts[0])),
-              let stars = Int(parts[1]),
-              Self.starsRange.contains(stars) else { return nil }
-        self.init(stars: stars, comparison: comparison)
     }
 }

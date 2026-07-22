@@ -607,17 +607,4 @@ struct RatingFilterTests {
         #expect(filter.matches(4) == false)
     }
 
-    @Test
-    func rawValue_roundTrips() {
-        let filter = RatingFilter(stars: 4, comparison: .atMost)
-        #expect(RatingFilter(rawValue: filter.rawValue) == filter)
-    }
-
-    @Test
-    func initWithRawValue_rejectsInvalidStrings() {
-        #expect(RatingFilter(rawValue: "") == nil)
-        #expect(RatingFilter(rawValue: "atLeast") == nil)
-        #expect(RatingFilter(rawValue: "atLeast:9") == nil)
-        #expect(RatingFilter(rawValue: "unknown:3") == nil)
-    }
 }

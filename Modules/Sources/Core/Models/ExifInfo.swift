@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ExifInfo: Sendable {
+public struct ExifInfo {
     public let iso: String?
     public let focalLength: String?
     public let exposureValue: String?

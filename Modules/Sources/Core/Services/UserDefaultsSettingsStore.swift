@@ -29,28 +29,27 @@ public enum SaveFormat: String, Codable {
 
 // MARK: - UserDefaultsSettings
 
-/// UserDefaultsへ永続化する設定値とそのデフォルト値をまとめて保持する。
+/// UserDefaultsへ永続化する設定値をまとめて保持する。
 /// UserDefaultsSettingsStoreがこの型のプロパティ単位でCodableエンコードして保存する。
 public struct UserDefaultsSettings: Codable {
-    public var viewMode: ViewMode = .grid
-    public var saveFormat: SaveFormat = .jpeg
-    public var sortOrder: FileSortOrder = .dateAscending
-    public var gridColumnCount: Int = 3
-    public var isRatingEnabled: Bool = true
+    public var viewMode: ViewMode
+    public var saveFormat: SaveFormat
+    public var sortOrder: FileSortOrder
+    public var gridColumnCount: Int
+    public var isRatingEnabled: Bool
     public var ratingFilter: RatingFilter?
-    public var colorLabelFilter: Set<PhotoColorLabel> = []
+    public var colorLabelFilter: Set<PhotoColorLabel>
     public var lastViewedFileName: String?
 
-    // Codable準拠により暗黙のmemberwiseイニシャライザが生成されないため明示的に定義する
     public init(
-        viewMode: ViewMode = .grid,
-        saveFormat: SaveFormat = .jpeg,
-        sortOrder: FileSortOrder = .dateAscending,
-        gridColumnCount: Int = 3,
-        isRatingEnabled: Bool = true,
-        ratingFilter: RatingFilter? = nil,
-        colorLabelFilter: Set<PhotoColorLabel> = [],
-        lastViewedFileName: String? = nil
+        viewMode: ViewMode,
+        saveFormat: SaveFormat,
+        sortOrder: FileSortOrder,
+        gridColumnCount: Int,
+        isRatingEnabled: Bool,
+        ratingFilter: RatingFilter?,
+        colorLabelFilter: Set<PhotoColorLabel>,
+        lastViewedFileName: String?
     ) {
         self.viewMode = viewMode
         self.saveFormat = saveFormat
@@ -62,23 +61,37 @@ public struct UserDefaultsSettings: Codable {
         self.lastViewedFileName = lastViewedFileName
     }
 
-    /// UserDefaultsへの保存キー名。プロパティのリネームに追従させないため明示的に固定する
-    static let keyNames: [PartialKeyPath<UserDefaultsSettings>: String] = [
-        \.viewMode: "viewMode",
-        \.saveFormat: "saveFormat",
-        \.sortOrder: "sortOrder",
-        \.gridColumnCount: "gridColumnCount",
-        \.isRatingEnabled: "isRatingEnabled",
-        \.ratingFilter: "ratingFilter",
-        \.colorLabelFilter: "colorLabelFilter",
-        \.lastViewedFileName: "lastViewedFileName",
+    /// デフォルト値の定義箇所はここのみ
+    public static func `default`() -> Self {
+        Self(
+            viewMode: .grid,
+            saveFormat: .jpeg,
+            sortOrder: .dateAscending,
+            gridColumnCount: 3,
+            isRatingEnabled: true,
+            ratingFilter: nil,
+            colorLabelFilter: [],
+            lastViewedFileName: nil
+        )
+    }
+
+    /// UserDefaultsへの保存キーの列挙に使う（削除時など、全プロパティを走査したい場合のみ使用）
+    static let allKeyPaths: [PartialKeyPath<UserDefaultsSettings>] = [
+        \.viewMode,
+        \.saveFormat,
+        \.sortOrder,
+        \.gridColumnCount,
+        \.isRatingEnabled,
+        \.ratingFilter,
+        \.colorLabelFilter,
+        \.lastViewedFileName,
     ]
 }
 
 // MARK: - UserDefaultsSettingsStoreProtocol
 
 /// UserDefaultsに永続化するアプリ設定への型付きアクセスを提供する。
-/// プロパティごとにCodableでエンコードして保存し、デフォルト値はUserDefaultsSettings()に一元化する。
+/// プロパティごとにCodableでエンコードして保存し、デフォルト値はUserDefaultsSettings.default()に一元化する。
 @dynamicMemberLookup
 public protocol UserDefaultsSettingsStoreProtocol: AnyObject {
     subscript<T: Codable>(dynamicMember keyPath: KeyPath<UserDefaultsSettings, T>) -> T { get set }
@@ -91,7 +104,7 @@ public protocol UserDefaultsSettingsStoreProtocol: AnyObject {
 
 public final class UserDefaultsSettingsStore: UserDefaultsSettingsStoreProtocol {
     private let defaults: UserDefaults
-    private let fallback = UserDefaultsSettings()
+    private let fallback = UserDefaultsSettings.default()
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
@@ -99,23 +112,26 @@ public final class UserDefaultsSettingsStore: UserDefaultsSettingsStoreProtocol 
 
     public subscript<T: Codable>(dynamicMember keyPath: KeyPath<UserDefaultsSettings, T>) -> T {
         get {
-            guard let key = UserDefaultsSettings.keyNames[keyPath],
-                  let data = defaults.data(forKey: key),
+            guard let data = defaults.data(forKey: Self.key(for: keyPath)),
                   let decoded = try? JSONDecoder().decode(T.self, from: data) else {
                 return fallback[keyPath: keyPath]
             }
             return decoded
         }
         set {
-            guard let key = UserDefaultsSettings.keyNames[keyPath],
-                  let data = try? JSONEncoder().encode(newValue) else { return }
-            defaults.set(data, forKey: key)
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: Self.key(for: keyPath))
         }
     }
 
     public func removeAll() {
-        for key in UserDefaultsSettings.keyNames.values {
-            defaults.removeObject(forKey: key)
+        for keyPath in UserDefaultsSettings.allKeyPaths {
+            defaults.removeObject(forKey: Self.key(for: keyPath))
         }
+    }
+
+    /// KeyPathのdebug descriptionにプレフィックスを付けてUserDefaultsのキー名とする
+    private static func key(for keyPath: PartialKeyPath<UserDefaultsSettings>) -> String {
+        "UserDefaultsSettingsStore.\(String(describing: keyPath))"
     }
 }

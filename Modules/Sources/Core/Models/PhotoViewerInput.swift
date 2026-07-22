@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PhotoViewerInput: Sendable {
+public struct PhotoViewerInput {
     public let initialURL: URL
     public let allURLs: [URL]
     /// レーティング機能が有効か（星ボタン・カラーラベルの表示可否）
