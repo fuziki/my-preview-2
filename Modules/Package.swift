@@ -66,6 +66,12 @@ let package = Package(
 
         // MARK: - テストターゲット
 
+        // UserDefaultsSettingsStoreのユニットテスト
+        .testTarget(
+            name: "CoreTests",
+            dependencies: ["Core"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         // FileBrowserViewModelのユニットテスト
         .testTarget(
             name: "FileBrowserTests",

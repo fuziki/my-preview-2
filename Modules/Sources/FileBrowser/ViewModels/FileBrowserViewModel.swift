@@ -17,34 +17,34 @@ public final class FileBrowserViewModel {
 
     /// 表示モード。変更時にUserDefaultsへ自動保存される
     public var viewMode: ViewMode {
-        didSet { storage.set(viewMode.rawValue, forKey: .viewMode) }
+        didSet { settings.viewMode = viewMode }
     }
 
     /// 保存形式。変更時にUserDefaultsへ自動保存される
     public var saveFormat: SaveFormat {
-        didSet { storage.set(saveFormat.rawValue, forKey: .saveFormat) }
+        didSet { settings.saveFormat = saveFormat }
     }
 
     /// ソート順。変更時にUserDefaultsへ自動保存し、セクションを再構築する
     public var sortOrder: FileSortOrder {
         didSet {
-            storage.set(sortOrder.rawValue, forKey: .sortOrder)
+            settings.sortOrder = sortOrder
             updateSections()
         }
     }
 
     /// グリッド表示の列数の選択可能範囲
-    public static let gridColumnCountRange = 2...5
+    public static let gridColumnCountRange = UserDefaultsSettingsStore.gridColumnCountRange
 
     /// グリッド表示の列数。変更時にUserDefaultsへ自動保存される（復元時に範囲内へクランプ）
     public var gridColumnCount: Int {
-        didSet { storage.set(String(gridColumnCount), forKey: .gridColumnCount) }
+        didSet { settings.gridColumnCount = gridColumnCount }
     }
 
     /// レーティング機能のオンオフ。変更時にUserDefaultsへ自動保存し、セクションを再構築する
     public var isRatingEnabled: Bool {
         didSet {
-            storage.set(isRatingEnabled ? "true" : "false", forKey: .isRatingEnabled)
+            settings.isRatingEnabled = isRatingEnabled
             updateSections()
         }
     }
@@ -52,7 +52,7 @@ public final class FileBrowserViewModel {
     /// レーティングフィルター（nilはフィルターなし）。変更時にUserDefaultsへ自動保存し、セクションを再構築する
     public var ratingFilter: RatingFilter? {
         didSet {
-            storage.set(ratingFilter?.rawValue, forKey: .ratingFilter)
+            settings.ratingFilter = ratingFilter
             updateSections()
         }
     }
@@ -61,17 +61,14 @@ public final class FileBrowserViewModel {
     /// 変更時にUserDefaultsへ自動保存し、セクションを再構築する
     public var colorLabelFilter: Set<PhotoColorLabel> {
         didSet {
-            storage.set(
-                colorLabelFilter.isEmpty ? nil : colorLabelFilter.colorLabelFilterRawValue,
-                forKey: .colorLabelFilter
-            )
+            settings.colorLabelFilter = colorLabelFilter
             updateSections()
         }
     }
 
     /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
     private var lastViewedFileName: String? {
-        didSet { storage.set(lastViewedFileName, forKey: .lastViewedFileName) }
+        didSet { settings.lastViewedFileName = lastViewedFileName }
     }
 
     // MARK: - レーティング・カラーラベル
@@ -183,7 +180,7 @@ public final class FileBrowserViewModel {
     // MARK: - 依存関係
 
     private let fileSystemService: any FileSystemServiceProtocol
-    private let storage: any UserDefaultsStorageProtocol
+    private let settings: any UserDefaultsSettingsStoreProtocol
     private let savedDateStore: any SavedDateStoreProtocol
     private let ratingStore: any PhotoRatingStoreProtocol
     private let colorLabelStore: any ColorLabelStoreProtocol
@@ -195,26 +192,22 @@ public final class FileBrowserViewModel {
         savedDateStore: any SavedDateStoreProtocol,
         ratingStore: any PhotoRatingStoreProtocol,
         colorLabelStore: any ColorLabelStoreProtocol,
-        storage: any UserDefaultsStorageProtocol = UserDefaultsStorage.shared
+        settings: any UserDefaultsSettingsStoreProtocol
     ) {
         self.fileSystemService = fileSystemService
         self.savedDateStore = savedDateStore
         self.ratingStore = ratingStore
         self.colorLabelStore = colorLabelStore
-        self.storage = storage
-        // UserDefaultsから復元する
-        self.viewMode = ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .grid
-        self.saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpeg
-        self.sortOrder = FileSortOrder(rawValue: storage.string(forKey: .sortOrder) ?? "") ?? .dateAscending
-        let storedColumnCount = Int(storage.string(forKey: .gridColumnCount) ?? "") ?? 3
-        self.gridColumnCount = min(
-            max(storedColumnCount, Self.gridColumnCountRange.lowerBound),
-            Self.gridColumnCountRange.upperBound
-        )
-        self.isRatingEnabled = (storage.string(forKey: .isRatingEnabled) ?? "true") == "true"
-        self.ratingFilter = RatingFilter(rawValue: storage.string(forKey: .ratingFilter) ?? "")
-        self.colorLabelFilter = Set(colorLabelFilterRawValue: storage.string(forKey: .colorLabelFilter) ?? "")
-        self.lastViewedFileName = storage.string(forKey: .lastViewedFileName)
+        self.settings = settings
+        // UserDefaultsSettingsStoreから復元する（デフォルト値・クランプはそちらに一元化されている）
+        self.viewMode = settings.viewMode
+        self.saveFormat = settings.saveFormat
+        self.sortOrder = settings.sortOrder
+        self.gridColumnCount = settings.gridColumnCount
+        self.isRatingEnabled = settings.isRatingEnabled
+        self.ratingFilter = settings.ratingFilter
+        self.colorLabelFilter = settings.colorLabelFilter
+        self.lastViewedFileName = settings.lastViewedFileName
     }
 
     // MARK: - アクション
@@ -231,19 +224,19 @@ public final class FileBrowserViewModel {
     /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと
     /// 永続化済みの保存日時・レーティング・カラーラベルを削除する
     public func resetToDefaults() {
-        // 各プロパティを初期値へ戻す（didSetで一時的に再保存されるが、最後にまとめて削除する）
-        viewMode = .grid
-        saveFormat = .jpeg
-        sortOrder = .dateAscending
-        gridColumnCount = 3
-        isRatingEnabled = true
-        ratingFilter = nil
-        colorLabelFilter = []
-        lastViewedFileName = nil
+        settings.removeAll()
+        // 削除後のUserDefaultsSettingsStoreから読み直すことで、デフォルト値の重複管理を避ける
+        viewMode = settings.viewMode
+        saveFormat = settings.saveFormat
+        sortOrder = settings.sortOrder
+        gridColumnCount = settings.gridColumnCount
+        isRatingEnabled = settings.isRatingEnabled
+        ratingFilter = settings.ratingFilter
+        colorLabelFilter = settings.colorLabelFilter
+        lastViewedFileName = settings.lastViewedFileName
         lastViewedItemID = nil
         ratingsByURL = [:]
         labelsByURL = [:]
-        storage.removeAll()
         savedDateStore.removeAll()
         ratingStore.removeAll()
         colorLabelStore.removeAll()

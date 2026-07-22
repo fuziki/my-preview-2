@@ -10,7 +10,7 @@ import Core
 struct FileBrowserViewModelTests {
 
     let fileSystemService: MockFileSystemService
-    let storage: MockUserDefaultsStorage
+    let settings: MockUserDefaultsSettingsStore
     let savedDateStore: MockSavedDateStore
     let ratingStore: MockPhotoRatingStore
     let colorLabelStore: MockColorLabelStore
@@ -18,7 +18,7 @@ struct FileBrowserViewModelTests {
 
     init() {
         fileSystemService = MockFileSystemService()
-        storage = MockUserDefaultsStorage()
+        settings = MockUserDefaultsSettingsStore()
         savedDateStore = MockSavedDateStore()
         ratingStore = MockPhotoRatingStore()
         colorLabelStore = MockColorLabelStore()
@@ -27,18 +27,18 @@ struct FileBrowserViewModelTests {
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            storage: storage
+            settings: settings
         )
     }
 
-    /// 現在のモックを使ってViewModelを生成し直すヘルパー（ストレージ復元のテストに使用）
+    /// 現在のモックを使ってViewModelを生成し直すヘルパー（設定復元のテストに使用）
     private func makeViewModel() -> FileBrowserViewModel {
         FileBrowserViewModel(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            storage: storage
+            settings: settings
         )
     }
 
@@ -110,10 +110,9 @@ struct FileBrowserViewModelTests {
         fileSystemService.stubbedItems = [FileItem(url: itemURL)]
         await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
 
-        let countBefore = storage.setCallCount
         viewModel.saveLastViewed(url: itemURL)
 
-        #expect(storage.setCallCount > countBefore)
+        #expect(settings.lastViewedFileName == itemURL.lastPathComponent)
     }
 
     @Test
@@ -245,32 +244,32 @@ struct FileBrowserViewModelTests {
         #expect(viewModel.makeMenuData().sections[0].title.contains("2"))
     }
 
-    // MARK: - UserDefaults連携
+    // MARK: - UserDefaultsSettingsStore連携
 
     @Test
     func viewMode_persistsToStorage_onChange() {
-        viewModel.viewMode = .grid
-        #expect(storage.string(forKey: AppStorageKey.viewMode.rawValue) == ViewMode.grid.rawValue)
+        viewModel.viewMode = .list
+        #expect(settings.viewMode == .list)
     }
 
     @Test
     func saveFormat_persistsToStorage_onChange() {
-        viewModel.saveFormat = .jpeg
-        #expect(storage.string(forKey: AppStorageKey.saveFormat.rawValue) == SaveFormat.jpeg.rawValue)
+        viewModel.saveFormat = .jpegAndRaw
+        #expect(settings.saveFormat == .jpegAndRaw)
     }
 
     @Test
     func init_restoresViewMode_fromStorage() {
-        storage.set(ViewMode.grid.rawValue, forKey: AppStorageKey.viewMode.rawValue)
+        settings.viewMode = .list
         let vm = makeViewModel()
-        #expect(vm.viewMode == .grid)
+        #expect(vm.viewMode == .list)
     }
 
     @Test
     func init_restoresSaveFormat_fromStorage() {
-        storage.set(SaveFormat.jpeg.rawValue, forKey: AppStorageKey.saveFormat.rawValue)
+        settings.saveFormat = .jpegAndRaw
         let vm = makeViewModel()
-        #expect(vm.saveFormat == .jpeg)
+        #expect(vm.saveFormat == .jpegAndRaw)
     }
 
     @Test
@@ -293,35 +292,14 @@ struct FileBrowserViewModelTests {
     @Test
     func gridColumnCount_persistsToStorage_onChange() {
         viewModel.gridColumnCount = 4
-        #expect(storage.string(forKey: AppStorageKey.gridColumnCount.rawValue) == "4")
+        #expect(settings.gridColumnCount == 4)
     }
 
     @Test
     func init_restoresGridColumnCount_fromStorage() {
-        storage.set("5", forKey: AppStorageKey.gridColumnCount.rawValue)
+        settings.gridColumnCount = 5
         let vm = makeViewModel()
         #expect(vm.gridColumnCount == 5)
-    }
-
-    @Test
-    func init_clampsGridColumnCount_belowRange() {
-        storage.set("1", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = makeViewModel()
-        #expect(vm.gridColumnCount == 2)
-    }
-
-    @Test
-    func init_clampsGridColumnCount_aboveRange() {
-        storage.set("10", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = makeViewModel()
-        #expect(vm.gridColumnCount == 5)
-    }
-
-    @Test
-    func init_defaultsToThreeColumns_forInvalidStoredValue() {
-        storage.set("abc", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let vm = makeViewModel()
-        #expect(vm.gridColumnCount == 3)
     }
 
     // MARK: - resetToDefaults
@@ -361,35 +339,28 @@ struct FileBrowserViewModelTests {
 
     @Test
     func isRatingEnabled_persistsToStorage_onChange() {
-        viewModel.isRatingEnabled = true
-        #expect(storage.string(forKey: AppStorageKey.isRatingEnabled.rawValue) == "true")
+        viewModel.isRatingEnabled = false
+        #expect(settings.isRatingEnabled == false)
     }
 
     @Test
     func init_restoresIsRatingEnabled_fromStorage() {
-        storage.set("true", forKey: AppStorageKey.isRatingEnabled.rawValue)
+        settings.isRatingEnabled = false
         let vm = makeViewModel()
-        #expect(vm.isRatingEnabled == true)
+        #expect(vm.isRatingEnabled == false)
     }
 
     @Test
     func ratingFilter_persistsToStorage_onChange() {
         viewModel.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
-        #expect(storage.string(forKey: AppStorageKey.ratingFilter.rawValue) == "atLeast:3")
+        #expect(settings.ratingFilter == RatingFilter(stars: 3, comparison: .atLeast))
     }
 
     @Test
     func init_restoresRatingFilter_fromStorage() {
-        storage.set("exactly:2", forKey: AppStorageKey.ratingFilter.rawValue)
+        settings.ratingFilter = RatingFilter(stars: 2, comparison: .exactly)
         let vm = makeViewModel()
         #expect(vm.ratingFilter == RatingFilter(stars: 2, comparison: .exactly))
-    }
-
-    @Test
-    func init_ignoresInvalidRatingFilter_fromStorage() {
-        storage.set("garbage", forKey: AppStorageKey.ratingFilter.rawValue)
-        let vm = makeViewModel()
-        #expect(vm.ratingFilter == nil)
     }
 
     @Test
@@ -479,28 +450,21 @@ struct FileBrowserViewModelTests {
     @Test
     func colorLabelFilter_persistsToStorage_onChange() {
         viewModel.colorLabelFilter = [.green, .red]
-        #expect(storage.string(forKey: AppStorageKey.colorLabelFilter.rawValue) == "green,red")
+        #expect(settings.colorLabelFilter == [.green, .red])
     }
 
     @Test
     func colorLabelFilter_emptySelection_removesStorageValue() {
         viewModel.colorLabelFilter = [.green]
         viewModel.colorLabelFilter = []
-        #expect(storage.string(forKey: AppStorageKey.colorLabelFilter.rawValue) == nil)
+        #expect(settings.colorLabelFilter.isEmpty)
     }
 
     @Test
     func init_restoresColorLabelFilter_fromStorage() {
-        storage.set("blue,white", forKey: AppStorageKey.colorLabelFilter.rawValue)
+        settings.colorLabelFilter = [.blue, .white]
         let vm = makeViewModel()
         #expect(vm.colorLabelFilter == [.blue, .white])
-    }
-
-    @Test
-    func init_ignoresInvalidColorLabelFilter_fromStorage() {
-        storage.set("blue,unknown", forKey: AppStorageKey.colorLabelFilter.rawValue)
-        let vm = makeViewModel()
-        #expect(vm.colorLabelFilter == [.blue])
     }
 
     @Test

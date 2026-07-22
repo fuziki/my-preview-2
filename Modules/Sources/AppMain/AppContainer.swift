@@ -25,6 +25,9 @@ final class AppContainer {
     /// セッションをまたいでカラーラベルを保持するため、AppContainerが所有する
     private let colorLabelStore: any ColorLabelStoreProtocol = ColorLabelStore()
 
+    /// FileBrowserとPhotoViewerの保存設定を同一の値で参照させるため、AppContainerが所有する
+    private let settingsStore: any UserDefaultsSettingsStoreProtocol = UserDefaultsSettingsStore(storage: UserDefaultsStorage.shared)
+
     #if targetEnvironment(simulator)
     /// シミュレータでは実ファイルが存在しないため、ファイルIO系サービスをモックに差し替える
     private lazy var fileSystemService: any FileSystemServiceProtocol = MockFileSystemService()
@@ -48,7 +51,8 @@ final class AppContainer {
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
-            colorLabelStore: colorLabelStore
+            colorLabelStore: colorLabelStore,
+            settings: settingsStore
         )
         return FileBrowserViewController(
             viewModel: viewModel,
@@ -65,7 +69,7 @@ final class AppContainer {
         let services = PhotoViewerServices(
             imageLoader: imageLoaderService,
             exifService: exifService,
-            photoLibrary: PhotoLibraryService(),
+            photoLibrary: PhotoLibraryService(settings: settingsStore),
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,

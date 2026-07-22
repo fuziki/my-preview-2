@@ -9,10 +9,10 @@ public protocol PhotoLibraryServiceProtocol {
 }
 
 public final class PhotoLibraryService: PhotoLibraryServiceProtocol {
-    private let storage: any UserDefaultsStorageProtocol
+    private let settings: any UserDefaultsSettingsStoreProtocol
 
-    public init(storage: any UserDefaultsStorageProtocol = UserDefaultsStorage.shared) {
-        self.storage = storage
+    public init(settings: any UserDefaultsSettingsStoreProtocol) {
+        self.settings = settings
     }
 
     public func save(fileURL: URL) async throws {
@@ -21,8 +21,7 @@ public final class PhotoLibraryService: PhotoLibraryServiceProtocol {
             throw PhotoLibraryError.unauthorized
         }
 
-        let saveFormat = SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpegAndRaw
-        let rawURL = saveFormat == .jpegAndRaw ? findRawFile(for: fileURL) : nil
+        let rawURL = settings.saveFormat == .jpegAndRaw ? findRawFile(for: fileURL) : nil
 
         try await performSave(jpegURL: fileURL, rawURL: rawURL)
     }
