@@ -7,7 +7,7 @@ import UIKit
 // MARK: - PhotoColorLabel
 
 /// 写真に1つ設定できるカラーラベル
-public enum PhotoColorLabel: String, CaseIterable, Hashable, Sendable {
+public enum PhotoColorLabel: String, CaseIterable, Hashable, Codable {
     case green
     case yellow
     case blue

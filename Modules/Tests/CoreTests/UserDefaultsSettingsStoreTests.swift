@@ -5,53 +5,58 @@ import Foundation
 @Suite
 struct UserDefaultsSettingsStoreTests {
 
+    /// テストごとに独立したUserDefaultsスイートを生成する
+    private func makeDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "UserDefaultsSettingsStoreTests.\(UUID().uuidString)")!
+    }
+
     // MARK: - デフォルト値（未保存時）
 
     @Test
     func viewMode_defaultsToGrid_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.viewMode == .grid)
     }
 
     @Test
     func saveFormat_defaultsToJpeg_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.saveFormat == .jpeg)
     }
 
     @Test
     func sortOrder_defaultsToDateAscending_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.sortOrder == .dateAscending)
     }
 
     @Test
     func gridColumnCount_defaultsToThree_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.gridColumnCount == 3)
     }
 
     @Test
     func isRatingEnabled_defaultsToTrue_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.isRatingEnabled == true)
     }
 
     @Test
     func ratingFilter_defaultsToNil_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.ratingFilter == nil)
     }
 
     @Test
     func colorLabelFilter_defaultsToEmpty_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.colorLabelFilter.isEmpty)
     }
 
     @Test
     func lastViewedFileName_defaultsToNil_whenUnset() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         #expect(store.lastViewedFileName == nil)
     }
 
@@ -59,49 +64,38 @@ struct UserDefaultsSettingsStoreTests {
 
     @Test
     func saveFormat_persistsAcrossInstances() {
-        let storage = FakeUserDefaultsStorage()
-        UserDefaultsSettingsStore(storage: storage).saveFormat = .jpegAndRaw
-        #expect(UserDefaultsSettingsStore(storage: storage).saveFormat == .jpegAndRaw)
+        let defaults = makeDefaults()
+        UserDefaultsSettingsStore(defaults: defaults).saveFormat = .jpegAndRaw
+        #expect(UserDefaultsSettingsStore(defaults: defaults).saveFormat == .jpegAndRaw)
     }
 
     @Test
     func viewMode_persistsAcrossInstances() {
-        let storage = FakeUserDefaultsStorage()
-        UserDefaultsSettingsStore(storage: storage).viewMode = .list
-        #expect(UserDefaultsSettingsStore(storage: storage).viewMode == .list)
-    }
-
-    // MARK: - gridColumnCountのクランプ
-
-    @Test
-    func gridColumnCount_clampsBelowRange() {
-        let storage = FakeUserDefaultsStorage()
-        storage.set("1", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let store = UserDefaultsSettingsStore(storage: storage)
-        #expect(store.gridColumnCount == UserDefaultsSettingsStore.gridColumnCountRange.lowerBound)
+        let defaults = makeDefaults()
+        UserDefaultsSettingsStore(defaults: defaults).viewMode = .list
+        #expect(UserDefaultsSettingsStore(defaults: defaults).viewMode == .list)
     }
 
     @Test
-    func gridColumnCount_clampsAboveRange() {
-        let storage = FakeUserDefaultsStorage()
-        storage.set("10", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let store = UserDefaultsSettingsStore(storage: storage)
-        #expect(store.gridColumnCount == UserDefaultsSettingsStore.gridColumnCountRange.upperBound)
+    func ratingFilter_persistsAcrossInstances() {
+        let defaults = makeDefaults()
+        let filter = RatingFilter(stars: 3, comparison: .atLeast)
+        UserDefaultsSettingsStore(defaults: defaults).ratingFilter = filter
+        #expect(UserDefaultsSettingsStore(defaults: defaults).ratingFilter == filter)
     }
 
     @Test
-    func gridColumnCount_defaultsToThree_forInvalidStoredValue() {
-        let storage = FakeUserDefaultsStorage()
-        storage.set("abc", forKey: AppStorageKey.gridColumnCount.rawValue)
-        let store = UserDefaultsSettingsStore(storage: storage)
-        #expect(store.gridColumnCount == 3)
+    func colorLabelFilter_persistsAcrossInstances() {
+        let defaults = makeDefaults()
+        UserDefaultsSettingsStore(defaults: defaults).colorLabelFilter = [.green, .red]
+        #expect(UserDefaultsSettingsStore(defaults: defaults).colorLabelFilter == [.green, .red])
     }
 
     // MARK: - removeAll
 
     @Test
     func removeAll_resetsAllPropertiesToDefaults() {
-        let store = UserDefaultsSettingsStore(storage: FakeUserDefaultsStorage())
+        let store = UserDefaultsSettingsStore(defaults: makeDefaults())
         store.viewMode = .list
         store.saveFormat = .jpegAndRaw
         store.gridColumnCount = 5
@@ -121,30 +115,13 @@ struct UserDefaultsSettingsStoreTests {
         #expect(store.lastViewedFileName == nil)
     }
 
-    // MARK: - 不正な生値のフォールバック
+    // MARK: - 不正な生データのフォールバック
 
     @Test
-    func ratingFilter_ignoresInvalidStoredValue() {
-        let storage = FakeUserDefaultsStorage()
-        storage.set("garbage", forKey: AppStorageKey.ratingFilter.rawValue)
-        let store = UserDefaultsSettingsStore(storage: storage)
-        #expect(store.ratingFilter == nil)
-    }
-
-    @Test
-    func colorLabelFilter_ignoresInvalidElements_inStoredValue() {
-        let storage = FakeUserDefaultsStorage()
-        storage.set("blue,unknown", forKey: AppStorageKey.colorLabelFilter.rawValue)
-        let store = UserDefaultsSettingsStore(storage: storage)
-        #expect(store.colorLabelFilter == [.blue])
-    }
-
-    @Test
-    func colorLabelFilter_emptySelection_removesUnderlyingStorageValue() {
-        let storage = FakeUserDefaultsStorage()
-        let store = UserDefaultsSettingsStore(storage: storage)
-        store.colorLabelFilter = [.green]
-        store.colorLabelFilter = []
-        #expect(storage.string(forKey: AppStorageKey.colorLabelFilter.rawValue) == nil)
+    func decodeFailure_fallsBackToDefault() {
+        let defaults = makeDefaults()
+        defaults.set(Data([0xFF, 0x00]), forKey: "saveFormat")
+        let store = UserDefaultsSettingsStore(defaults: defaults)
+        #expect(store.saveFormat == .jpeg)
     }
 }

@@ -302,6 +302,20 @@ struct FileBrowserViewModelTests {
         #expect(vm.gridColumnCount == 5)
     }
 
+    @Test
+    func init_clampsGridColumnCount_belowRange() {
+        settings.gridColumnCount = 1
+        let vm = makeViewModel()
+        #expect(vm.gridColumnCount == FileBrowserViewModel.gridColumnCountRange.lowerBound)
+    }
+
+    @Test
+    func init_clampsGridColumnCount_aboveRange() {
+        settings.gridColumnCount = 10
+        let vm = makeViewModel()
+        #expect(vm.gridColumnCount == FileBrowserViewModel.gridColumnCountRange.upperBound)
+    }
+
     // MARK: - resetToDefaults
 
     @Test

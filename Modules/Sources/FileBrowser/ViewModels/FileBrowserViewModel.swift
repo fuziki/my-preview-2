@@ -34,11 +34,16 @@ public final class FileBrowserViewModel {
     }
 
     /// グリッド表示の列数の選択可能範囲
-    public static let gridColumnCountRange = UserDefaultsSettingsStore.gridColumnCountRange
+    public static let gridColumnCountRange = 2...5
 
     /// グリッド表示の列数。変更時にUserDefaultsへ自動保存される（復元時に範囲内へクランプ）
     public var gridColumnCount: Int {
         didSet { settings.gridColumnCount = gridColumnCount }
+    }
+
+    /// 復元したグリッド列数をgridColumnCountRange内へクランプする
+    private static func clamped(_ value: Int) -> Int {
+        min(max(value, gridColumnCountRange.lowerBound), gridColumnCountRange.upperBound)
     }
 
     /// レーティング機能のオンオフ。変更時にUserDefaultsへ自動保存し、セクションを再構築する
@@ -203,7 +208,7 @@ public final class FileBrowserViewModel {
         self.viewMode = settings.viewMode
         self.saveFormat = settings.saveFormat
         self.sortOrder = settings.sortOrder
-        self.gridColumnCount = settings.gridColumnCount
+        self.gridColumnCount = Self.clamped(settings.gridColumnCount)
         self.isRatingEnabled = settings.isRatingEnabled
         self.ratingFilter = settings.ratingFilter
         self.colorLabelFilter = settings.colorLabelFilter
@@ -229,7 +234,7 @@ public final class FileBrowserViewModel {
         viewMode = settings.viewMode
         saveFormat = settings.saveFormat
         sortOrder = settings.sortOrder
-        gridColumnCount = settings.gridColumnCount
+        gridColumnCount = Self.clamped(settings.gridColumnCount)
         isRatingEnabled = settings.isRatingEnabled
         ratingFilter = settings.ratingFilter
         colorLabelFilter = settings.colorLabelFilter

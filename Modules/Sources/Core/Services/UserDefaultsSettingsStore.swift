@@ -2,20 +2,20 @@ import Foundation
 
 // MARK: - ViewMode
 
-public enum ViewMode: String {
+public enum ViewMode: String, Codable {
     case list, grid
 }
 
 // MARK: - FileSortOrder
 
-public enum FileSortOrder: String {
+public enum FileSortOrder: String, Codable {
     case dateDescending  // 新しい順
     case dateAscending   // 古い順（デフォルト）
 }
 
 // MARK: - SaveFormat
 
-public enum SaveFormat: String {
+public enum SaveFormat: String, Codable {
     case jpeg
     case jpegAndRaw
 
@@ -27,20 +27,61 @@ public enum SaveFormat: String {
     }
 }
 
+// MARK: - UserDefaultsSettings
+
+/// UserDefaultsへ永続化する設定値とそのデフォルト値をまとめて保持する。
+/// UserDefaultsSettingsStoreがこの型のプロパティ単位でCodableエンコードして保存する。
+public struct UserDefaultsSettings: Codable {
+    public var viewMode: ViewMode = .grid
+    public var saveFormat: SaveFormat = .jpeg
+    public var sortOrder: FileSortOrder = .dateAscending
+    public var gridColumnCount: Int = 3
+    public var isRatingEnabled: Bool = true
+    public var ratingFilter: RatingFilter?
+    public var colorLabelFilter: Set<PhotoColorLabel> = []
+    public var lastViewedFileName: String?
+
+    // Codable準拠により暗黙のmemberwiseイニシャライザが生成されないため明示的に定義する
+    public init(
+        viewMode: ViewMode = .grid,
+        saveFormat: SaveFormat = .jpeg,
+        sortOrder: FileSortOrder = .dateAscending,
+        gridColumnCount: Int = 3,
+        isRatingEnabled: Bool = true,
+        ratingFilter: RatingFilter? = nil,
+        colorLabelFilter: Set<PhotoColorLabel> = [],
+        lastViewedFileName: String? = nil
+    ) {
+        self.viewMode = viewMode
+        self.saveFormat = saveFormat
+        self.sortOrder = sortOrder
+        self.gridColumnCount = gridColumnCount
+        self.isRatingEnabled = isRatingEnabled
+        self.ratingFilter = ratingFilter
+        self.colorLabelFilter = colorLabelFilter
+        self.lastViewedFileName = lastViewedFileName
+    }
+
+    /// UserDefaultsへの保存キー名。プロパティのリネームに追従させないため明示的に固定する
+    static let keyNames: [PartialKeyPath<UserDefaultsSettings>: String] = [
+        \.viewMode: "viewMode",
+        \.saveFormat: "saveFormat",
+        \.sortOrder: "sortOrder",
+        \.gridColumnCount: "gridColumnCount",
+        \.isRatingEnabled: "isRatingEnabled",
+        \.ratingFilter: "ratingFilter",
+        \.colorLabelFilter: "colorLabelFilter",
+        \.lastViewedFileName: "lastViewedFileName",
+    ]
+}
+
 // MARK: - UserDefaultsSettingsStoreProtocol
 
 /// UserDefaultsに永続化するアプリ設定への型付きアクセスを提供する。
-/// デフォルト値・フォールバック・値のクランプ処理をこのプロトコルの実装に一元化し、
-/// 利用側（ViewModelやサービス）が個別にrawValue変換やデフォルト値を持たないようにする。
+/// プロパティごとにCodableでエンコードして保存し、デフォルト値はUserDefaultsSettings()に一元化する。
+@dynamicMemberLookup
 public protocol UserDefaultsSettingsStoreProtocol: AnyObject {
-    var viewMode: ViewMode { get set }
-    var saveFormat: SaveFormat { get set }
-    var sortOrder: FileSortOrder { get set }
-    var gridColumnCount: Int { get set }
-    var isRatingEnabled: Bool { get set }
-    var ratingFilter: RatingFilter? { get set }
-    var colorLabelFilter: Set<PhotoColorLabel> { get set }
-    var lastViewedFileName: String? { get set }
+    subscript<T: Codable>(dynamicMember keyPath: KeyPath<UserDefaultsSettings, T>) -> T { get set }
 
     /// 全設定をUserDefaultsから削除する。以後のアクセスはデフォルト値を返す
     func removeAll()
@@ -49,59 +90,32 @@ public protocol UserDefaultsSettingsStoreProtocol: AnyObject {
 // MARK: - UserDefaultsSettingsStore
 
 public final class UserDefaultsSettingsStore: UserDefaultsSettingsStoreProtocol {
-    /// グリッド表示の列数の選択可能範囲
-    public static let gridColumnCountRange = 2...5
+    private let defaults: UserDefaults
+    private let fallback = UserDefaultsSettings()
 
-    private let storage: any UserDefaultsStorageProtocol
-
-    public init(storage: any UserDefaultsStorageProtocol) {
-        self.storage = storage
+    public init(defaults: UserDefaults) {
+        self.defaults = defaults
     }
 
-    public var viewMode: ViewMode {
-        get { ViewMode(rawValue: storage.string(forKey: .viewMode) ?? "") ?? .grid }
-        set { storage.set(newValue.rawValue, forKey: .viewMode) }
-    }
-
-    public var saveFormat: SaveFormat {
-        get { SaveFormat(rawValue: storage.string(forKey: .saveFormat) ?? "") ?? .jpeg }
-        set { storage.set(newValue.rawValue, forKey: .saveFormat) }
-    }
-
-    public var sortOrder: FileSortOrder {
-        get { FileSortOrder(rawValue: storage.string(forKey: .sortOrder) ?? "") ?? .dateAscending }
-        set { storage.set(newValue.rawValue, forKey: .sortOrder) }
-    }
-
-    public var gridColumnCount: Int {
+    public subscript<T: Codable>(dynamicMember keyPath: KeyPath<UserDefaultsSettings, T>) -> T {
         get {
-            let stored = Int(storage.string(forKey: .gridColumnCount) ?? "") ?? 3
-            return min(max(stored, Self.gridColumnCountRange.lowerBound), Self.gridColumnCountRange.upperBound)
+            guard let key = UserDefaultsSettings.keyNames[keyPath],
+                  let data = defaults.data(forKey: key),
+                  let decoded = try? JSONDecoder().decode(T.self, from: data) else {
+                return fallback[keyPath: keyPath]
+            }
+            return decoded
         }
-        set { storage.set(String(newValue), forKey: .gridColumnCount) }
-    }
-
-    public var isRatingEnabled: Bool {
-        get { (storage.string(forKey: .isRatingEnabled) ?? "true") == "true" }
-        set { storage.set(newValue ? "true" : "false", forKey: .isRatingEnabled) }
-    }
-
-    public var ratingFilter: RatingFilter? {
-        get { RatingFilter(rawValue: storage.string(forKey: .ratingFilter) ?? "") }
-        set { storage.set(newValue?.rawValue, forKey: .ratingFilter) }
-    }
-
-    public var colorLabelFilter: Set<PhotoColorLabel> {
-        get { Set(colorLabelFilterRawValue: storage.string(forKey: .colorLabelFilter) ?? "") }
-        set { storage.set(newValue.isEmpty ? nil : newValue.colorLabelFilterRawValue, forKey: .colorLabelFilter) }
-    }
-
-    public var lastViewedFileName: String? {
-        get { storage.string(forKey: .lastViewedFileName) }
-        set { storage.set(newValue, forKey: .lastViewedFileName) }
+        set {
+            guard let key = UserDefaultsSettings.keyNames[keyPath],
+                  let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: key)
+        }
     }
 
     public func removeAll() {
-        storage.removeAll()
+        for key in UserDefaultsSettings.keyNames.values {
+            defaults.removeObject(forKey: key)
+        }
     }
 }

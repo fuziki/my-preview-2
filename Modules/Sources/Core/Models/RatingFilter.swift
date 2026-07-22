@@ -3,9 +3,9 @@ import Foundation
 // MARK: - RatingFilter
 
 /// レーティングによる絞り込み条件（星の数と比較方法の組み合わせ）
-public struct RatingFilter: Hashable, Sendable {
+public struct RatingFilter: Hashable, Codable {
     /// 比較方法
-    public enum Comparison: String, CaseIterable, Sendable {
+    public enum Comparison: String, CaseIterable, Sendable, Codable {
         case atLeast   // 以上
         case atMost    // 以下
         case exactly   // 同値

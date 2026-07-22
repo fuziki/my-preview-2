@@ -1,27 +1,18 @@
 import Core
 
-/// UserDefaultsSettingsStoreProtocolのテスト用モック（インメモリ）
+/// UserDefaultsSettingsStoreProtocolのテスト用モック（インメモリ、UserDefaultsには一切触れない）
 final class MockUserDefaultsSettingsStore: UserDefaultsSettingsStoreProtocol {
-    var viewMode: ViewMode = .grid
-    var saveFormat: SaveFormat = .jpeg
-    var sortOrder: FileSortOrder = .dateAscending
-    var gridColumnCount: Int = 3
-    var isRatingEnabled: Bool = true
-    var ratingFilter: RatingFilter?
-    var colorLabelFilter: Set<PhotoColorLabel> = []
-    var lastViewedFileName: String?
+    private var storage: [PartialKeyPath<UserDefaultsSettings>: Any] = [:]
+    private let fallback = UserDefaultsSettings()
     var removeAllCallCount = 0
 
-    /// UserDefaultsSettingsStore.removeAll()と同様、削除後は各プロパティがデフォルト値を返す
+    subscript<T: Codable>(dynamicMember keyPath: KeyPath<UserDefaultsSettings, T>) -> T {
+        get { (storage[keyPath] as? T) ?? fallback[keyPath: keyPath] }
+        set { storage[keyPath] = newValue }
+    }
+
     func removeAll() {
         removeAllCallCount += 1
-        viewMode = .grid
-        saveFormat = .jpeg
-        sortOrder = .dateAscending
-        gridColumnCount = 3
-        isRatingEnabled = true
-        ratingFilter = nil
-        colorLabelFilter = []
-        lastViewedFileName = nil
+        storage.removeAll()
     }
 }
