@@ -76,7 +76,7 @@ public struct UserDefaultsSettings: Codable {
     }
 
     /// UserDefaultsへの保存キーの列挙に使う（削除時など、全プロパティを走査したい場合のみ使用）
-    static let allKeyPaths: [PartialKeyPath<UserDefaultsSettings>] = [
+    fileprivate static let allKeyPaths: [PartialKeyPath<UserDefaultsSettings>] = [
         \.viewMode,
         \.saveFormat,
         \.sortOrder,
@@ -86,6 +86,9 @@ public struct UserDefaultsSettings: Codable {
         \.colorLabelFilter,
         \.lastViewedFileName,
     ]
+
+    // テストでのみ使用できる
+    static var allKeyPathsForTest: [PartialKeyPath<UserDefaultsSettings>] { allKeyPaths }
 }
 
 // MARK: - UserDefaultsSettingsStoreProtocol

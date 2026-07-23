@@ -124,4 +124,21 @@ struct UserDefaultsSettingsStoreTests {
         let store = UserDefaultsSettingsStore(defaults: defaults)
         #expect(store.saveFormat == .jpeg)
     }
+
+    // MARK: - allKeyPathsの網羅性
+
+    /// Mirrorで実際のプロパティ名を列挙し、allKeyPathsの内容と一致するか検証する。
+    /// プロパティの追加・削除・二重登録があるとこのテストが失敗する。
+    @Test
+    func allKeyPaths_namesMatchActualProperties() {
+        let propertyNames = Set(Mirror(reflecting: UserDefaultsSettings.default()).children.compactMap(\.label))
+        let keyPathNames = Set(UserDefaultsSettings.allKeyPathsForTest.map(Self.propertyName(of:)))
+        #expect(keyPathNames == propertyNames)
+    }
+
+    /// KeyPathのdebug description（例: "\UserDefaultsSettings.viewMode"）末尾のプロパティ名を取り出す
+    private static func propertyName(of keyPath: PartialKeyPath<UserDefaultsSettings>) -> String {
+        let description = String(describing: keyPath)
+        return description.split(separator: ".").last.map(String.init) ?? description
+    }
 }

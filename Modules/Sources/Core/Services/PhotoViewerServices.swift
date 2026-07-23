@@ -31,4 +31,3 @@ public struct PhotoViewerServices {
         self.hapticsService = hapticsService
     }
 }
-
