@@ -120,20 +120,27 @@ struct UserDefaultsSettingsStoreTests {
     @Test
     func decodeFailure_fallsBackToDefault() {
         let defaults = makeDefaults()
-        defaults.set(Data([0xFF, 0x00]), forKey: "saveFormat")
+        defaults.set(Data([0xFF, 0x00]), forKey: "UserDefaultsSettingsStore.saveFormat")
         let store = UserDefaultsSettingsStore(defaults: defaults)
         #expect(store.saveFormat == .jpeg)
     }
 
-    // MARK: - allKeyPathsの網羅性
+    // MARK: - storageKeysの網羅性
 
-    /// Mirrorで実際のプロパティ名を列挙し、allKeyPathsの内容と一致するか検証する。
+    /// Mirrorで実際のプロパティ名を列挙し、storageKeysの内容と一致するか検証する。
     /// プロパティの追加・削除・二重登録があるとこのテストが失敗する。
     @Test
-    func allKeyPaths_namesMatchActualProperties() {
+    func storageKeys_namesMatchActualProperties() {
         let propertyNames = Set(Mirror(reflecting: UserDefaultsSettings.default()).children.compactMap(\.label))
-        let keyPathNames = Set(UserDefaultsSettings.allKeyPathsForTest.map(Self.propertyName(of:)))
+        let keyPathNames = Set(UserDefaultsSettingsStore.storageKeysForTest.keys.map(Self.propertyName(of:)))
         #expect(keyPathNames == propertyNames)
+    }
+
+    /// 保存キー文字列が重複していない（コピペミスで2プロパティが同じキーを共有していない）ことを検証する
+    @Test
+    func storageKeys_valuesAreUnique() {
+        let keys = UserDefaultsSettingsStore.storageKeysForTest.values
+        #expect(Set(keys).count == keys.count)
     }
 
     /// KeyPathのdebug description（例: "\UserDefaultsSettings.viewMode"）末尾のプロパティ名を取り出す

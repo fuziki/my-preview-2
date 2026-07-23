@@ -75,20 +75,6 @@ public struct UserDefaultsSettings: Codable {
         )
     }
 
-    /// UserDefaultsへの保存キーの列挙に使う（削除時など、全プロパティを走査したい場合のみ使用）
-    fileprivate static let allKeyPaths: [PartialKeyPath<UserDefaultsSettings>] = [
-        \.viewMode,
-        \.saveFormat,
-        \.sortOrder,
-        \.gridColumnCount,
-        \.isRatingEnabled,
-        \.ratingFilter,
-        \.colorLabelFilter,
-        \.lastViewedFileName,
-    ]
-
-    // テストでのみ使用できる
-    static var allKeyPathsForTest: [PartialKeyPath<UserDefaultsSettings>] { allKeyPaths }
 }
 
 // MARK: - UserDefaultsSettingsStoreProtocol
@@ -106,6 +92,22 @@ public protocol UserDefaultsSettingsStoreProtocol: AnyObject {
 // MARK: - UserDefaultsSettingsStore
 
 public final class UserDefaultsSettingsStore: UserDefaultsSettingsStoreProtocol {
+    /// KeyPathと保存キーの対応表。プロパティ名を変えてもここを更新しない限り
+    /// 保存キーは変わらない（=既存ユーザーの設定を壊さない）
+    private static let storageKeys: [PartialKeyPath<UserDefaultsSettings>: String] = [
+        \UserDefaultsSettings.viewMode: "UserDefaultsSettingsStore.viewMode",
+        \UserDefaultsSettings.saveFormat: "UserDefaultsSettingsStore.saveFormat",
+        \UserDefaultsSettings.sortOrder: "UserDefaultsSettingsStore.sortOrder",
+        \UserDefaultsSettings.gridColumnCount: "UserDefaultsSettingsStore.gridColumnCount",
+        \UserDefaultsSettings.isRatingEnabled: "UserDefaultsSettingsStore.isRatingEnabled",
+        \UserDefaultsSettings.ratingFilter: "UserDefaultsSettingsStore.ratingFilter",
+        \UserDefaultsSettings.colorLabelFilter: "UserDefaultsSettingsStore.colorLabelFilter",
+        \UserDefaultsSettings.lastViewedFileName: "UserDefaultsSettingsStore.lastViewedFileName",
+    ]
+
+    // テストでのみ使用できる（storageKeysが全プロパティを網羅しているかの検証用）
+    static var storageKeysForTest: [PartialKeyPath<UserDefaultsSettings>: String] { storageKeys }
+
     private let defaults: UserDefaults
     private let fallback = UserDefaultsSettings.default()
 
@@ -115,26 +117,23 @@ public final class UserDefaultsSettingsStore: UserDefaultsSettingsStoreProtocol 
 
     public subscript<T: Codable>(dynamicMember keyPath: KeyPath<UserDefaultsSettings, T>) -> T {
         get {
-            guard let data = defaults.data(forKey: Self.key(for: keyPath)),
+            guard let key = Self.storageKeys[keyPath],
+                  let data = defaults.data(forKey: key),
                   let decoded = try? JSONDecoder().decode(T.self, from: data) else {
                 return fallback[keyPath: keyPath]
             }
             return decoded
         }
         set {
-            guard let data = try? JSONEncoder().encode(newValue) else { return }
-            defaults.set(data, forKey: Self.key(for: keyPath))
+            guard let key = Self.storageKeys[keyPath],
+                  let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: key)
         }
     }
 
     public func removeAll() {
-        for keyPath in UserDefaultsSettings.allKeyPaths {
-            defaults.removeObject(forKey: Self.key(for: keyPath))
+        for key in Self.storageKeys.values {
+            defaults.removeObject(forKey: key)
         }
-    }
-
-    /// KeyPathのdebug descriptionにプレフィックスを付けてUserDefaultsのキー名とする
-    private static func key(for keyPath: PartialKeyPath<UserDefaultsSettings>) -> String {
-        "UserDefaultsSettingsStore.\(String(describing: keyPath))"
     }
 }
