@@ -66,6 +66,13 @@ let package = Package(
 
         // MARK: - テストターゲット
 
+        // テスト用モックサービス（Coreに依存、複数のテストターゲットで共有）
+        .target(
+            name: "MocksForTest",
+            dependencies: ["Core"],
+            path: "Tests/MocksForTest",
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         // UserDefaultsSettingsStoreのユニットテスト
         .testTarget(
             name: "CoreTests",
@@ -75,14 +82,14 @@ let package = Package(
         // FileBrowserViewModelのユニットテスト
         .testTarget(
             name: "FileBrowserTests",
-            dependencies: ["FileBrowser"],
+            dependencies: ["FileBrowser", "MocksForTest"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // PhotoViewerViewModelのユニットテスト
         // SwiftUI: UIKitを経由してSwiftUI.AttributedStringのシンボルが参照されるためリンクが必要
         .testTarget(
             name: "PhotoViewerTests",
-            dependencies: ["PhotoViewer"],
+            dependencies: ["PhotoViewer", "MocksForTest"],
             swiftSettings: [.defaultIsolation(MainActor.self)],
             linkerSettings: [.linkedFramework("SwiftUI", .when(platforms: [.iOS]))]
         ),

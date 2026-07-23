@@ -2,8 +2,8 @@ import Core
 import Foundation
 
 /// ExifServiceProtocolのテスト用モック
-final class MockExifService: ExifServiceProtocol, @unchecked Sendable {
-    var stubbedExif: ExifInfo? = ExifInfo(
+public final class MockExifService: ExifServiceProtocol, @unchecked Sendable {
+    public var stubbedExif: ExifInfo? = ExifInfo(
         iso: "ISO 100",
         focalLength: "50mm",
         exposureValue: "±0EV",
@@ -11,9 +11,11 @@ final class MockExifService: ExifServiceProtocol, @unchecked Sendable {
         shutterSpeed: "1/250s",
         flashFired: false
     )
-    var extractCallCount = 0
+    public private(set) var extractCallCount = 0
 
-    func extractExif(from url: URL) async -> ExifInfo? {
+    public init() {}
+
+    public func extractExif(from url: URL) async -> ExifInfo? {
         extractCallCount += 1
         return stubbedExif
     }

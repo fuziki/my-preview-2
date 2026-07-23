@@ -2,6 +2,7 @@ import Testing
 import Core
 import UIKit
 import Foundation
+import MocksForTest
 @testable import PhotoViewer
 
 // MARK: - テスト
