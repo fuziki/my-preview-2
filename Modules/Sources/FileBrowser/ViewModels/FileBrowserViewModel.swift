@@ -185,7 +185,7 @@ public final class FileBrowserViewModel {
     // MARK: - 依存関係
 
     private let fileSystemService: any FileSystemServiceProtocol
-    private let settings: any UserDefaultsSettingsStoreProtocol
+    private let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     private let savedDateStore: any SavedDateStoreProtocol
     private let ratingStore: any PhotoRatingStoreProtocol
     private let colorLabelStore: any ColorLabelStoreProtocol
@@ -197,7 +197,7 @@ public final class FileBrowserViewModel {
         savedDateStore: any SavedDateStoreProtocol,
         ratingStore: any PhotoRatingStoreProtocol,
         colorLabelStore: any ColorLabelStoreProtocol,
-        settings: any UserDefaultsSettingsStoreProtocol
+        settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     ) {
         self.fileSystemService = fileSystemService
         self.savedDateStore = savedDateStore

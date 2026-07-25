@@ -26,7 +26,10 @@ final class AppContainer {
     private let colorLabelStore: any ColorLabelStoreProtocol = ColorLabelStore()
 
     /// FileBrowserとPhotoViewerの保存設定を同一の値で参照させるため、AppContainerが所有する
-    private let settingsStore: any UserDefaultsSettingsStoreProtocol = UserDefaultsSettingsStore(defaults: .standard)
+    private let settingsStore: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings> = UserDefaultsSettingsStore(
+        defaultValue: .default(),
+        defaults: .standard
+    )
 
     #if targetEnvironment(simulator)
     /// シミュレータでは実ファイルが存在しないため、ファイルIO系サービスをモックに差し替える

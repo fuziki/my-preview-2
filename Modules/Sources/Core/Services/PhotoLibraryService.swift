@@ -9,9 +9,9 @@ public protocol PhotoLibraryServiceProtocol {
 }
 
 public final class PhotoLibraryService: PhotoLibraryServiceProtocol {
-    private let settings: any UserDefaultsSettingsStoreProtocol
+    private let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
 
-    public init(settings: any UserDefaultsSettingsStoreProtocol) {
+    public init(settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>) {
         self.settings = settings
     }
 
