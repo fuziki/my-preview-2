@@ -71,9 +71,10 @@ public final class FileBrowserViewModel {
         }
     }
 
-    /// 最後に閲覧したファイル名（起動をまたいで復元するために永続化する）
+    /// 現在のディレクトリで最後に閲覧したファイル名（ディレクトリパスごとに永続化されたものから引く）
     private var lastViewedFileName: String? {
-        didSet { settings.lastViewedFileName = lastViewedFileName }
+        guard let directoryPath = rootURL?.path else { return nil }
+        return settings.lastViewedEntries.first(where: { $0.directoryPath == directoryPath })?.fileName
     }
 
     // MARK: - レーティング・カラーラベル
@@ -212,7 +213,6 @@ public final class FileBrowserViewModel {
         self.isRatingEnabled = settings.isRatingEnabled
         self.ratingFilter = settings.ratingFilter
         self.colorLabelFilter = settings.colorLabelFilter
-        self.lastViewedFileName = settings.lastViewedFileName
     }
 
     // MARK: - アクション
@@ -238,7 +238,6 @@ public final class FileBrowserViewModel {
         isRatingEnabled = settings.isRatingEnabled
         ratingFilter = settings.ratingFilter
         colorLabelFilter = settings.colorLabelFilter
-        lastViewedFileName = settings.lastViewedFileName
         lastViewedItemID = nil
         ratingsByURL = [:]
         labelsByURL = [:]
@@ -248,9 +247,14 @@ public final class FileBrowserViewModel {
         updateSections()
     }
 
-    /// 閲覧したURLをUserDefaultsに保存し、lastViewedItemIDも更新する
+    /// 閲覧したURLをディレクトリパスごとにUserDefaultsに保存し、lastViewedItemIDも更新する
     public func saveLastViewed(url: URL) {
-        lastViewedFileName = url.lastPathComponent
+        guard let directoryPath = rootURL?.path else { return }
+        settings.lastViewedEntries = settings.lastViewedEntries.updatingLastViewed(
+            directoryPath: directoryPath,
+            fileName: url.lastPathComponent,
+            limit: UserDefaultsSettings.maxLastViewedDirectoryCount
+        )
         lastViewedItemID = items.first(where: { $0.url == url })?.id
     }
 

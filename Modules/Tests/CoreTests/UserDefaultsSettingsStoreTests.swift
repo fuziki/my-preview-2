@@ -59,9 +59,9 @@ struct UserDefaultsSettingsStoreTests {
     }
 
     @Test
-    func lastViewedFileName_defaultsToNil_whenUnset() {
+    func lastViewedEntries_defaultsToEmpty_whenUnset() {
         let store = makeStore(defaults: makeDefaults())
-        #expect(store.lastViewedFileName == nil)
+        #expect(store.lastViewedEntries.isEmpty)
     }
 
     // MARK: - 永続化ラウンドトリップ
@@ -106,7 +106,7 @@ struct UserDefaultsSettingsStoreTests {
         store.isRatingEnabled = false
         store.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
         store.colorLabelFilter = [.green]
-        store.lastViewedFileName = "a.jpg"
+        store.lastViewedEntries = [DirectoryLastViewedEntry(directoryPath: "/tmp", fileName: "a.jpg")]
 
         store.removeAll()
 
@@ -116,7 +116,7 @@ struct UserDefaultsSettingsStoreTests {
         #expect(store.isRatingEnabled == true)
         #expect(store.ratingFilter == nil)
         #expect(store.colorLabelFilter.isEmpty)
-        #expect(store.lastViewedFileName == nil)
+        #expect(store.lastViewedEntries.isEmpty)
     }
 
     // MARK: - 不正な生データのフォールバック
@@ -177,5 +177,49 @@ struct UserDefaultsSettingsStoreTests {
         store.unknown = "updated"
 
         #expect(UserDefaultsSettingsStore(defaultValue: IncompleteSettings.default(), defaults: defaults).unknown == "updated")
+    }
+}
+
+// MARK: - DirectoryLastViewedEntry.updatingLastViewed
+
+@Suite
+struct DirectoryLastViewedEntryUpdatingTests {
+
+    @Test
+    func addsNewEntry_whenDirectoryNotPresent() {
+        let entries: [DirectoryLastViewedEntry] = []
+        let result = entries.updatingLastViewed(directoryPath: "/a", fileName: "1.jpg", limit: 10)
+        #expect(result == [DirectoryLastViewedEntry(directoryPath: "/a", fileName: "1.jpg")])
+    }
+
+    @Test
+    func updatesFileName_andMovesToEnd_whenDirectoryAlreadyPresent() {
+        let entries = [
+            DirectoryLastViewedEntry(directoryPath: "/a", fileName: "1.jpg"),
+            DirectoryLastViewedEntry(directoryPath: "/b", fileName: "2.jpg"),
+        ]
+        let result = entries.updatingLastViewed(directoryPath: "/a", fileName: "3.jpg", limit: 10)
+        #expect(result == [
+            DirectoryLastViewedEntry(directoryPath: "/b", fileName: "2.jpg"),
+            DirectoryLastViewedEntry(directoryPath: "/a", fileName: "3.jpg"),
+        ])
+    }
+
+    @Test
+    func removesOldestEntries_whenExceedingLimit() {
+        let entries = (1...10).map { DirectoryLastViewedEntry(directoryPath: "/\($0)", fileName: "\($0).jpg") }
+        let result = entries.updatingLastViewed(directoryPath: "/11", fileName: "11.jpg", limit: 10)
+        #expect(result.count == 10)
+        #expect(result.first == DirectoryLastViewedEntry(directoryPath: "/2", fileName: "2.jpg"))
+        #expect(result.last == DirectoryLastViewedEntry(directoryPath: "/11", fileName: "11.jpg"))
+        #expect(!result.contains(DirectoryLastViewedEntry(directoryPath: "/1", fileName: "1.jpg")))
+    }
+
+    @Test
+    func doesNotExceedLimit_whenRevisitingExistingDirectoryAtCapacity() {
+        let entries = (1...10).map { DirectoryLastViewedEntry(directoryPath: "/\($0)", fileName: "\($0).jpg") }
+        let result = entries.updatingLastViewed(directoryPath: "/1", fileName: "updated.jpg", limit: 10)
+        #expect(result.count == 10)
+        #expect(result.last == DirectoryLastViewedEntry(directoryPath: "/1", fileName: "updated.jpg"))
     }
 }

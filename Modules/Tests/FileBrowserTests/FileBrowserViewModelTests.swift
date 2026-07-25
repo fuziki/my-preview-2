@@ -113,7 +113,9 @@ struct FileBrowserViewModelTests {
 
         viewModel.saveLastViewed(url: itemURL)
 
-        #expect(settings.lastViewedFileName == itemURL.lastPathComponent)
+        #expect(settings.lastViewedEntries == [
+            DirectoryLastViewedEntry(directoryPath: "/tmp", fileName: itemURL.lastPathComponent),
+        ])
     }
 
     @Test
@@ -125,6 +127,24 @@ struct FileBrowserViewModelTests {
         viewModel.saveLastViewed(url: itemURL)
 
         #expect(viewModel.lastViewedItem?.url == itemURL)
+    }
+
+    @Test
+    func saveLastViewed_keepsSeparateEntry_perDirectory() async {
+        let firstURL = URL(fileURLWithPath: "/tmp/a/photo.jpg")
+        fileSystemService.stubbedItems = [FileItem(url: firstURL)]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp/a"))
+        viewModel.saveLastViewed(url: firstURL)
+
+        let secondURL = URL(fileURLWithPath: "/tmp/b/photo2.jpg")
+        fileSystemService.stubbedItems = [FileItem(url: secondURL)]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp/b"))
+        viewModel.saveLastViewed(url: secondURL)
+
+        #expect(settings.lastViewedEntries == [
+            DirectoryLastViewedEntry(directoryPath: "/tmp/a", fileName: "photo.jpg"),
+            DirectoryLastViewedEntry(directoryPath: "/tmp/b", fileName: "photo2.jpg"),
+        ])
     }
 
     // MARK: - consumeHasFolderChanged
