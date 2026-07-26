@@ -2,7 +2,7 @@
 
 ## 画面概要
 
-JPEG 写真をフルスクリーンで表示するビューア画面。同フォルダ内の写真間をナビゲートし、Exif メタデータを表示しながら、写真を iOS の写真ライブラリに保存できる。
+JPEG 写真をフルスクリーンで表示するビューア画面。同フォルダ内の写真間をナビゲートし、Exif メタデータを表示しながら、写真を iOS の写真ライブラリに保存できる。星評価・カラーラベルの設定、ファイル名/Exif のクリップボードコピーにも対応する。
 
 **クラス名：** `PhotoViewerViewController`
 **ViewModel：** `PhotoViewerViewModel`
@@ -22,8 +22,13 @@ final class PhotoViewerViewModel {
     private(set) var previousOrientation: ImageOrientation? = nil
     private(set) var isLoading: Bool = false
     private(set) var exifInfo: ExifInfo? = nil
-    var saveStatus: SaveStatus = .idle
+    private(set) var saveStatus: SaveStatus = .idle
+    private(set) var lastSavedDate: Date? = nil
+    private(set) var currentRating: Int = 0
+    private(set) var currentColorLabel: PhotoColorLabel? = nil
+    private(set) var shouldDismiss: Bool = false
     var isOverlayVisible: Bool = true
+    let isRatingEnabled: Bool
 
     // 派生プロパティ
     var currentURL: URL { allURLs[currentIndex] }
@@ -33,42 +38,42 @@ final class PhotoViewerViewModel {
 }
 ```
 
-`init(input: PhotoViewerInput)` で `allURLs` と `currentIndex`（`initialURL` の位置）を初期化する。
+`init(input: PhotoViewerInput, services: PhotoViewerServices)` で `allURLs`・`currentIndex`（`initialURL` の位置）・`isRatingEnabled`・評価/カラーラベルフィルタを初期化する。
 
 **ViewModel のメソッド：**
 
-| メソッド                      | 処理                                                                            |
-|-------------------------------|---------------------------------------------------------------------------------|
-| `loadCurrentImage() async`    | 現在の URL から画像と Exif 情報をバックグラウンドで読み込み各プロパティを更新する |
-| `navigatePrevious() async`    | `previousOrientation` を保存後に `currentIndex` をデクリメントし `loadCurrentImage()` を呼ぶ |
-| `navigateNext() async`        | `previousOrientation` を保存後に `currentIndex` をインクリメントし `loadCurrentImage()` を呼ぶ |
-| `save() async`                | 権限確認後に現在の写真を写真ライブラリへ保存し `saveStatus` を更新する          |
-| `toggleOverlay()`             | `isOverlayVisible` を反転する                                                   |
+| メソッド                                  | 処理                                                                                          |
+|--------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `loadInitial() async`                      | 初期表示の画像・Exif をバックグラウンドで読み込む（VC 準備後に1回呼ぶ）                       |
+| `navigatePrevious() async`                 | `previousOrientation` を保存後に `currentIndex` をデクリメントし画像・Exifを再読み込みする    |
+| `navigateNext() async`                     | `previousOrientation` を保存後に `currentIndex` をインクリメントし画像・Exifを再読み込みする  |
+| `didSwipeTo(index: Int, image: UIImage?) async` | スワイプ後、画像は既に表示済みとして Exif のみ再読み込み。`previousOrientation` は nil にリセット |
+| `setRating(_ stars: Int) async`            | 星評価を設定。同じ値を再度指定すると 0（解除）。`ratingStore` へ永続化後、フィルタ外なら自動遷移 |
+| `setColorLabel(_ label: PhotoColorLabel) async` | カラーラベルを設定。同じ値を再度指定すると nil（解除）。`colorLabelStore` へ永続化後、フィルタ外なら自動遷移 |
+| `save() async`                              | 権限確認後に現在の写真を写真ライブラリへ保存し `saveStatus`・`lastSavedDate` を更新、触覚フィードバックを発行 |
+| `toggleOverlay()`                          | `isOverlayVisible` を反転する                                                                 |
+
+**評価・カラーラベルフィルタと自動遷移：** ViewModel は `PhotoViewerInput` 由来の `ratingFilter`/`colorLabelFilter` を保持する。`setRating`/`setColorLabel` で写真が現在のフィルタ条件に合わなくなった場合、`autoNavigateIfFilteredOut()` が呼ばれ、前方→後方の順でフィルタに一致する最も近い写真へ自動的に遷移する。一致する写真が他に無い場合は `shouldDismiss = true` となり、VC がフォトビューアを閉じる。
 
 ### PhotoViewerViewController の updateProperties
 
-`PhotoViewerViewController` は `updateProperties()` をオーバーライドし、`viewModel` のプロパティ変化を UI に反映する。
+`PhotoViewerViewController` は `updateProperties()`（`UIViewController.updateProperties()`、Observation 駆動）をオーバーライドし、以下をすべて `viewModel` から同期する：
 
 ```swift
 override func updateProperties() {
     super.updateProperties()
-    fileNameLabel.text = viewModel.currentFileName
-    // exifParts を結合してラベルに設定、空の場合は非表示
-    exifLabel.text = exifParts.joined(separator: "  ")
-    exifLabel.isHidden = exifParts.isEmpty
+    photoInfoPillView.configure(fileName: viewModel.currentFileName, exifInfo: viewModel.exifInfo)
     prevButtonView.button.isEnabled = viewModel.canGoPrevious
-    prevButtonView.button.tintColor = viewModel.canGoPrevious ? .white : .systemGray
     nextButtonView.button.isEnabled = viewModel.canGoNext
-    nextButtonView.button.tintColor = viewModel.canGoNext ? .white : .systemGray
     updateSaveButton(status: viewModel.saveStatus)
+    ratingLabelBarView.setRating(viewModel.currentRating)
+    ratingLabelBarView.setColorLabel(viewModel.currentColorLabel)
+    lastSavedDateLabel.text = /* viewModel.lastSavedDate をフォーマット */
+    lastSavedDateLabel.isHidden = viewModel.lastSavedDate == nil
     viewModel.isLoading ? loadingIndicator.startAnimating() : loadingIndicator.stopAnimating()
     updateOverlayVisibility(visible: viewModel.isOverlayVisible)
-
-    if let image = viewModel.currentImage, image !== displayedImage {
-        displayedImage = image
-        // サムネイルサイズ更新・imageView 更新・zoomScrollView への表示
-        zoomScrollView.display(image: image, previousOrientation: viewModel.previousOrientation)
-    }
+    if viewModel.shouldDismiss { dismiss(animated: true) }
+    // 現在セルへの画像・サムネイル反映
 }
 ```
 
@@ -77,25 +82,42 @@ override func updateProperties() {
 ## 表示レイアウト
 
 - `view.backgroundColor = .black`。
-- `modalPresentationStyle = .fullScreen` でフルスクリーン表示する。
-- ステータスバーはオーバーレイの表示状態に連動して表示・非表示を切り替える（`setNeedsStatusBarAppearanceUpdate()` を使用）。
+- `preferredTransition = .zoom` を伴ってフルスクリーン表示する（呼び出し元でサムネイルセルとの拡大トランジションを構成）。
+- ステータスバーはオーバーレイの表示状態に連動して表示・非表示を切り替える（`prefersStatusBarHidden`・`setNeedsStatusBarAppearanceUpdate()`）。
 - ビュー階層：
 
 ```
 view（黒背景）
-  ├── PhotoZoomScrollView（全画面、写真のズーム・パン）
-  │     └── UIImageView（写真）
-  └── 各フローティング要素（view に直接追加、PhotoZoomScrollView より前面）
+  ├── UICollectionView（横スクロール・ページング、写真のページング表示）
+  │     └── PhotoPageItemCell（各ページ）
+  │           └── PhotoZoomScrollView（写真のズーム・パン）
+  │                 └── UIImageView（写真）
+  └── 各フローティング要素（view に直接追加、UICollectionView より前面）
         ├── 閉じるボタン（GlassButtonView、左上）
-        ├── ファイル名 + Exif パネル（UIVisualEffectView、右上）
-        ├── サムネイル（UIImageView、ファイル名パネルの下・右寄せ）
-        ├── 前へボタン（GlassButtonView、左下）
-        ├── 次へボタン（GlassButtonView、右下）
+        ├── ファイル名 + Exif パネル（PhotoInfoPillView、右上）
+        ├── サムネイル（UIImageView、パネルの下・右寄せ）
+        ├── 前へボタン（GlassButtonView + 拡大ヒットエリア、左下）
+        ├── 次へボタン（GlassButtonView + 拡大ヒットエリア、右下）
         ├── 保存ボタン（GlassButtonView、下部中央）
-        └── ローディングインジケーター（UIActivityIndicatorView、保存ボタンの上）
+        ├── 評価・カラーラベルバー（RatingLabelBarView、保存ボタンの上。isRatingEnabled時のみ）
+        ├── ローディングインジケーター（UIActivityIndicatorView、評価バー or 保存ボタンの上）
+        └── 最終保存日時ラベル（lastSavedDateLabel、保存ボタンの下）
 ```
 
-各フローティング要素はボタンが配置されていない領域のタッチを `PhotoZoomScrollView` に自然に伝播させる（`hitTest` オーバーライド不要）。
+各フローティング要素はボタンが配置されていない領域のタッチを下層のスクロールビューへ自然に伝播させる。
+
+---
+
+## ページング（UICollectionView）
+
+写真間の移動は `UIPageViewController` ではなく、横スクロール・ページング設定の `UICollectionView`（`UICollectionViewFlowLayout`、`interPageSpacing = 16`）で行う。
+
+| ナビゲーション種別 | セルの扱い                                                                 | ズーム状態                                               |
+|--------------------|---------------------------------------------------------------------------|------------------------------------------------------------|
+| 前後ボタン         | 同じ `PhotoPageItemCell` を再利用し、`index` を更新して画像を上書き        | 同じ向きの場合は維持、向きが変わった場合はリセット        |
+| 左右スワイプ       | `UICollectionView` が隣接セルを自然に表示（`didSwipeTo(index:image:)` で通知） | 常にリセット（`previousOrientation = nil`）              |
+
+前後ボタンには長押しジェスチャー（`UILongPressGestureRecognizer`、`minimumPressDuration = 1.0`）による連続ナビゲーション（0.12秒間隔で自動送り）が拡大ヒットエリア（`prevHitAreaButton`/`nextHitAreaButton`）に設定されている。
 
 ---
 
@@ -170,10 +192,6 @@ zoomScale = targetZoom
 
 引き継ぎ後は `clampContentOffset()` でコンテンツオフセットを有効範囲に収める。
 
-> **前後ボタンナビゲーション時のズーム維持**
-> ボタンナビゲーションでは同じ `PhotoPageItemViewController`（および同じ `PhotoZoomScrollView` インスタンス）を再利用するため、`updateZoomForSameOrientation` が読み取るズームスケールは直前の状態がそのまま残っている。これにより、同じ向きの写真に切り替わる際はズーム状態が自然に引き継がれる。向きが異なる写真に切り替わる場合は `resetZoom` が呼ばれ、ズームはリセットされる。
-> スワイプナビゲーションでは新しい VC が生成されるため、常にズームがリセットされる（`previousOrientation = nil`）。
-
 ---
 
 ## フローティング UI 要素の配置
@@ -181,94 +199,71 @@ zoomScale = targetZoom
 ### 閉じるボタン（左上）
 
 - `GlassButtonView.circle(systemImageName: "xmark")`
-- 制約：
-  - `top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt
-  - `leading` = `view.leadingAnchor` + 16pt
+- 制約：`top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt、`leading` = `view.leadingAnchor` + 16pt
 
-### ファイル名 + Exif パネル（右上）
+### ファイル名 + Exif パネル（右上・PhotoInfoPillView）
 
-- `UIVisualEffectView`（`UIBlurEffect(style: .systemUltraThinMaterialDark)`）にガラスモーフィズムを適用。
-  - `cornerRadius = 16`
-  - 白ボーダー（透明度 0.15、幅 0.5pt）
-- 内部に `UIStackView`（縦 axis）で `fileNameLabel`・`exifLabel` を配置する。
-- 制約：
-  - `top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt
-  - `trailing` = `view.trailingAnchor` - 16pt
-  - `leading` ≥ `closeButtonView.trailingAnchor` + 8pt（閉じるボタンに重ならない）
-  - `height` ≥ 44pt
-  - 内部パディング：上下 8pt、左右 14pt
+`Modules/Sources/PhotoViewer/Views/PhotoInfoPillView.swift`。従来の素の `UIVisualEffectView` パネルを置き換え、共通の `GlassBackdropView`（`cornerRadius: 16`）を背景に使う。
 
-#### ファイル名ラベル
+- 内部に縦 `UIStackView` で `fileNameLabel`（callout・白文字・1行）・`exifLabel`（caption1・白75%透過・Exif取得0件なら非表示）を配置する。
+- Exif ラベルは `iso · focalLength · exposureValue · fNumber · shutterSpeed` を連結し、`flashFired` が true の場合は末尾に `"  ⚡️"` を付与する。
+- パネル全体に透明な `copyButton` を重ねており、タップでファイル名＋Exifの整形テキストをクリップボードへコピーし、中程度の触覚フィードバック（`UIImpactFeedbackGenerator`）と `ToastKit` によるトースト通知（クリップボードアイコン＋コピー完了メッセージ）を発行する。
+- 制約：`top` = `safeArea` + 12pt、`trailing` = `view` - 16pt、`leading` ≥ `closeButtonView.trailing` + 8pt、`height` ≥ 44pt。
 
-- フォント：`UIFont.preferredFont(forTextStyle: .callout)`
-- テキストカラー：白
-- 行数：1行、`lineBreakMode = .byTruncatingMiddle`
+### サムネイル（パネルの下・右寄せ）
 
-#### Exif ラベル
+- `contentMode = .scaleAspectFit`、最大辺 80pt でアスペクト比を維持。
+- 制約：`top` = `photoInfoPillView.bottom` + 8pt、`trailing` = `photoInfoPillView.trailing`。
 
-- フォント：`UIFont.preferredFont(forTextStyle: .caption1)`
-- テキストカラー：白（透明度 75%）
-- 行数：1行
-- 表示内容：取得できた Exif 項目を `"  "`（2スペース）区切りで連結
-- Exif 項目が 1 件も取得できない場合は非表示にする
+### 前へ／次へボタン（左下・右下）
 
-### サムネイル（ファイル名パネルの下・右寄せ）
-
-- `contentMode = .scaleAspectFit`
-- サイズ：最大辺 80pt でアスペクト比を維持する（動的に制約を更新）
-- 制約：
-  - `top` = `fileNameBlur.bottomAnchor` + 8pt
-  - `trailing` = `fileNameBlur.trailingAnchor`
-
-### 前へボタン（左下）
-
-- `GlassButtonView.circle(systemImageName: "chevron.left")`
-- 制約：
-  - `bottom` = `view.safeAreaLayoutGuide.bottomAnchor` - 20pt
-  - `leading` = `view.leadingAnchor` + 16pt
-
-### 次へボタン（右下）
-
-- `GlassButtonView.circle(systemImageName: "chevron.right")`
-- 制約：
-  - `bottom` = `view.safeAreaLayoutGuide.bottomAnchor` - 20pt
-  - `trailing` = `view.trailingAnchor` - 16pt
+- `GlassButtonView.circle(systemImageName: "chevron.left"/"chevron.right")`
+- 制約：`bottom` = `safeArea` - 20pt、`leading`/`trailing` = `view` ± 16pt
+- ビジュアルボタンの前面に透明な拡大ヒットエリア（`prevHitAreaButton`/`nextHitAreaButton`、上下左右に数十pt拡張）を重ね、通常タップと長押し連続送りの両方を検出する。
 
 ### 保存ボタン（下部中央）
 
 - `GlassButtonView`（カプセル形、`cornerRadius = 22`）
 - ボタン構成：`UIButton.Configuration.borderless()`、タイトルテキスト、左右パディング 20pt
 - テキストカラー：常に白（`configurationUpdateHandler` で disabled 時の自動調光を抑制）
-- 制約：
-  - `bottom` = `view.safeAreaLayoutGuide.bottomAnchor` - 20pt
-  - `centerX` = `view.centerXAnchor`
-  - `leading` ≥ `prevButtonView.trailingAnchor` + 8pt
-  - `trailing` ≤ `nextButtonView.leadingAnchor` - 8pt
-  - `height` = 44pt
+- 制約：`bottom` = `safeArea` - 20pt、`centerX` = `view.centerXAnchor`、`leading` ≥ `prevButtonView.trailing` + 8pt、`trailing` ≤ `nextButtonView.leading` - 8pt、`height` = 44pt
 
-### ローディングインジケーター（保存ボタンの上）
+### 評価・カラーラベルバー（RatingLabelBarView、保存ボタンの上）
 
-- `UIActivityIndicatorView(style: .medium)`
-- カラー：白
-- `hidesWhenStopped = true`
-- 制約：
-  - `centerX` = `saveButtonView.centerXAnchor`
-  - `bottom` = `saveButtonView.topAnchor` - 8pt
+`Modules/Sources/PhotoViewer/Views/RatingLabelBarView.swift`。`viewModel.isRatingEnabled` が true の場合のみ追加する。`GlassBackdropView`（`cornerRadius: 16`）ベースの横長カプセル、高さ32pt。
+
+- 星ボタン5個（`star`/`star.fill`、24×32pt、tag 1〜5）
+- 縦の区切り線
+- カラーラベルボタン6個（`circle.fill`/`circle.inset.filled`、24×32pt、`PhotoColorLabel` の色でtint）
+- タップは UIMenu ではなく直接の `UIButton.touchUpInside`。`onStarTapped`/`onColorTapped` コールバック経由で `viewModel.setRating`/`setColorLabel` を呼ぶ（トグルオフのロジックは ViewModel 側が持つ）。
+- 制約：`bottom` = `saveButtonView.top` - 8pt、`centerX` = `view.centerXAnchor`
+
+### ローディングインジケーター
+
+- `UIActivityIndicatorView(style: .medium)`、白、`hidesWhenStopped = true`
+- 制約：`centerX` = `saveButtonView.centerXAnchor`、`bottom` = （`ratingLabelBarView` があればその上、無ければ `saveButtonView` の上）- 8pt
+
+### 最終保存日時ラベル（保存ボタンの下）
+
+- `lastSavedDateLabel`（caption2）。`viewModel.lastSavedDate` が nil の場合は非表示。
+- 制約：`top` = `saveButtonView.bottom` + 4pt、`centerX` = `view.centerXAnchor`
 
 ---
+
+## GlassBackdropView（ガラス背景の共通コンポーネント）
+
+`Modules/Sources/PhotoViewer/Views/GlassBackdropView.swift`。半透明の黒レイヤー（`alpha 0.4`）の上に `UIGlassEffect(style: .clear)` の `UIVisualEffectView`（`overrideUserInterfaceStyle = .dark`）を重ねた「座布団」。`contentView` を公開し、呼び出し側がその上にサブビューを積む。`GlassButtonView`・`PhotoInfoPillView`・`RatingLabelBarView` が共通で利用し、各所に重複していたガラス調背景の実装を集約している。
 
 ## GlassButtonView の仕様
 
 ```swift
 final class GlassButtonView: UIView {
     let button: UIButton
-    private let blurView: UIVisualEffectView  // systemUltraThinMaterialDark
 }
 ```
 
-- 背景：`UIVisualEffectView`（`UIBlurEffect(style: .systemUltraThinMaterialDark)`）
-- ボーダー：白（透明度 0.15）、幅 0.5pt
-- `cornerRadius`：コンストラクタ引数で指定（デフォルト 22）
+- 背景は `GlassBackdropView` を利用する。
+- `cornerRadius`：コンストラクタ引数で指定（デフォルト 22）。
 
 **circle ファクトリメソッド：**
 
@@ -284,7 +279,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 ## オーバーレイの表示・非表示
 
 - `viewModel.isOverlayVisible` の変化を `updateProperties()` で検知する。
-- `UIView.animate(withDuration: 0.2)` でフローティング UI 要素全体の `alpha` を 0.0 / 1.0 に切り替える。
+- `UIView.animate(withDuration: 0.2)` で閉じるボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
 - オーバーレイが非表示の場合はステータスバーも非表示にする（`prefersStatusBarHidden` で制御）。
 - `updateProperties()` 内で `setNeedsStatusBarAppearanceUpdate()` を呼ぶ。
 
@@ -292,37 +287,25 @@ static func circle(systemImageName: String) -> GlassButtonView
 
 ## ジェスチャー認識
 
-ジェスチャーは `PhotoZoomScrollView` に追加する。
+タップ系ジェスチャーは各ページの `PhotoPageItemCell`（`zoomScrollView`）に追加し、`PhotoPageItemCellDelegate` 経由で VC に通知する。
 
-| ジェスチャー     | 認識クラス               | 挙動                                                                     |
-|------------------|--------------------------|--------------------------------------------------------------------------|
-| シングルタップ   | `UITapGestureRecognizer`（`numberOfTapsRequired = 1`） | `viewModel.toggleOverlay()` を呼ぶ |
-| ダブルタップ     | `UITapGestureRecognizer`（`numberOfTapsRequired = 2`） | ズームイン or ズームリセット        |
-| ピンチ           | `UIScrollView` 組み込み  | ズームイン・ズームアウト                                                   |
+| ジェスチャー         | 認識クラス                                              | 挙動                                                                     |
+|----------------------|-----------------------------------------------------------|--------------------------------------------------------------------------|
+| シングルタップ       | `UITapGestureRecognizer`（`numberOfTapsRequired = 1`）    | `viewModel.toggleOverlay()` を呼ぶ                                       |
+| ダブルタップ         | `UITapGestureRecognizer`（`numberOfTapsRequired = 2`）    | ズームイン or ズームリセット                                              |
+| ピンチ               | `UIScrollView` 組み込み                                   | ズームイン・ズームアウト                                                   |
+| 前/次ボタン長押し    | `UILongPressGestureRecognizer`（`minimumPressDuration = 1.0`）、ヒットエリア上 | 0.12秒間隔で `navigatePrevious()`/`navigateNext()` を連続実行 |
+| ドラッグズーム       | `UILongPressGestureRecognizer`（`minimumPressDuration = 0.5`）、`UICollectionView` 上 | 縦方向ドラッグ量からズームスケールを連続変更（`exp((dx-dy)*0.01)`） |
 
 - シングルタップは `require(toFail:)` でダブルタップ認識の失敗を待つ。
+- `presentationController?.delegate = self` により、ズーム中は `presentationControllerShouldDismiss` が `false` を返し、スワイプでの誤ドロー・ダウン・ドミスを防止する。
 
 ### ダブルタップの挙動
 
 | 現在の状態                              | 挙動                                                                                        |
-|-----------------------------------------|---------------------------------------------------------------------------------------------|
+|-----------------------------------------|-----------------------------------------------------------------------------------------------|
 | `minimumZoomScale`（全体表示）に近い状態 | タップした位置を中心に `maximumZoomScale` へズームイン（`zoom(to:animated:)` でアニメーション） |
-| ズーム中                                | `setZoomScale(minimumZoomScale, animated: true)` で全体表示に戻す                           |
-
-ズームイン時の `zoomRect` 計算：
-
-```swift
-let tapPoint = gesture.location(in: zoomScrollView.imageView)
-let width = zoomScrollView.bounds.width / zoomScrollView.maximumZoomScale
-let height = zoomScrollView.bounds.height / zoomScrollView.maximumZoomScale
-let rect = CGRect(
-    x: tapPoint.x - width / 2,
-    y: tapPoint.y - height / 2,
-    width: width,
-    height: height
-)
-zoomScrollView.zoom(to: rect, animated: true)
-```
+| ズーム中                                | `setZoomScale(minimumZoomScale, animated: true)` で全体表示に戻す                             |
 
 「ズーム中」の判定は `zoomScale > minimumZoomScale + 0.001` とする。
 
@@ -335,18 +318,13 @@ zoomScrollView.zoom(to: rect, animated: true)
 - ナビゲーション後に `saveStatus = .idle` にリセットする。
 - 前後ボタンの `tintColor`：有効時は `.white`、無効時は `.systemGray`。
 
-### ナビゲーション実装戦略
+---
 
-| ナビゲーション種別 | VC の扱い                                                                 | ズーム状態                                               |
-|--------------------|---------------------------------------------------------------------------|----------------------------------------------------------|
-| 前後ボタン         | 同じ `PhotoPageItemViewController` を再利用し、`index` を更新して画像を上書き | 同じ向きの場合は維持、向きが変わった場合はリセット        |
-| 左右スワイプ       | `UIPageViewController` が新しい VC を生成・表示                            | 常にリセット（新規 VC のため）                            |
+## 評価・カラーラベルの設定（ViewModel の `setRating`/`setColorLabel`）
 
-前後ボタン押下時、`updateProperties()` 内で以下の処理を行う：
-
-1. `currentItemVC.index` を `viewModel.currentIndex` に更新する（インデックスが古い場合のみ）
-2. 同じ VC に対して `display(image:previousOrientation:)` を呼ぶ
-3. `pageViewController.setViewControllers([currentVC], direction: .forward, animated: false)` でUIPageViewControllerに隣ページのキャッシュを再生成させる
+- `setRating(_ stars: Int)`：現在値と同じ場合は 0（解除）にする。`PhotoRatingStoreProtocol.setRating(_:for:)` で永続化後、`autoNavigateIfFilteredOut()` を呼ぶ。
+- `setColorLabel(_ label: PhotoColorLabel)`：現在値と同じ場合は nil（解除）にする。`ColorLabelStoreProtocol.setLabel(_:for:)` で永続化後、`autoNavigateIfFilteredOut()` を呼ぶ。
+- `autoNavigateIfFilteredOut()`：`ratingFilter`/`colorLabelFilter` が設定されている場合のみ動作。現在の写真が条件を満たさなくなったら、後方→前方の順で最も近い一致写真へ遷移する。一致する写真が無ければ `shouldDismiss = true`。
 
 ---
 
@@ -359,33 +337,35 @@ func save() async {
     saveStatus = .saving
     let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
     guard status == .authorized || status == .limited else {
-        saveStatus = .failure; return
+        saveStatus = .failure
+        hapticsService.notifyError()
+        return
     }
     do {
-        try await PHPhotoLibrary.shared().performChanges {
-            let options = PHAssetResourceCreationOptions()
-            options.originalFilename = url.lastPathComponent
-            let request = PHAssetCreationRequest.forAsset()
-            request.addResource(with: .photo, fileURL: url, options: options)
-        }
+        try await photoLibrary.save(fileURL: url)
+        let now = Date()
+        savedDateStore.setDate(now, for: url)
+        lastSavedDate = now
         saveStatus = .success
+        hapticsService.notifySuccess()
         try await Task.sleep(for: .seconds(2))
         saveStatus = .idle
     } catch {
         saveStatus = .failure
+        hapticsService.notifyError()
     }
 }
 ```
 
-- `PHAssetCreationRequest` + `addResource(with: .photo, fileURL:, options:)` でオリジナルデータをそのまま保存する。
-- `options.originalFilename` に元ファイル名を設定してファイル名を保持する。
-- 画像の再エンコードは行わない。
-- 保存成功後、2 秒後に `saveStatus = .idle` に戻す（`Task.sleep(for: .seconds(2))`）。
+- `PhotoLibraryServiceProtocol.save(fileURL:)` が `PHAssetCreationRequest` + `addResource(with: .photo, fileURL:, options:)` でオリジナルデータをそのまま保存する（`options.originalFilename` で元ファイル名を保持、再エンコードなし）。
+- 保存フォーマット設定が `.jpegAndRaw` の場合、同名の RAW ファイル（対応拡張子: dng/arw/cr2/cr3/nef/orf/raf/rw2/pef/srw/3fr）が同フォルダに存在すれば併せて保存する。
+- 保存成功・失敗を `HapticsServiceProtocol` の触覚フィードバックで通知する。
+- 保存成功後、`SavedDateStore` に保存日時を記録し `lastSavedDate` を更新、2 秒後に `saveStatus = .idle` に戻す（`Task.sleep(for: .seconds(2))`）。
 
 ### 保存ボタンの状態遷移
 
 | 状態      | ボタン表示テキスト | ボタン有効/無効 | 次の遷移                           |
-|-----------|-------------------|-----------------|------------------------------------|
+|-----------|-------------------|-----------------|-------------------------------------|
 | `.idle`   | `↓ 保存`          | 有効            | タップで `.saving` へ              |
 | `.saving` | `⏳ 保存中...`    | 無効            | 完了後 `.success` または `.failure` へ |
 | `.success`| `✓ 保存完了`      | 無効            | 2 秒後に自動で `.idle` へ          |
@@ -393,44 +373,18 @@ func save() async {
 
 ---
 
-## 画像のロード（ViewModel の `loadCurrentImage() async`）
+## 画像・Exif のロード（ViewModel の `loadImageAndExif`）
 
-```swift
-func loadCurrentImage() async {
-    let url = currentURL
-    isLoading = true
-    let result = await Task.detached(priority: .userInitiated) {
-        guard let data = try? Data(contentsOf: url) else { return (nil, nil) }
-        return (UIImage(data: data), Self.extractExif(from: data))
-    }.value
-    currentImage = result.0
-    exifInfo = result.1
-    isLoading = false
-}
-```
-
-- `Task.detached` でバックグラウンドスレッドで読み込む。
+- `ImageLoaderServiceProtocol.loadImage(from:)` と `ExifServiceProtocol.extractExif(from:)` を並行してバックグラウンドで読み込む。両サービスとも `FileLoadingTracker` に処理を登録し、`isLoading` の重複解除を防ぐ。
 - `isLoading = true` → 画像・Exif 取得 → `currentImage`・`exifInfo` 更新 → `isLoading = false` の順で更新する。
 - セキュリティスコープドアクセスは `FileBrowserViewModel` が保持しているため、追加のスコープ取得は不要。
+- スワイプ後の `didSwipeTo(index:image:)` は画像がすでに表示済みのため Exif のみ再取得する。
 
 ---
 
 ## Exif 情報の抽出
 
-`CGImageSource` を使用して JPEG データから直接 Exif メタデータを抽出する（画像デコード不要）。
-
-```swift
-private static func extractExif(from data: Data) -> ExifInfo? {
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-          let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
-          let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] else {
-        return nil
-    }
-    // 各フィールドを取得・フォーマット
-}
-```
-
-### 各フィールドの取得・フォーマット
+`ExifServiceProtocol`（`CGImageSource`）が JPEG データから直接 Exif メタデータを抽出する（画像デコード不要）。
 
 | フィールド     | Exif キー                              | フォーマット例                                                |
 |---------------|----------------------------------------|--------------------------------------------------------------|
@@ -439,8 +393,24 @@ private static func extractExif(from data: Data) -> ExifInfo? {
 | 露出補正      | `kCGImagePropertyExifExposureBiasValue`| `Double`。0 の場合は `"±0EV"`、それ以外は `"%+.1fEV"` → `"+1.0EV"` |
 | F 値          | `kCGImagePropertyExifFNumber`          | `Double`。`"f/%.1f"` → `"f/2.8"`                             |
 | シャッタースピード | `kCGImagePropertyExifExposureTime` | `Double`（秒）。1秒以上は `"%.0fs"` → `"2s"`、1秒未満は `"1/\(round(1/et))s"` → `"1/125s"` |
+| フラッシュ    | `kCGImagePropertyExifFlash`            | 発光ビットを判定し `flashFired: Bool` を設定                  |
 
 Exif ディクショナリ自体が取得できない場合は `nil` を返す（Exif ラベルは非表示になる）。
+
+---
+
+## トースト通知（ToastKit）
+
+`Modules/Sources/ToastKit/` に実装されたトースト表示の仕組み。`UIWindow`（`windowLevel = .alert + 1`）にSwiftUIビューをホストし、複数トーストはキューで直列表示する。
+
+**公開 API：**
+
+```swift
+ToastKit.setup(windowScene: UIWindowScene)                       // 起動時に一度だけ呼ぶ
+ToastKit.show(duration: TimeInterval? = nil) { /* SwiftUI View */ }
+```
+
+**現在の呼び出し箇所：** `PhotoInfoPillView` のファイル名＋Exifコピー時のみ（クリップボードアイコン＋コピー完了メッセージ）。保存成功・失敗や評価変更はトーストではなく、保存ボタンの表示・触覚フィードバック・`lastSavedDateLabel` で通知する。
 
 ---
 

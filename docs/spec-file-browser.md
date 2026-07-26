@@ -2,7 +2,8 @@
 
 ## 画面概要
 
-アプリのメイン画面。ユーザーが選択したフォルダ内の JPEG 画像を `UICollectionView` でリスト表示する。
+アプリのメイン画面。ユーザーが選択したフォルダ内の JPEG 画像を `UICollectionView` でリスト／グリッド表示する。
+サムネイル・星評価・カラーラベルの表示や、それらによる並び替え・絞り込みを行える。
 サブフォルダ内への画面遷移は行わない。フォルダの変更はフローティングボタンから `UIDocumentPickerViewController` を介してのみ行う。
 
 **クラス名：** `FileBrowserViewController`
@@ -17,48 +18,85 @@
 ```swift
 @Observable
 final class FileBrowserViewModel {
-    private(set) var items: [FileItem] = []
+    private(set) var sections: [FileBrowserSection] = []
     private(set) var hasFolder: Bool = false
-    private var rootURL: URL? = nil
+    private(set) var isLoading: Bool = false
+    private(set) var folderName: String? = nil
+    var viewMode: ViewMode                     // didSet: 永続化
+    var saveFormat: SaveFormat                 // didSet: 永続化
+    var sortOrder: FileSortOrder               // didSet: 永続化 + updateSections()
+    var gridColumnCount: Int                   // didSet: 永続化（範囲 2...5 にクランプ）
+    var isRatingEnabled: Bool                  // didSet: 永続化 + updateSections()
+    var ratingFilter: RatingFilter?            // didSet: 永続化 + updateSections()
+    var colorLabelFilter: Set<PhotoColorLabel> // didSet: 永続化 + updateSections()
+    private(set) var lastViewedItemID: FileItem.ID? = nil
+
+    // 派生プロパティ
+    var items: [FileItem] { sections.flatMap(\.items) }
+    var lastViewedItem: FileItem? { get }
 }
 ```
+
+**init（引数にデフォルト値を持たせない、すべて protocol 型で注入）：**
+
+```swift
+init(
+    fileSystemService: any FileSystemServiceProtocol,
+    savedDateStore: any SavedDateStoreProtocol,
+    ratingStore: any PhotoRatingStoreProtocol,
+    colorLabelStore: any ColorLabelStoreProtocol,
+    settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
+)
+```
+
+初期化時に `viewMode`/`saveFormat`/`sortOrder`/`gridColumnCount`（クランプ済み）/`isRatingEnabled`/`ratingFilter`/`colorLabelFilter` を `settings` から復元する。
 
 **ViewModel のメソッド：**
 
-| メソッド                         | 処理                                                                                          |
-|----------------------------------|-----------------------------------------------------------------------------------------------|
-| `selectFolder(_ url: URL) async` | 前のセキュリティスコープを解放し、新しいスコープを取得後に `loadItems()` を呼ぶ               |
-| `loadItems() async`              | `rootURL` 配下の JPEG 画像をバックグラウンドで列挙・ソートし `items` をメインスレッドで更新する |
+| メソッド                                    | 処理                                                                                          |
+|---------------------------------------------|-----------------------------------------------------------------------------------------------|
+| `rating(for url: URL) -> Int`               | `ratingsByURL[url] ?? 0` を返す                                                               |
+| `colorLabel(for url: URL) -> PhotoColorLabel?` | `labelsByURL[url]` を返す                                                                  |
+| `refreshRatingsAndLabels()`                 | 評価・カラーラベルのキャッシュをストアから再読込し `updateSections()`。フォトビューア閉じた後に呼ぶ |
+| `consumeHasFolderChanged() -> Bool`         | `hasFolder` の変化を1回だけ検出する（フォルダボタンのアニメーション用）                        |
+| `sectionTitle(for id: FileBrowserSection.ID) -> String` | セクションの日付キーをロケール対応の表示用文字列にフォーマットする                    |
+| `section(for id: FileBrowserSection.ID) -> FileBrowserSection?` | セクションを ID で検索する                                                    |
+| `makeMenuData() -> (showsLastViewed: Bool, sections: [(id: FileBrowserSection.ID, title: String)])` | セクションヘッダーのジャンプメニュー用データを生成する               |
+| `selectFolder(_ url: URL) async`            | 前のセキュリティスコープを解放し、新しいスコープを取得後に `loadItems()` を呼ぶ               |
+| `resetToDefaults()`                         | 設定・評価・カラーラベル・保存日時をすべて初期状態に戻す（「キャッシュを消去」機能）           |
+| `saveLastViewed(url: URL)`                  | 現在のフォルダについて「最後に見た写真」を記憶する（フォルダごと最大10件、LRU）                |
+
+**内部処理（private）：**
+
+- `loadItems() async` — `fileSystemService.scanForJPEGs(in:)` でバックグラウンド読込 → 評価・カラーラベルのキャッシュ再読込 → `updateSections()` → 直近表示位置の復元 → `isLoading = false`。
+- `updateSections()` — 評価フィルタ・カラーラベルフィルタ（`isRatingEnabled` かつフィルタ設定時のみ）を適用し、撮影日（`captureDate ?? .distantFuture`）で日単位にグルーピング、`sortOrder` に従いセクション・アイテムを昇順/降順に並べ替える。
+- `matchesFilters(_ url: URL) -> Bool` — 星評価フィルタとカラーラベルフィルタの AND 判定。
+- `restoreLastViewedItemIDIfNeeded()` — `lastViewedItemID` が未設定の場合のみ、永続化されたエントリから復元する。
+
+### FileBrowserSection
+
+```swift
+struct FileBrowserSection {
+    struct ID: Hashable {
+        let dateKey: String // "yyyy-MM-dd"（en_US_POSIX）
+    }
+    let id: ID
+    let items: [FileItem]
+}
+```
+
+撮影日（1日単位）でグルーピングしたセクション。`UICollectionViewDiffableDataSource<FileBrowserSection.ID, FileItem.ID>` のセクション識別子として使う。
 
 ### FileBrowserViewController の updateProperties
 
-`FileBrowserViewController` は `updateProperties()` をオーバーライドし、`viewModel.hasFolder` の変化を UI に反映する。
+`FileBrowserViewController` は `updateProperties()` をオーバーライドし、`viewModel.sections`/`hasFolder`/`isLoading`/`folderName` の変化を UI に反映する。空状態の表示判定・タイトル更新・フォルダボタンのアニメーションもここから駆動する。
 
-```swift
-override func updateProperties() {
-    super.updateProperties()
-    let hasFolder = viewModel.hasFolder
-    collectionView.isHidden = !hasFolder
-    emptyStateView.isHidden = hasFolder
-}
-```
+### 監視（withObservationTracking）
 
-### items の変化の監視
+`updateProperties()` の外で2系統の監視を行い、変化のたびに再登録して継続的に監視する。
 
-`viewModel.items` の変化は `updateProperties()` の外で `withObservationTracking` を用いて監視し、変化のたびに DiffableDataSource の `apply()` を呼んで差分更新する。変化後は `withObservationTracking` を再登録して継続的に監視する。
-
-```swift
-private func startObservingItems() {
-    withObservationTracking {
-        _ = viewModel.items
-    } onChange: { [weak self] in
-        Task { @MainActor [weak self] in
-            self?.applySnapshot()
-            self?.startObservingItems()
-        }
-    }
-}
-```
+- `startObservingItems()` — `sections`/`hasFolder`/`isLoading`/`folderName` を監視し、スナップショット適用・空状態更新・フォルダボタンアニメーション（`consumeHasFolderChanged()` が真の場合のみ）・タイトル更新を行う。
+- `startObservingViewMode()` — `viewMode`/`gridColumnCount` を監視し、レイアウトの差し替え（`setCollectionViewLayout`）とアイテムの再読込（`reloadItems`、非アニメーション）を行う。
 
 ---
 
@@ -75,9 +113,9 @@ private func startObservingItems() {
 
 ### フォルダ選択後
 
-- `EmptyStateView` を非表示にする。
-- `UICollectionView` を表示し、選択したフォルダ内の JPEG 画像をリスト表示する。
-- ナビゲーションタイトルは「My Preview」（固定）。
+- `EmptyStateView` を非表示にする。ローディング中／写真0件の場合も `EmptyStateView` の別状態（`.loading`/`.noPhotos`）を表示する。
+- `UICollectionView` を表示し、選択したフォルダ内の JPEG 画像をリスト／グリッド表示する。
+- ナビゲーションタイトルは選択したフォルダ名（`folderName`）。
 
 ---
 
@@ -90,33 +128,44 @@ UINavigationController
 
 - `FileBrowserViewController` が `UINavigationController` のルートとなる。
 - サブフォルダへの遷移は行わないため、`UINavigationController` のプッシュ遷移は使用しない。
+- `init(viewModel:thumbnailService:photoViewerFactory:)` で ViewModel・サムネイルサービス・フォトビューア生成クロージャを注入する。`photoViewerFactory` により `PhotoViewer` モジュールへの直接依存を避ける。
 
 ---
 
 ## ナビゲーションバー
 
-- タイトル「My Preview」のみ表示する。
-- `UIBarButtonItem` は配置しない。
+- タイトルはフォルダ未選択時「My Preview」、選択後は選択したフォルダ名。
+- 右側の `UIBarButtonItem`：
+  - 設定ボタン（歯車アイコン）：常に表示。メニューは `FileBrowserMenuBuilder.makeSettingsMenu()`。
+  - フィルタボタン（`line.3.horizontal.decrease.circle`、フィルタ有効時は `.fill`）：`viewModel.isRatingEnabled` の場合のみ表示。メニューは `FileBrowserMenuBuilder.makeFilterMenu()`。
+- 各アクション実行後、対応するメニューを再構築して `.menu` に再代入し、チェック状態を最新に保つ。
 
 ---
 
-## フローティングボタン（フォルダを開く）
+## フローティングボタン
 
-- Safe Area 内の **左下隅** に固定配置するフローティングボタンを設置する。
-- アイコン：`folder` システムアイコン
-- **iOS 26 の Liquid Glass エフェクト**（`UIButton.Configuration.prominentGlass()`）を適用する。
-- サイズ：56 × 56pt（円形）
+### フォルダを開く（左下）
+
+- Safe Area 内の **左下隅** に固定配置する。
+- アイコン：`folder` システムアイコン。**iOS 26 の Liquid Glass エフェクト**（`UIButton.Configuration.prominentGlass()`）を適用する。
+- フォルダ未選択時は「フォルダを選択」ラベル付きの横長ボタン、選択後は 56×56pt の円形アイコンボタンにスプリングアニメーション（ダンピング0.7）で変形する。
 - 制約（Auto Layout）：
-  - `leading` = `view.safeAreaLayoutGuide.leadingAnchor` + 16pt
+  - `leading` = `view.safeAreaLayoutGuide.leadingAnchor` + 16pt（固定）
   - `bottom` = `view.safeAreaLayoutGuide.bottomAnchor` + `folderButtonSize`（56pt）
+  - `trailing`/`width` はフォルダ有無の状態でアニメーション対象になる制約
 - タップすると `UIDocumentPickerViewController` を表示する。
 - 空状態・フォルダ選択後を問わず、常に表示する。
+
+### 一番下へジャンプ（右下）
+
+- `UIButton.Configuration.glass()`、`chevron.down` アイコン、56×56pt の円形（`cornerStyle = .large`）。
+- フォルダボタンと同じ高さで右下に配置。フォルダ未選択時は `alpha = 0`、選択後はフォルダボタンのアニメーションと同時にフェードインする。
+- タップするとリストの最終セクション末尾へスクロールする。
 
 ### フローティングボタンとリストのかぶり対策
 
 - `FileBrowserViewController` の `additionalSafeAreaInsets.bottom` を `folderButtonSize + 32`（88pt）に設定する。
 - `UICollectionView` の `contentInsetAdjustmentBehavior = .automatic` により、拡張された Safe Area が自動的にスクロール領域に反映される。
-- これにより `contentInset.bottom` を手動管理することなく、リスト末尾のアイテムがフローティングボタンの上方に収まる。
 
 ---
 
@@ -137,35 +186,70 @@ UINavigationController
 
 リストには **JPEG 画像のみ** を表示する。フォルダ・その他のファイルは一切表示しない。
 
-### レイアウト設定
+### レイアウト（UICollectionViewCompositionalLayout）
 
-- `UICollectionLayoutListConfiguration` を使用してリストレイアウトを構築する。
-  - `appearance: .plain`（プレーンスタイル）
-  - セパレーターラインを標準表示する（`showsSeparators = true`）
-- `UICollectionView` は `view` の全面に配置する（edge-to-edge）。
-  - `contentInsetAdjustmentBehavior = .automatic`
+`Modules/Sources/FileBrowser/Views/UICollectionViewLayout+FileBrowser.swift` で2種類のレイアウトを構築し、`viewModel.viewMode` に応じて切り替える。両方とも `pinToVisibleBounds = true` のセクションヘッダーを持つ。
+
+- **リストレイアウト**（`fileBrowserList()`）：`NSCollectionLayoutSection.list` + `UICollectionLayoutListConfiguration(appearance: .plain)`、セパレーター表示あり。
+- **グリッドレイアウト**（`fileBrowserGrid(columnCount:)`）：正方形セル。`itemSize` は幅・高さともに `fractionalWidth(1 / columnCount)`。列数は `viewModel.gridColumnCount`（2〜5、設定メニューのステッパーで変更可能）。セル間隔 1pt、セクション下余白 8pt。
 
 ### データソース
 
-- `UICollectionViewDiffableDataSource<Section, FileItem.ID>` を使用する。
-  - セクション型 `Section` は `nonisolated enum`、値は単一（`.main`）。
-  - 識別子は `FileItem.ID`（`UUID`）を使用する。
-- `viewModel.items` の変化を検知したら `NSDiffableDataSourceSnapshot` を生成し `apply(animatingDifferences: true)` で差分更新する。
+- `UICollectionViewDiffableDataSource<FileBrowserSection.ID, FileItem.ID>` を使用する。
+- セクション識別子は `FileBrowserSection.ID`、アイテム識別子は `FileItem.ID`（`UUID`）。
+- `viewModel.sections` の変化を検知したらスナップショットを再構築し `apply(animatingDifferences: true)` で差分更新する。評価・フィルタ・キャッシュ消去の直後は `reconfigureItems` で全セルを再構成する。
 
-### セル（UICollectionViewListCell）
+### セル
 
-- `UICollectionViewListCell` を `CellRegistration` で使用する。
-- `defaultContentConfiguration()` で取得した `contentConfiguration` に以下を設定する：
-  - `image`：`photo` システムアイコン（`tintColor = .systemBlue`）
-  - `text`：ファイル名（1 行、`lineBreakMode = .byTruncatingMiddle`）
+2種類のセル登録（`UICollectionView.CellRegistration`）を `viewModel.viewMode` に応じて使い分ける。
+
+**リストモード：** `UICollectionViewListCell` + `UIListContentConfiguration`。
+- `image`：`photo` システムアイコン
+- 主テキスト：ファイル名
+- 副テキスト：星評価・カラーラベル（色付き `●`）・「最後に表示」ラベルを `" · "` で連結（評価機能有効時のみ星・ラベルを表示）
+
+**グリッドモード：** `ThumbnailCell`（`Modules/Sources/FileBrowser/Views/ThumbnailCell.swift`）。
+- サムネイル画像（`.scaleAspectFit`、黒背景）。`thumbnailService.cachedThumbnail(for:)` を同期取得できればそれを即表示（フリッカー防止）、無ければ `loadThumbnail(url:maxPixelSize:)` を非同期取得。
+- 左上：星評価バッジ（黒 0.65 透過の角丸ラベル、`★` の数を表示、評価0は非表示）
+- 右上：カラーラベルの色ドット（12×12pt円、評価機能有効時のみ）
+- 下部：「最後に表示」バッジ（半透明の黒帯、白文字）
+- 評価・カラーラベルの表示は `viewModel.isRatingEnabled` が true の場合のみ
 
 ### タップ処理
 
-- `UICollectionViewDelegate` の `collectionView(_:didSelectItemAt:)` で処理する。
-- `deselectItem(at:animated:)` を即座に呼んでハイライト状態を解除する。
-- `dataSource.itemIdentifier(for:indexPath)` で `FileItem.ID` を取得し、`viewModel.items` から対応する URL を特定する。
-- `viewModel.items` から全 URL リストを取得して `PhotoViewerInput` を生成する。
-- `PhotoViewerViewController` を生成し `modalPresentationStyle = .fullScreen` でモーダル表示する。
+- `UICollectionViewDelegate.collectionView(_:didSelectItemAt:)` で処理する。
+- `dataSource.itemIdentifier(for:indexPath)` で `FileItem.ID` を取得し、対応する URL を特定する。
+- `viewModel.items` から全 URL リストを取得し、評価機能有効フラグ・現在のフィルタ設定とあわせて `PhotoViewerInput` を生成する。
+- `photoViewerFactory(input)` で生成した ViewController を `preferredTransition = .zoom`（`CurrentURLProvider` からタップ元セルを特定）でモーダル表示する。
+- `DismissNotifiable` 経由で `onDismiss` を設定し、閉じられた際に `viewModel.saveLastViewed(url:)` → `viewModel.refreshRatingsAndLabels()` → 全セル再構成を行う。
+
+---
+
+## 設定メニュー（FileBrowserMenuBuilder.makeSettingsMenu）
+
+歯車アイコンのメニュー。すべて `UIDeferredMenuElement.uncached` でラップし、開くたびに最新状態で再構築する。
+
+| 項目               | 内容                                                                                     |
+|--------------------|------------------------------------------------------------------------------------------|
+| 表示形式           | 「リスト」「グリッド」の単一選択インラインメニュー                                        |
+| 列数（グリッド時のみ） | 減算／現在値表示（無効ボタン）／加算の3ボタン、範囲 2〜5 でクランプ                     |
+| 保存フォーマット   | 「JPEG」「JPEG + RAW」の単一選択インラインメニュー                                        |
+| 並び順             | 「古い順」「新しい順」の単一選択インラインメニュー                                        |
+| 評価機能のON/OFF   | 星評価・フィルタ UI 全体の表示/非表示を切り替える単一アクション                           |
+| キャッシュを消去   | 破壊的アクション。確認ダイアログ後 `viewModel.resetToDefaults()` を実行                   |
+
+## フィルタメニュー（FileBrowserMenuBuilder.makeFilterMenu）
+
+`line.3.horizontal.decrease.circle` アイコンのメニュー（評価機能が有効な場合のみ表示）。
+
+| 項目           | 内容                                                                                     |
+|----------------|--------------------------------------------------------------------------------------------|
+| フィルタなし   | 星評価・カラーラベルフィルタを両方クリアする単一アクション                                |
+| 星評価         | `0〜5` の単一選択インラインサブメニュー                                                    |
+| 比較条件       | 「以上」「以下」「同値」の単一選択インラインサブメニュー                                  |
+| カラーラベル   | 緑・黄・青・ピンク・赤・白の複数選択可能なインラインサブメニュー（色付き丸アイコン）      |
+
+星評価・比較条件の変更は `RatingFilter(stars:comparison:)` を都度組み立てて `viewModel.ratingFilter` に反映する。
 
 ---
 
@@ -173,34 +257,17 @@ UINavigationController
 
 ### 外観
 
-- `UIGlassEffect` を使用したガラス形態素のピルバッジ（高さ 32pt、角丸 16pt）を左端に配置する。
-- ガラスバッジ内にはローカライズされた日付テキストと `chevron.up.chevron.down` アイコンを横並びで表示する。
-- ヘッダーはスクロール中も画面上部に固定される（`pinToVisibleBounds = true`）。
+- `UIGlassEffect` を使用したガラス形態素のピルバッジ（高さ 32pt、角丸16pt、セクション左端から16ptの位置に配置）を配置する。
+- ガラスバッジ内にはローカライズされた日付＋件数テキストと `chevron.up.chevron.down` アイコンを横並びで表示する。
+- ヘッダーはスクロール中も画面上部に固定される（`pinToVisibleBounds = true`）。list/grid 両レイアウトで共通。
 
-### コンテキストメニュー（日付ジャンプ）
+### メニュー（ジャンプ）
 
-- ヘッダーをタップするとコンテキストメニューが開く。
-- メニューには現在のデータソースにある全セクションの日付が一覧表示される。
-- 日付を選択すると対象セクションの先頭アイテムへスクロールする。
-
-#### 実装方針
-
-- `SectionHeaderView` 内のガラスビューの前面に透明な `UIButton(type: .custom)` を重ねる。
-- `showsMenuAsPrimaryAction = true` を設定し、タップ時にコンテキストメニューを表示する。
-- ヘッダー登録クロージャ（`configureDataSource` 内）でスナップショットの全セクションから `UIAction` を生成し `UIMenu` を組み立てて渡す。
-- セクションへのジャンプは `scrollToItem(at:IndexPath(item:0, section:), at:.top, animated:true)` で行う。
-
-```swift
-// ヘッダー登録クロージャでのメニュー生成
-let menuActions = snapshot.sectionIdentifiers.compactMap { sec -> UIAction? in
-    guard case .date(let key) = sec else { return nil }
-    return UIAction(title: sectionTitle(for: key)) { [weak self] _ in
-        self?.jumpToSection(sec)
-    }
-}
-let menu = UIMenu(title: "", children: menuActions)
-headerView.configure(title: sectionTitle(for: dateKey), menu: menu)
-```
+- ピル全体に透明な `UIButton(type: .custom)` を重ね、`showsMenuAsPrimaryAction = true` でタップ即座にメニューを表示する（長押しのコンテキストメニューではない）。
+- メニュー内容は `viewModel.makeMenuData()` から都度生成する `UIDeferredMenuElement.uncached`：
+  - 「最後に見た写真へ」ジャンプ項目（該当写真が現在のフィルタで表示されている場合のみ）
+  - 現在表示中の全セクションへのジャンプ項目（タイトルは日付＋件数）
+- ジャンプは `scrollToItem(at:IndexPath(item:0, section:), at:.top, animated:true)`、または直近表示位置は `.centeredVertically` で行う。
 
 ---
 
@@ -209,28 +276,17 @@ headerView.configure(title: sectionTitle(for: dateKey), menu: menu)
 ```swift
 func loadItems() async {
     guard let url = rootURL else { return }
-    let loaded = await Task.detached(priority: .userInitiated) {
-        let contents = try? FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: nil,
-            options: .skipsHiddenFiles
-        )
-        return (contents ?? [])
-            .filter { ["jpg", "jpeg"].contains($0.pathExtension.lowercased()) }
-            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-            .map { FileItem(url: $0) }
-    }.value
-    await MainActor.run {
-        self.items = loaded
-    }
+    isLoading = true
+    loadedItems = await fileSystemService.scanForJPEGs(in: url)
+    // 評価・カラーラベルのキャッシュを再読込
+    updateSections()
+    restoreLastViewedItemIDIfNeeded()
+    isLoading = false
 }
 ```
 
-- `Task.detached` でバックグラウンドスレッドでファイル列挙・フィルター・ソートを実行する。
-- 列挙オプションは `.skipsHiddenFiles`（隠しファイルを除外）。
-- 拡張子フィルターは `.jpg`、`.jpeg`（`pathExtension.lowercased()` で大文字小文字を問わない）。
-- ソートは `localizedStandardCompare`（ロケール対応昇順）。
-- 結果は `MainActor.run` でメインスレッドに戻してから `items` を更新する。
+- `FileSystemServiceProtocol.scanForJPEGs(in:)` がバックグラウンドで列挙・フィルタ・撮影日付与・ソートまで行う（隠しファイル除外、拡張子 `.jpg`/`.jpeg` のみ、`captureDate` 昇順、日付なしは `.distantFuture` 扱い）。
+- `updateSections()` で評価・カラーラベルのフィルタ適用と日付グルーピング・並び替えを行う。
 
 ---
 
@@ -241,6 +297,7 @@ func selectFolder(_ url: URL) async {
     rootURL?.stopAccessingSecurityScopedResource()
     guard url.startAccessingSecurityScopedResource() else { return }
     rootURL = url
+    folderName = url.lastPathComponent
     hasFolder = true
     await loadItems()
 }
@@ -249,3 +306,20 @@ func selectFolder(_ url: URL) async {
 - 既存の `rootURL` がある場合は先にセキュリティスコープを解放する。
 - 新しい URL のセキュリティスコープ取得に失敗した場合は処理を中断する。
 - `hasFolder = true` に更新後、`loadItems()` を呼んでファイルリストを取得する。
+
+---
+
+## 直近に見た写真の記憶（ViewModel の `saveLastViewed(url:)`）
+
+- `rootURL` のパスをキーに、`UserDefaultsSettings.lastViewedEntries` へ `(directoryPath, fileName)` を追加・更新する。
+- `updatingLastViewed(directoryPath:fileName:limit:)`（`limit = UserDefaultsSettings.maxLastViewedDirectoryCount` = 10）で、同一フォルダの既存エントリを置き換えつつ、フォルダ数の上限を超えたら最も古いフォルダから削除する（フォルダ単位の LRU）。
+- 併せて `lastViewedItemID` を該当 `FileItem` に更新し、セルのバッジ・ジャンプメニューに反映する。
+
+---
+
+## キャッシュを消去（ViewModel の `resetToDefaults()`）
+
+- `settings.removeAll()` で `UserDefaults` の設定値をすべて削除し、各プロパティをデフォルト値で再読込する。
+- `savedDateStore.removeAll()` / `ratingStore.removeAll()` / `colorLabelStore.removeAll()` で SwiftData 上の保存日時・評価・カラーラベルをすべて削除する。
+- `lastViewedItemID` および評価・カラーラベルのキャッシュもクリアし、`updateSections()` を呼ぶ。
+- UI 側では確認ダイアログ（`UIAlertController`、破壊的アクション）を経てから実行する。
