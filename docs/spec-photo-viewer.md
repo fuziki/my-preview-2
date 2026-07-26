@@ -424,3 +424,10 @@ override var prefersStatusBarHidden: Bool { !viewModel.isOverlayVisible }
 - `preferredStatusBarStyle` は常に `.lightContent`（白色）。
 - `prefersStatusBarHidden` はオーバーレイが非表示の場合に `true` を返す。
 - オーバーレイ切り替え時に `setNeedsStatusBarAppearanceUpdate()` を呼ぶ。
+
+---
+
+## 画面ロック防止
+
+- `viewWillAppear(_:)` で `UIApplication.shared.isIdleTimerDisabled = true` を設定し、写真閲覧中に画面が自動ロックされないようにする。
+- `viewWillDisappear(_:)` で `UIApplication.shared.isIdleTimerDisabled = false` に戻す。

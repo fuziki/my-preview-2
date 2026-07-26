@@ -162,6 +162,12 @@ public final class PhotoViewerViewController: UIViewController {
         updateCollectionViewFrame()
     }
 
+    override public func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 写真閲覧中は画面ロックを防止する
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
     override public func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         // ズームトランジションのスワイプ閉じ制御のため、プレゼンテーションコントローラのデリゲートを設定する
@@ -170,6 +176,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        UIApplication.shared.isIdleTimerDisabled = false
         if isBeingDismissed {
             // 閉じる時点での表示URLをFileBrowserへ通知する
             onDismiss?(viewModel.currentURL)
