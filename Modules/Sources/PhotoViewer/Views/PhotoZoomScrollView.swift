@@ -16,6 +16,9 @@ public final class PhotoZoomScrollView: UIScrollView {
     private var currentImage: UIImage?
     private var lastKnownBoundsSize: CGSize = .zero
 
+    /// ズーム倍率が変化するたびに呼ばれる。zoomScaleを直接代入する箇所ではUIKitがdelegateを自動で呼ばないため、明示的に呼び出す。
+    public var onZoomChange: ((CGFloat) -> Void)?
+
     // MARK: - 初期化
 
     override public init(frame: CGRect) {
@@ -88,6 +91,7 @@ public final class PhotoZoomScrollView: UIScrollView {
         zoomScale = scale
 
         centerImageView()
+        onZoomChange?(zoomScale)
     }
 
     private func updateZoomForSameOrientation(for image: UIImage) {
@@ -112,6 +116,7 @@ public final class PhotoZoomScrollView: UIScrollView {
 
         centerImageView()
         clampContentOffset()
+        onZoomChange?(zoomScale)
     }
 
     private func aspectFitScale(for image: UIImage) -> CGFloat {
@@ -153,5 +158,6 @@ extension PhotoZoomScrollView: UIScrollViewDelegate {
 
     public func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImageView()
+        onZoomChange?(zoomScale)
     }
 }

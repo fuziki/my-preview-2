@@ -89,6 +89,8 @@ public final class PhotoViewerViewController: UIViewController {
         let iv = UIImageView()
         iv.translatesAutoresizingMaskIntoConstraints = false
         iv.contentMode = .scaleAspectFit
+        // ズーム中のみ表示するため、初期状態は非表示にする
+        iv.isHidden = true
         return iv
     }()
 
@@ -491,6 +493,11 @@ public final class PhotoViewerViewController: UIViewController {
         setNeedsStatusBarAppearanceUpdate()
     }
 
+    /// サムネイルは画像をズームしている場合のみ表示する
+    private func updateThumbnailVisibility() {
+        thumbnailImageView.isHidden = !(currentItemCell?.isZoomed ?? false)
+    }
+
     // MARK: - 保存ボタン
 
     private func updateSaveButton(status: SaveStatus) {
@@ -594,6 +601,7 @@ public final class PhotoViewerViewController: UIViewController {
             if let zoom = currentItemCell?.zoomScrollView {
                 let newScale = max(zoom.minimumZoomScale, min(zoom.maximumZoomScale, zoom.zoomScale * multiplier))
                 zoom.setZoomScale(newScale, animated: false)
+                updateThumbnailVisibility()
             }
             longPressZoomCircleView?.center = location
         case .ended, .cancelled, .failed:
@@ -663,6 +671,11 @@ extension PhotoViewerViewController: PhotoPageItemCellDelegate {
             )
             zoom.zoom(to: rect, animated: true)
         }
+    }
+
+    func pageItemCellDidChangeZoom(_ cell: PhotoPageItemCell) {
+        guard cell === currentItemCell else { return }
+        updateThumbnailVisibility()
     }
 }
 

@@ -214,6 +214,7 @@ zoomScale = targetZoom
 
 - `contentMode = .scaleAspectFit`、最大辺 80pt でアスペクト比を維持。
 - 制約：`top` = `photoInfoPillView.bottom` + 8pt、`trailing` = `photoInfoPillView.trailing`。
+- 現在表示中の写真がズームされている場合のみ表示する（`isHidden` で制御。ズーム倍率は `PhotoPageItemCell.isZoomed`）。ズーム状態の変化は `PhotoZoomScrollView.onZoomChange` → `PhotoPageItemCellDelegate.pageItemCellDidChangeZoom(_:)` 経由で通知される。オーバーレイの表示・非表示に伴う `alpha` アニメーションとは独立して制御する。
 
 ### 前へ／次へボタン（左下・右下）
 

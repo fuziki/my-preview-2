@@ -4,6 +4,7 @@ import Core
 protocol PhotoPageItemCellDelegate: AnyObject {
     func pageItemCellDidTap(_ cell: PhotoPageItemCell)
     func pageItemCellDidDoubleTap(_ cell: PhotoPageItemCell, at locationInImage: CGPoint)
+    func pageItemCellDidChangeZoom(_ cell: PhotoPageItemCell)
 }
 
 /// UICollectionViewのスワイプナビゲーション内で使用される、1枚の写真を表示するセル。
@@ -49,6 +50,10 @@ final class PhotoPageItemCell: UICollectionViewCell {
             zoomScrollView.topAnchor.constraint(equalTo: contentView.topAnchor),
             zoomScrollView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
         ])
+        zoomScrollView.onZoomChange = { [weak self] _ in
+            guard let self else { return }
+            delegate?.pageItemCellDidChangeZoom(self)
+        }
     }
 
     private func setupGestures() {
