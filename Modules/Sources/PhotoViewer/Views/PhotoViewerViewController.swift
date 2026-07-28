@@ -94,6 +94,13 @@ public final class PhotoViewerViewController: UIViewController {
 
     private var thumbnailSizeConstraints: [NSLayoutConstraint] = []
 
+    /// レーティングバー・保存ボタン付近の縦持ち/横持ち向けの制約セット（isRatingEnabled時のみ使用）
+    private var portraitBottomBarConstraints: [NSLayoutConstraint] = []
+    private var landscapeBottomBarConstraints: [NSLayoutConstraint] = []
+    private var isCurrentlyLandscape: Bool?
+    /// 横持ち時にレーティングバー＋保存ボタンの組を左右中央揃えするための不可視ガイド
+    private let bottomBarGroupGuide = UILayoutGuide()
+
     private let saveButtonView: GlassButtonView = {
         var config = UIButton.Configuration.borderless()
         config.title = L10n.PhotoViewer.saveIdle
@@ -160,6 +167,7 @@ public final class PhotoViewerViewController: UIViewController {
     override public func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         updateCollectionViewFrame()
+        updateBottomBarLayoutIfNeeded()
     }
 
     override public func viewWillAppear(_ animated: Bool) {
@@ -284,6 +292,21 @@ public final class PhotoViewerViewController: UIViewController {
         collectionView.setContentOffset(offset, animated: animated)
     }
 
+    /// 横持ち/縦持ちの切り替わりを検知し、レーティングバー・保存ボタン付近の制約セットを差し替える。
+    private func updateBottomBarLayoutIfNeeded() {
+        guard viewModel.isRatingEnabled else { return }
+        let isLandscape = view.bounds.width > view.bounds.height
+        guard isLandscape != isCurrentlyLandscape else { return }
+        isCurrentlyLandscape = isLandscape
+        if isLandscape {
+            NSLayoutConstraint.deactivate(portraitBottomBarConstraints)
+            NSLayoutConstraint.activate(landscapeBottomBarConstraints)
+        } else {
+            NSLayoutConstraint.deactivate(landscapeBottomBarConstraints)
+            NSLayoutConstraint.activate(portraitBottomBarConstraints)
+        }
+    }
+
     private func setupOverlay() {
         // 各フローティング要素をcollectionViewの上に直接追加する。
 
@@ -291,21 +314,21 @@ public final class PhotoViewerViewController: UIViewController {
         view.addSubview(closeButtonView)
         NSLayoutConstraint.activate([
             closeButtonView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            closeButtonView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            closeButtonView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
         ])
 
         // 前へボタン: 左下のフローティング円
         view.addSubview(prevButtonView)
         NSLayoutConstraint.activate([
             prevButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            prevButtonView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            prevButtonView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
         ])
 
         // 次へボタン: 右下のフローティング円
         view.addSubview(nextButtonView)
         NSLayoutConstraint.activate([
             nextButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            nextButtonView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            nextButtonView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
         ])
 
         // ファイル名 + EXIF: 右上のフローティングピル
@@ -313,7 +336,7 @@ public final class PhotoViewerViewController: UIViewController {
         NSLayoutConstraint.activate([
             photoInfoPillView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
             photoInfoPillView.leadingAnchor.constraint(equalTo: closeButtonView.trailingAnchor, constant: 8),
-            photoInfoPillView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            photoInfoPillView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
         ])
 
         // サムネイル: ファイル名ラベルの下、右揃え
@@ -324,10 +347,11 @@ public final class PhotoViewerViewController: UIViewController {
         ])
 
         // 保存ボタン: 下部中央のカプセル形
+        // centerXは縦持ち/横持ちで意味が変わる（横持ちはレーティングバーとの組を中央揃えするため）ため、
+        // レーティング有効時はここでは固定せずportrait/landscapeの制約セット側で設定する。
         view.addSubview(saveButtonView)
         NSLayoutConstraint.activate([
             saveButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
-            saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             saveButtonView.leadingAnchor.constraint(greaterThanOrEqualTo: prevButtonView.trailingAnchor, constant: 8),
             saveButtonView.trailingAnchor.constraint(lessThanOrEqualTo: nextButtonView.leadingAnchor, constant: -8),
             saveButtonView.heightAnchor.constraint(equalToConstant: 44),
@@ -338,21 +362,46 @@ public final class PhotoViewerViewController: UIViewController {
         ])
 
         // レーティング星 + カラーラベル: 保存ボタンの上のカプセル（レーティング有効時のみ）
+        // 縦持ち/横持ちで配置が異なるため、両方の制約セットを用意しviewWillLayoutSubviewsで切り替える
         if viewModel.isRatingEnabled {
             view.addSubview(ratingLabelBarView)
-            NSLayoutConstraint.activate([
+            view.addLayoutGuide(bottomBarGroupGuide)
+            portraitBottomBarConstraints = [
+                saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
                 ratingLabelBarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            ]
+            landscapeBottomBarConstraints = [
+                ratingLabelBarView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
+                ratingLabelBarView.trailingAnchor.constraint(equalTo: saveButtonView.leadingAnchor, constant: -8),
+                // レーティングバー＋保存ボタンの組をひとつのグループとみなし、左右中央に配置する
+                bottomBarGroupGuide.leadingAnchor.constraint(equalTo: ratingLabelBarView.leadingAnchor),
+                bottomBarGroupGuide.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
+                bottomBarGroupGuide.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            ]
+        } else {
+            NSLayoutConstraint.activate([
+                saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ])
         }
 
         // ローディングインジケーター: 保存ボタン（レーティング有効時は星 + カラーラベル）の上
         view.addSubview(loadingIndicator)
-        let loadingIndicatorAnchor = viewModel.isRatingEnabled ? ratingLabelBarView.topAnchor : saveButtonView.topAnchor
         NSLayoutConstraint.activate([
             loadingIndicator.centerXAnchor.constraint(equalTo: saveButtonView.centerXAnchor),
-            loadingIndicator.bottomAnchor.constraint(equalTo: loadingIndicatorAnchor, constant: -8),
         ])
+        if viewModel.isRatingEnabled {
+            portraitBottomBarConstraints.append(
+                loadingIndicator.bottomAnchor.constraint(equalTo: ratingLabelBarView.topAnchor, constant: -8)
+            )
+            landscapeBottomBarConstraints.append(
+                loadingIndicator.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8)
+            )
+        } else {
+            NSLayoutConstraint.activate([
+                loadingIndicator.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
+            ])
+        }
 
         // 最終保存日時ラベル: 保存ボタンの下
         view.addSubview(lastSavedDateLabel)

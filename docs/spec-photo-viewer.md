@@ -199,7 +199,7 @@ zoomScale = targetZoom
 ### 閉じるボタン（左上）
 
 - `GlassButtonView.circle(systemImageName: "xmark")`
-- 制約：`top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt、`leading` = `view.leadingAnchor` + 16pt
+- 制約：`top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt、`leading` = `view.safeAreaLayoutGuide.leadingAnchor` + 16pt
 
 ### ファイル名 + Exif パネル（右上・PhotoInfoPillView）
 
@@ -208,7 +208,7 @@ zoomScale = targetZoom
 - 内部に縦 `UIStackView` で `fileNameLabel`（callout・白文字・1行）・`exifLabel`（caption1・白75%透過・Exif取得0件なら非表示）を配置する。
 - Exif ラベルは `iso · focalLength · exposureValue · fNumber · shutterSpeed` を連結し、`flashFired` が true の場合は末尾に `"  ⚡️"` を付与する。
 - パネル全体に透明な `copyButton` を重ねており、タップでファイル名＋Exifの整形テキストをクリップボードへコピーし、中程度の触覚フィードバック（`UIImpactFeedbackGenerator`）と `ToastKit` によるトースト通知（クリップボードアイコン＋コピー完了メッセージ）を発行する。
-- 制約：`top` = `safeArea` + 12pt、`trailing` = `view` - 16pt、`leading` ≥ `closeButtonView.trailing` + 8pt、`height` ≥ 44pt。
+- 制約：`top` = `safeArea` + 12pt、`trailing` = `view.safeAreaLayoutGuide.trailingAnchor` - 16pt、`leading` ≥ `closeButtonView.trailing` + 8pt、`height` ≥ 44pt。
 
 ### サムネイル（パネルの下・右寄せ）
 
@@ -218,7 +218,7 @@ zoomScale = targetZoom
 ### 前へ／次へボタン（左下・右下）
 
 - `GlassButtonView.circle(systemImageName: "chevron.left"/"chevron.right")`
-- 制約：`bottom` = `safeArea` - 20pt、`leading`/`trailing` = `view` ± 16pt
+- 制約：`bottom` = `safeArea` - 20pt、`leading`/`trailing` = `view.safeAreaLayoutGuide` ± 16pt
 - ビジュアルボタンの前面に透明な拡大ヒットエリア（`prevHitAreaButton`/`nextHitAreaButton`、上下左右に数十pt拡張）を重ね、通常タップと長押し連続送りの両方を検出する。
 
 ### 保存ボタン（下部中央）
@@ -236,12 +236,16 @@ zoomScale = targetZoom
 - 縦の区切り線
 - カラーラベルボタン6個（`circle.fill`/`circle.inset.filled`、24×32pt、`PhotoColorLabel` の色でtint）
 - タップは UIMenu ではなく直接の `UIButton.touchUpInside`。`onStarTapped`/`onColorTapped` コールバック経由で `viewModel.setRating`/`setColorLabel` を呼ぶ（トグルオフのロジックは ViewModel 側が持つ）。
-- 制約：`bottom` = `saveButtonView.top` - 8pt、`centerX` = `view.centerXAnchor`
+- 制約（縦持ち）：`bottom` = `saveButtonView.top` - 8pt、`centerX` = `view.centerXAnchor`。`saveButtonView.centerX` も `view.centerXAnchor` に揃える。
+- 制約（横持ち）：`centerY` = `saveButtonView.centerYAnchor`、`trailing` = `saveButtonView.leading` - 8pt（保存ボタンと左右に並ぶ）。`saveButtonView` 単体は中央揃えせず、`bottomBarGroupGuide`（不可視の `UILayoutGuide`。`leading` = `ratingLabelBarView.leading`、`trailing` = `saveButtonView.trailing`）の `centerX` を `view.centerXAnchor` に揃えることで、レーティングバー＋保存ボタンの組を左右中央に配置する。
+- 縦持ち/横持ちの切り替えは `PhotoViewerViewController.viewWillLayoutSubviews()` 内で `view.bounds.width > view.bounds.height` を判定し、該当する制約セットを activate/deactivate して行う。
 
 ### ローディングインジケーター
 
 - `UIActivityIndicatorView(style: .medium)`、白、`hidesWhenStopped = true`
-- 制約：`centerX` = `saveButtonView.centerXAnchor`、`bottom` = （`ratingLabelBarView` があればその上、無ければ `saveButtonView` の上）- 8pt
+- 制約：`centerX` = `saveButtonView.centerXAnchor`
+- `bottom`（縦持ち）：`ratingLabelBarView` があればその上 - 8pt、無ければ `saveButtonView` の上 - 8pt
+- `bottom`（横持ち）：`isRatingEnabled` の有無に関わらず常に `saveButtonView` の上 - 8pt（横持ちではレーティングバーが保存ボタンの上ではなく横に並ぶため）
 
 ### 最終保存日時ラベル（保存ボタンの下）
 
