@@ -85,6 +85,9 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let photoInfoPillView = PhotoInfoPillView()
 
+    /// 画面回転設定を循環させるボタン（端末の設定に追従 → 縦画面固定 → 横画面固定）
+    private let orientationLockButtonView = GlassButtonView.circle(systemImageName: "arrow.triangle.2.circlepath")
+
     private let thumbnailImageView: UIImageView = {
         let iv = UIImageView()
         iv.translatesAutoresizingMaskIntoConstraints = false
@@ -182,6 +185,8 @@ public final class PhotoViewerViewController: UIViewController {
         super.viewDidAppear(animated)
         // ズームトランジションのスワイプ閉じ制御のため、プレゼンテーションコントローラのデリゲートを設定する
         presentationController?.delegate = self
+        // 表示直後、ロック中の向きへ能動的に回転させる（マスクを絞るだけでは自動回転しないため）
+        applyOrientationLock()
     }
 
     override public func viewWillDisappear(_ animated: Bool) {
@@ -190,6 +195,23 @@ public final class PhotoViewerViewController: UIViewController {
         if isBeingDismissed {
             // 閉じる時点での表示URLをFileBrowserへ通知する
             onDismiss?(viewModel.currentURL)
+            // 縦/横固定中はコントロールセンターの回転ロックを一時的に上書きしていることがあり、
+            // 何もしないと閉じた後もその向きのまま残ってしまうため、presenter側の許容範囲へ
+            // 能動的に回転要求を出し直す。dismissアニメーション中に発行すると進行中のビュー階層と
+            // 衝突して表示が崩れるため、トランジション完了後に発行する。
+            if viewModel.orientationLock != .followSystem,
+               let presenter = presentingViewController, let scene = view.window?.windowScene {
+                let mask = presenter.supportedInterfaceOrientations
+                let revert = {
+                    presenter.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+                }
+                if let coordinator = transitionCoordinator {
+                    coordinator.animate(alongsideTransition: nil) { _ in revert() }
+                } else {
+                    revert()
+                }
+            }
         }
     }
 
@@ -197,6 +219,25 @@ public final class PhotoViewerViewController: UIViewController {
 
     override public var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     override public var prefersStatusBarHidden: Bool { !viewModel.isOverlayVisible }
+
+    // MARK: - 画面回転
+
+    override public var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        switch viewModel.orientationLock {
+        case .followSystem: super.supportedInterfaceOrientations
+        case .portrait: .portrait
+        case .landscape: .landscape
+        }
+    }
+
+    /// 画面回転設定を切り替えた際、その場で能動的に回転させる。
+    /// `setNeedsUpdateOfSupportedInterfaceOrientations()`は許可範囲の再照会を促すだけで、
+    /// 実際の回転は`requestGeometryUpdate`を呼ばないと発生しない。
+    private func applyOrientationLock() {
+        guard let windowScene = view.window?.windowScene else { return }
+        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: supportedInterfaceOrientations)) { _ in }
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+    }
 
     // MARK: - updateProperties
 
@@ -210,6 +251,7 @@ public final class PhotoViewerViewController: UIViewController {
         nextButtonView.button.tintColor = viewModel.canGoNext ? .white : .systemGray
         nextHitAreaButton.isEnabled = viewModel.canGoNext
         updateSaveButton(status: viewModel.saveStatus)
+        orientationLockButtonView.button.configuration?.image = UIImage(systemName: orientationLockIconName(for: viewModel.orientationLock))
         ratingLabelBarView.setRating(viewModel.currentRating)
         ratingLabelBarView.setColorLabel(viewModel.currentColorLabel)
         if viewModel.shouldDismiss, !isBeingDismissed {
@@ -333,12 +375,20 @@ public final class PhotoViewerViewController: UIViewController {
             nextButtonView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
         ])
 
-        // ファイル名 + EXIF: 右上のフローティングピル
+        // ファイル名 + EXIF: 右上のフローティングピル。コンテンツ幅に応じて自身も収縮するため、
+        // leadingはcloseButtonViewと重ならないための床（下限）のみ
         view.addSubview(photoInfoPillView)
         NSLayoutConstraint.activate([
             photoInfoPillView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            photoInfoPillView.leadingAnchor.constraint(equalTo: closeButtonView.trailingAnchor, constant: 8),
+            photoInfoPillView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
             photoInfoPillView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+        ])
+
+        // 画面回転ボタン: ファイル名 + EXIFピルの左隣、上safeArea揃え
+        view.addSubview(orientationLockButtonView)
+        NSLayoutConstraint.activate([
+            orientationLockButtonView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            orientationLockButtonView.trailingAnchor.constraint(equalTo: photoInfoPillView.leadingAnchor, constant: -8),
         ])
 
         // サムネイル: ファイル名ラベルの下、右揃え
@@ -437,6 +487,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     private func setupActions() {
         closeButtonView.button.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        orientationLockButtonView.button.addTarget(self, action: #selector(orientationLockTapped), for: .touchUpInside)
         // タップ・長押しはガラスボタンの前面にある広いタッチ領域ボタンで検出する。
         prevHitAreaButton.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
         nextHitAreaButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
@@ -485,6 +536,7 @@ public final class PhotoViewerViewController: UIViewController {
             self.prevHitAreaButton.alpha = alpha
             self.nextHitAreaButton.alpha = alpha
             self.photoInfoPillView.alpha = alpha
+            self.orientationLockButtonView.alpha = alpha
             self.thumbnailImageView.alpha = alpha
             self.saveButtonView.alpha = alpha
             self.ratingLabelBarView.alpha = alpha
@@ -517,10 +569,25 @@ public final class PhotoViewerViewController: UIViewController {
         }
     }
 
+    // MARK: - 画面回転ボタン
+
+    private func orientationLockIconName(for lock: PhotoViewerOrientationLock) -> String {
+        switch lock {
+        case .followSystem: "arrow.triangle.2.circlepath"
+        case .portrait: "iphone"
+        case .landscape: "iphone.landscape"
+        }
+    }
+
     // MARK: - アクション
 
     @objc private func closeTapped() {
         dismiss(animated: true)
+    }
+
+    @objc private func orientationLockTapped() {
+        viewModel.cycleOrientationLock()
+        applyOrientationLock()
     }
 
     @objc private func prevTapped() {

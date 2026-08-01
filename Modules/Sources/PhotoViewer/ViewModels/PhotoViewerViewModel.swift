@@ -20,6 +20,8 @@ public final class PhotoViewerViewModel {
     /// フィルタに適合する写真が1枚も無くなった場合にtrueになる（VCはこれを見てdismissする）
     public private(set) var shouldDismiss: Bool = false
     public var isOverlayVisible: Bool = true
+    /// フォトビューア画面のみに適用される画面回転設定
+    public private(set) var orientationLock: PhotoViewerOrientationLock
 
     /// レーティング機能が有効か（星ボタン・カラーラベルの表示可否）
     public let isRatingEnabled: Bool
@@ -40,6 +42,7 @@ public final class PhotoViewerViewModel {
     private let ratingStore: any PhotoRatingStoreProtocol
     private let colorLabelStore: any ColorLabelStoreProtocol
     private let hapticsService: any HapticsServiceProtocol
+    private let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     private let ratingFilter: RatingFilter?
     private let colorLabelFilter: Set<PhotoColorLabel>
 
@@ -58,6 +61,8 @@ public final class PhotoViewerViewModel {
         ratingStore = services.ratingStore
         colorLabelStore = services.colorLabelStore
         hapticsService = services.hapticsService
+        settings = services.settings
+        orientationLock = services.settings.orientationLock
         lastSavedDate = services.savedDateStore.date(for: input.allURLs[currentIndex])
         currentRating = services.ratingStore.rating(for: input.allURLs[currentIndex])
         currentColorLabel = services.colorLabelStore.label(for: input.allURLs[currentIndex])
@@ -189,6 +194,14 @@ public final class PhotoViewerViewModel {
 
     public func toggleOverlay() {
         isOverlayVisible.toggle()
+    }
+
+    // MARK: - 画面回転設定
+
+    /// 画面回転ボタンタップ時の処理。「端末の設定に追従」→「縦画面固定」→「横画面固定」の順に循環する
+    public func cycleOrientationLock() {
+        orientationLock = orientationLock.next
+        settings.orientationLock = orientationLock
     }
 
     // MARK: - プライベート読み込み

@@ -94,6 +94,7 @@ view（黒背景）
   │                 └── UIImageView（写真）
   └── 各フローティング要素（view に直接追加、UICollectionView より前面）
         ├── 閉じるボタン（GlassButtonView、左上）
+        ├── 画面回転ボタン（GlassButtonView、ファイル名 + Exif パネルの左隣・右上）
         ├── ファイル名 + Exif パネル（PhotoInfoPillView、右上）
         ├── サムネイル（UIImageView、パネルの下・右寄せ）
         ├── 前へボタン（GlassButtonView + 拡大ヒットエリア、左下）
@@ -201,6 +202,26 @@ zoomScale = targetZoom
 - `GlassButtonView.circle(systemImageName: "xmark")`
 - 制約：`top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt、`leading` = `view.safeAreaLayoutGuide.leadingAnchor` + 16pt
 
+### 画面回転ボタン（ファイル名 + Exif パネルの左隣）
+
+- `GlassButtonView.circle(systemImageName:)`。タップエリアの拡張は無し（44×44）。
+- 制約：`top` = `safeArea` + 12pt（`photoInfoPillView`・`closeButtonView` と同じ）、`trailing` = `photoInfoPillView.leading` - 8pt。
+- タップするたびに画面回転設定を「端末の設定に追従」→「縦画面固定」→「横画面固定」→（最初に戻る）の順に循環させる（`PhotoViewerViewModel.cycleOrientationLock()`）。設定は `UserDefaultsSettings.orientationLock`（`PhotoViewerOrientationLock`、デフォルト `.followSystem`）として永続化され、次回フォトビューア表示時にも引き継がれる。この設定が影響するのはフォトビューア画面のみで、他の画面は常に端末の設定に従う。
+- アイコンは現在の状態を表す（`updateProperties()` で反映）：
+
+  | 状態             | アイコン（SF Symbols）      |
+  |------------------|------------------------------|
+  | 端末の設定に追従 | `arrow.triangle.2.circlepath` |
+  | 縦画面固定       | `iphone`                     |
+  | 横画面固定       | `iphone.landscape`           |
+
+**回転の反映方法：**
+
+- `PhotoViewerViewController.supportedInterfaceOrientations` を `viewModel.orientationLock` に応じてオーバーライドする（`.followSystem` は `super.supportedInterfaceOrientations` でInfo.plist準拠の端末設定、`.portrait` は `.portrait`、`.landscape` は `.landscape`）。
+- 許可範囲を絞るだけでは実際には回転しないため、`windowScene.requestGeometryUpdate(.iOS(interfaceOrientations:))` を能動的に呼んで回転を発生させる（ボタンタップ時・表示直後の `viewDidAppear` で発火。`setNeedsUpdateOfSupportedInterfaceOrientations()` とセットで呼ぶ）。
+- 縦/横固定中（`.followSystem` 以外）にフォトビューアを閉じる場合、コントロールセンターの回転ロック（縦固定）を一時的に上書きしていた可能性があるため、`presentingViewController` の許容範囲へ `requestGeometryUpdate` を出し直し、遷移先画面が向きを引き継がないようにする。dismissアニメーション中に発行すると進行中のビュー階層と衝突して表示が崩れるため、`transitionCoordinator` のトランジション完了コールバックで発行する。それ以外（`.followSystem`）の場合はUIKit標準の再評価に任せる。
+- `SceneDelegate.windowScene(_:didUpdateEffectiveGeometry:)`（実体は`AppMain.handleWindowSceneGeometryChange(_:)`）で、ジオメトリ変化のたびに`rootViewController.view.setNeedsLayout()`を呼び通常のレイアウトパスに再計算を促す（`window.frame`/`UIScreen`は直接読み書きしない）。詳細は [画面回転制御の実装知見](orientation-control.md) を参照。
+
 ### ファイル名 + Exif パネル（右上・PhotoInfoPillView）
 
 `Modules/Sources/PhotoViewer/Views/PhotoInfoPillView.swift`。従来の素の `UIVisualEffectView` パネルを置き換え、共通の `GlassBackdropView`（`cornerRadius: 16`）を背景に使う。
@@ -208,6 +229,7 @@ zoomScale = targetZoom
 - 内部に縦 `UIStackView` で `fileNameLabel`（callout・白文字・1行）・`exifLabel`（caption1・白75%透過・Exif取得0件なら非表示）を配置する。
 - Exif ラベルは `iso · focalLength · exposureValue · fNumber · shutterSpeed` を連結し、`flashFired` が true の場合は末尾に `"  ⚡️"` を付与する。
 - パネル全体に透明な `copyButton` を重ねており、タップでファイル名＋Exifの整形テキストをクリップボードへコピーし、中程度の触覚フィードバック（`UIImpactFeedbackGenerator`）と `ToastKit` によるトースト通知（クリップボードアイコン＋コピー完了メッセージ）を発行する。
+- パネル自身の `leadingAnchor` はコンテンツ幅（ファイル名・Exifの長さ）に応じて収縮する（内部でガラス背景の `leadingAnchor` と一致させているため）。外側からは `trailing` を固定し、`leading` は他要素との重なりを防ぐための床（下限）のみを与える。
 - 制約：`top` = `safeArea` + 12pt、`trailing` = `view.safeAreaLayoutGuide.trailingAnchor` - 16pt、`leading` ≥ `closeButtonView.trailing` + 8pt、`height` ≥ 44pt。
 
 ### サムネイル（パネルの下・右寄せ）
@@ -284,7 +306,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 ## オーバーレイの表示・非表示
 
 - `viewModel.isOverlayVisible` の変化を `updateProperties()` で検知する。
-- `UIView.animate(withDuration: 0.2)` で閉じるボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
+- `UIView.animate(withDuration: 0.2)` で閉じるボタン・画面回転ボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
 - オーバーレイが非表示の場合はステータスバーも非表示にする（`prefersStatusBarHidden` で制御）。
 - `updateProperties()` 内で `setNeedsStatusBarAppearanceUpdate()` を呼ぶ。
 

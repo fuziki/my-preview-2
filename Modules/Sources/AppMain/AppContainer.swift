@@ -76,7 +76,8 @@ final class AppContainer {
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            hapticsService: HapticsService()
+            hapticsService: HapticsService(),
+            settings: settingsStore
         )
         return PhotoViewerViewController(input: input, services: services)
     }

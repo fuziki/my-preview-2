@@ -22,6 +22,7 @@ struct PhotoViewerViewModelTests {
     let ratingStore: MockPhotoRatingStore
     let colorLabelStore: MockColorLabelStore
     let hapticsService: MockHapticsService
+    let settings: MockUserDefaultsSettingsStore
     let viewModel: PhotoViewerViewModel
 
     init() {
@@ -32,6 +33,7 @@ struct PhotoViewerViewModelTests {
         ratingStore = MockPhotoRatingStore()
         colorLabelStore = MockColorLabelStore()
         hapticsService = MockHapticsService()
+        settings = MockUserDefaultsSettingsStore()
 
         let urls = [
             URL(fileURLWithPath: "/tmp/photo1.jpg"),
@@ -46,7 +48,8 @@ struct PhotoViewerViewModelTests {
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            hapticsService: hapticsService
+            hapticsService: hapticsService,
+            settings: settings
         )
         viewModel = PhotoViewerViewModel(input: input, services: services)
     }
@@ -72,7 +75,8 @@ struct PhotoViewerViewModelTests {
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            hapticsService: hapticsService
+            hapticsService: hapticsService,
+            settings: settings
         )
         return PhotoViewerViewModel(input: input, services: services)
     }
@@ -597,5 +601,32 @@ struct PhotoViewerViewModelTests {
         viewModel.toggleOverlay()
         viewModel.toggleOverlay()
         #expect(viewModel.isOverlayVisible == initial)
+    }
+
+    // MARK: - cycleOrientationLock
+
+    @Test
+    func initialState_orientationLockIsFollowSystem() {
+        #expect(viewModel.orientationLock == .followSystem)
+    }
+
+    @Test
+    func cycleOrientationLock_fromFollowSystem_movesToPortrait() {
+        viewModel.cycleOrientationLock()
+        #expect(viewModel.orientationLock == .portrait)
+    }
+
+    @Test
+    func cycleOrientationLock_threeTimes_returnsToFollowSystem() {
+        viewModel.cycleOrientationLock()
+        viewModel.cycleOrientationLock()
+        viewModel.cycleOrientationLock()
+        #expect(viewModel.orientationLock == .followSystem)
+    }
+
+    @Test
+    func cycleOrientationLock_persistsToSettings() {
+        viewModel.cycleOrientationLock()
+        #expect(settings.orientationLock == .portrait)
     }
 }

@@ -12,6 +12,7 @@ public struct PhotoViewerServices {
     public let ratingStore: any PhotoRatingStoreProtocol
     public let colorLabelStore: any ColorLabelStoreProtocol
     public let hapticsService: any HapticsServiceProtocol
+    public let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
 
     public init(
         imageLoader: any ImageLoaderServiceProtocol,
@@ -20,7 +21,8 @@ public struct PhotoViewerServices {
         savedDateStore: any SavedDateStoreProtocol,
         ratingStore: any PhotoRatingStoreProtocol,
         colorLabelStore: any ColorLabelStoreProtocol,
-        hapticsService: any HapticsServiceProtocol
+        hapticsService: any HapticsServiceProtocol,
+        settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     ) {
         self.imageLoader = imageLoader
         self.exifService = exifService
@@ -29,5 +31,6 @@ public struct PhotoViewerServices {
         self.ratingStore = ratingStore
         self.colorLabelStore = colorLabelStore
         self.hapticsService = hapticsService
+        self.settings = settings
     }
 }

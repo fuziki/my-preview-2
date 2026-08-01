@@ -73,8 +73,8 @@ final class PhotoInfoPillView: UIView {
         NSLayoutConstraint.activate([
             glassBackdrop.topAnchor.constraint(equalTo: topAnchor),
             glassBackdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-            // コンテンツ幅で右寄せ。leadingは>=にしてスタック幅で決まるようにする
-            glassBackdrop.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
+            // 自身のleadingをガラス背景と一致させ、コンテンツ幅に応じて自身も収縮させる
+            glassBackdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
             glassBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
             heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])

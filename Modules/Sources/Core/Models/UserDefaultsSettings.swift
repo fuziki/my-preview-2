@@ -27,6 +27,24 @@ public enum SaveFormat: String, Codable {
     }
 }
 
+// MARK: - PhotoViewerOrientationLock
+
+/// フォトビューア画面のみに適用される画面回転設定。他の画面は常に端末の設定に従う
+public enum PhotoViewerOrientationLock: String, Codable {
+    case followSystem  // 端末の設定に追従（デフォルト）
+    case portrait       // 縦画面固定
+    case landscape       // 横画面固定
+
+    /// ボタンタップ時に遷移する次の状態
+    public var next: PhotoViewerOrientationLock {
+        switch self {
+        case .followSystem: .portrait
+        case .portrait: .landscape
+        case .landscape: .followSystem
+        }
+    }
+}
+
 // MARK: - DirectoryLastViewedEntry
 
 /// ディレクトリパスと、そのディレクトリで最後に閲覧したファイル名の組
@@ -70,6 +88,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
     public var ratingFilter: RatingFilter?
     public var colorLabelFilter: Set<PhotoColorLabel>
     public var lastViewedEntries: [DirectoryLastViewedEntry]
+    public var orientationLock: PhotoViewerOrientationLock
 
     init(
         viewMode: ViewMode,
@@ -79,7 +98,8 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
         isRatingEnabled: Bool,
         ratingFilter: RatingFilter?,
         colorLabelFilter: Set<PhotoColorLabel>,
-        lastViewedEntries: [DirectoryLastViewedEntry]
+        lastViewedEntries: [DirectoryLastViewedEntry],
+        orientationLock: PhotoViewerOrientationLock
     ) {
         self.viewMode = viewMode
         self.saveFormat = saveFormat
@@ -89,6 +109,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
         self.ratingFilter = ratingFilter
         self.colorLabelFilter = colorLabelFilter
         self.lastViewedEntries = lastViewedEntries
+        self.orientationLock = orientationLock
     }
 
     /// デフォルト値の定義箇所はここのみ
@@ -101,7 +122,8 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
             isRatingEnabled: true,
             ratingFilter: nil,
             colorLabelFilter: [],
-            lastViewedEntries: []
+            lastViewedEntries: [],
+            orientationLock: .followSystem
         )
     }
 
@@ -117,6 +139,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
             \.ratingFilter: "UserDefaultsSettingsStore.ratingFilter",
             \.colorLabelFilter: "UserDefaultsSettingsStore.colorLabelFilter",
             \.lastViewedEntries: "UserDefaultsSettingsStore.lastViewedEntries",
+            \.orientationLock: "UserDefaultsSettingsStore.orientationLock",
         ]
     }
 }

@@ -274,6 +274,7 @@ struct RatingFilter: Codable {
 enum ViewMode: String, Codable { case list, grid }
 enum FileSortOrder: String, Codable { case dateDescending, dateAscending }
 enum SaveFormat: String, Codable { case jpeg, jpegAndRaw }
+enum PhotoViewerOrientationLock: String, Codable { case followSystem, portrait, landscape }
 
 struct DirectoryLastViewedEntry: Codable, Equatable {
     let directoryPath: String
@@ -291,6 +292,7 @@ struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
     var ratingFilter: RatingFilter?          // デフォルト nil
     var colorLabelFilter: Set<PhotoColorLabel> // デフォルト []
     var lastViewedEntries: [DirectoryLastViewedEntry] // デフォルト []
+    var orientationLock: PhotoViewerOrientationLock // デフォルト .followSystem。フォトビューア画面のみに適用
 }
 ```
 
