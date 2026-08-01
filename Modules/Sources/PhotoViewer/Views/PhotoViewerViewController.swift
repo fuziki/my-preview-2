@@ -189,6 +189,11 @@ public final class PhotoViewerViewController: UIViewController {
         applyOrientationLock()
     }
 
+    /// dismiss完了後に向きを戻すための参照。`presentingViewController`/`view.window`は
+    /// `viewDidDisappear`の時点では既に`nil`になっているため、まだ有効な`viewWillDisappear`で捕捉しておく。
+    private weak var orientationRevertPresenter: UIViewController?
+    private weak var orientationRevertScene: UIWindowScene?
+
     override public func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         UIApplication.shared.isIdleTimerDisabled = false
@@ -196,23 +201,22 @@ public final class PhotoViewerViewController: UIViewController {
             // 閉じる時点での表示URLをFileBrowserへ通知する
             onDismiss?(viewModel.currentURL)
             // 縦/横固定中はコントロールセンターの回転ロックを一時的に上書きしていることがあり、
-            // 何もしないと閉じた後もその向きのまま残ってしまうため、presenter側の許容範囲へ
-            // 能動的に回転要求を出し直す。dismissアニメーション中に発行すると進行中のビュー階層と
-            // 衝突して表示が崩れるため、トランジション完了後に発行する。
-            if viewModel.orientationLock != .followSystem,
-               let presenter = presentingViewController, let scene = view.window?.windowScene {
-                let mask = presenter.supportedInterfaceOrientations
-                let revert = {
-                    presenter.setNeedsUpdateOfSupportedInterfaceOrientations()
-                    scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
-                }
-                if let coordinator = transitionCoordinator {
-                    coordinator.animate(alongsideTransition: nil) { _ in revert() }
-                } else {
-                    revert()
-                }
+            // 何もしないと閉じた後もその向きのまま残ってしまうため、presenter側へ能動的に
+            // 回転要求を出し直す。参照はまだ有効なここで捕捉し、実際の要求はトランジション完了後の
+            // viewDidDisappearで行う（進行中に発行するとビュー階層と衝突して表示が崩れるため）。
+            if viewModel.orientationLock != .followSystem {
+                orientationRevertPresenter = presentingViewController
+                orientationRevertScene = view.window?.windowScene
             }
         }
+    }
+
+    override public func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard let presenter = orientationRevertPresenter, let scene = orientationRevertScene else { return }
+        orientationRevertPresenter = nil
+        orientationRevertScene = nil
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: presenter.supportedInterfaceOrientations)) { _ in }
     }
 
     // MARK: - ステータスバー
@@ -231,12 +235,9 @@ public final class PhotoViewerViewController: UIViewController {
     }
 
     /// 画面回転設定を切り替えた際、その場で能動的に回転させる。
-    /// `setNeedsUpdateOfSupportedInterfaceOrientations()`は許可範囲の再照会を促すだけで、
-    /// 実際の回転は`requestGeometryUpdate`を呼ばないと発生しない。
     private func applyOrientationLock() {
         guard let windowScene = view.window?.windowScene else { return }
         windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: supportedInterfaceOrientations)) { _ in }
-        setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 
     // MARK: - updateProperties

@@ -219,8 +219,7 @@ zoomScale = targetZoom
 
 - `PhotoViewerViewController.supportedInterfaceOrientations` を `viewModel.orientationLock` に応じてオーバーライドする（`.followSystem` は `super.supportedInterfaceOrientations` でInfo.plist準拠の端末設定、`.portrait` は `.portrait`、`.landscape` は `.landscape`）。
 - 許可範囲を絞るだけでは実際には回転しないため、`windowScene.requestGeometryUpdate(.iOS(interfaceOrientations:))` を能動的に呼んで回転を発生させる（ボタンタップ時・表示直後の `viewDidAppear` で発火。`setNeedsUpdateOfSupportedInterfaceOrientations()` とセットで呼ぶ）。
-- 縦/横固定中（`.followSystem` 以外）にフォトビューアを閉じる場合、コントロールセンターの回転ロック（縦固定）を一時的に上書きしていた可能性があるため、`presentingViewController` の許容範囲へ `requestGeometryUpdate` を出し直し、遷移先画面が向きを引き継がないようにする。dismissアニメーション中に発行すると進行中のビュー階層と衝突して表示が崩れるため、`transitionCoordinator` のトランジション完了コールバックで発行する。それ以外（`.followSystem`）の場合はUIKit標準の再評価に任せる。
-- `SceneDelegate.windowScene(_:didUpdateEffectiveGeometry:)`（実体は`AppMain.handleWindowSceneGeometryChange(_:)`）で、ジオメトリ変化のたびに`rootViewController.view.setNeedsLayout()`を呼び通常のレイアウトパスに再計算を促す（`window.frame`/`UIScreen`は直接読み書きしない）。詳細は [画面回転制御の実装知見](orientation-control.md) を参照。
+- 縦/横固定中（`.followSystem` 以外）にフォトビューアを閉じる場合、コントロールセンターの回転ロック（縦固定）を一時的に上書きしていた可能性があるため、`presentingViewController` の許容範囲へ `requestGeometryUpdate` を出し直し、遷移先画面が向きを引き継がないようにする。`presentingViewController`/`view.window` は `viewDidDisappear` 時点で `nil` になるため `viewWillDisappear` で `weak` プロパティに捕捉し、実際の要求は（dismissアニメーション進行中との衝突を避けるため）トランジション完了後にしか呼ばれない `viewDidDisappear` で行う。それ以外（`.followSystem`）の場合はUIKit標準の再評価に任せる。詳細は [画面回転制御の実装知見](orientation-control.md) を参照。
 
 ### ファイル名 + Exif パネル（右上・PhotoInfoPillView）
 
