@@ -86,6 +86,7 @@ class MyViewController: UIViewController {
 - `AppMain` だけが全モジュールに依存し、`AppContainer`（`Modules/Sources/AppMain/AppContainer.swift`）がサービス層のインスタンス生成と注入を一元管理する。`FileBrowser` は `photoViewerFactory` クロージャ経由で `PhotoViewer` の ViewController を生成する（`PhotoViewer` を直接 import しない）。
 - `FileBrowserViewController` → `PhotoViewerViewController` の情報取得（表示中 URL・dismiss 通知）は `Core/Services/ViewControllerBridges.swift` の `CurrentURLProvider` / `DismissNotifiable` プロトコルを介して行う。
 - `AppState`（`Modules/Sources/AppMain/AppState.swift`）が唯一許容される singleton で、`AppContainer` のライフタイムをアプリ起動〜終了まで保持する。
+- `ImagePiPKit`（依存なし、UIKit/AVKitのみ使用）は静止画のPicture in Picture表示を扱う汎用エンジンモジュールで、`ToastKit` と同様に `PhotoViewer` が利用する。
 
 ---
 
@@ -107,6 +108,7 @@ class MyViewController: UIViewController {
 | 保存日時の記憶           | SwiftData（`SavedDateStore`）                                     | 「いつ保存したか」をセッションを跨いで記憶              |
 | 設定・直近表示位置の永続化 | `UserDefaultsSettingsStore`（`UserDefaults` + `Codable`）        | view mode・並び順・フィルタ・直近表示ファイルなどを保存 |
 | トースト通知             | `ToastKit`（別ウィンドウ + SwiftUI ホスティング）                 | クリップボードコピー等の一時的なフィードバック表示      |
+| PiP表示                 | `ImagePiPKit`（`AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)`） | 動画を使わず静止画をシステムPiPウィンドウへ表示するため |
 | 触覚フィードバック       | `HapticsServiceProtocol`（`UINotificationFeedbackGenerator`）     | 保存成功・失敗を触覚で通知                              |
 | Exif 抽出               | `ImageIO`（`CGImageSource`）                                      | 再デコードなしでメタデータのみ高速取得                 |
 | 写真保存                 | `PHPhotoLibrary`                                                  | 元データをそのまま保存し再エンコードを避ける           |
@@ -168,6 +170,14 @@ class MyViewController: UIViewController {
 - フォトビューア画面で写真ごとに星評価（0〜5）とカラーラベル（緑・黄・青・ピンク・赤・白から1つ）を設定できる。同じ値を再度選択すると解除（0 / nil）される。
 - 評価・カラーラベルは URL 単位で SwiftData（`PhotoRatingStore`/`ColorLabelStore`）に永続化され、アプリ再起動後も保持される。
 - フォトビューア内で評価・カラーラベルを変更し、現在の写真がファイルブラウザ側のフィルタ条件に一致しなくなった場合、自動的に次に一致する写真へ遷移する。一致する写真が他に無い場合はフォトビューアを閉じる。
+
+---
+
+## PiP表示機能
+
+- フォトビューア画面の保存ボタン右隣にあるPiPボタンから、現在表示中の写真をシステムの Picture in Picture ウィンドウに表示できる（動画は使わず、`ImagePiPKit` が静止画をシステムPiPへ表示する）。
+- PiP表示中は現在の写真を表示し続けるのみで、自動的に次の写真へ送る機能は無い。
+- 詳細は [フォトビューア画面の仕様](spec-photo-viewer.md) の「PiP表示」を参照。
 
 ---
 

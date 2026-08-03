@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "FileBrowser", targets: ["FileBrowser"]),
         .library(name: "PhotoViewer", targets: ["PhotoViewer"]),
         .library(name: "ToastKit", targets: ["ToastKit"]),
+        .library(name: "ImagePiPKit", targets: ["ImagePiPKit"]),
         .library(name: "Mocks", targets: ["Mocks"]),
         .library(name: "AppMain", targets: ["AppMain"]),
     ],
@@ -45,10 +46,15 @@ let package = Package(
             name: "ToastKit",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        // フォトビューアー機能モジュール（Core / ToastKit / Localizationに依存）
+        // 静止画のPicture in Picture表示を扱う汎用エンジン（依存なし、UIKit/AVKitのみ使用）
+        .target(
+            name: "ImagePiPKit",
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+        // フォトビューアー機能モジュール（Core / ToastKit / Localization / ImagePiPKitに依存）
         .target(
             name: "PhotoViewer",
-            dependencies: ["Core", "ToastKit", "Localization"],
+            dependencies: ["Core", "ToastKit", "Localization", "ImagePiPKit"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // シミュレータビルド用のモックサービス（Coreに依存）

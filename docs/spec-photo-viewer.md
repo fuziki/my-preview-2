@@ -100,6 +100,7 @@ view（黒背景）
         ├── 前へボタン（GlassButtonView + 拡大ヒットエリア、左下）
         ├── 次へボタン（GlassButtonView + 拡大ヒットエリア、右下）
         ├── 保存ボタン（GlassButtonView、下部中央）
+        ├── PiP開始ボタン（GlassButtonView、保存ボタンの右隣。タップエリアの拡張は無し）
         ├── 評価・カラーラベルバー（RatingLabelBarView、保存ボタンの上。isRatingEnabled時のみ）
         ├── ローディングインジケーター（UIActivityIndicatorView、評価バー or 保存ボタンの上）
         └── 最終保存日時ラベル（lastSavedDateLabel、保存ボタンの下）
@@ -248,7 +249,15 @@ zoomScale = targetZoom
 - `GlassButtonView`（カプセル形、`cornerRadius = 22`）
 - ボタン構成：`UIButton.Configuration.borderless()`、タイトルテキスト、左右パディング 20pt
 - テキストカラー：常に白（`configurationUpdateHandler` で disabled 時の自動調光を抑制）
-- 制約：`bottom` = `safeArea` - 20pt、`centerX` = `view.centerXAnchor`、`leading` ≥ `prevButtonView.trailing` + 8pt、`trailing` ≤ `nextButtonView.leading` - 8pt、`height` = 44pt
+- 制約：`bottom` = `safeArea` - 20pt、`leading` ≥ `prevButtonView.trailing` + 8pt、`height` = 44pt。`centerX` は単独では固定せず、PiPボタンとの組で中央揃えする（後述）。
+
+### PiPボタン（保存ボタンの右隣）
+
+- `GlassButtonView.circle(systemImageName: "pip.enter")`。タップエリアの拡張は無し（44×44）。
+- 制約：`leading` = `saveButtonView.trailing` + 8pt、`centerY` = `saveButtonView.centerYAnchor`、`trailing` ≤ `nextButtonView.leading` - 8pt
+- `saveButtonView` と合わせて不可視の `saveButtonGroupGuide`（`leading` = `saveButtonView.leading`、`trailing` = `pipButtonView.trailing`）を構成し、その `centerX` を `view.centerXAnchor` に揃えることで、保存ボタン + PiPボタンの組を左右中央に配置する（レーティング無効時、およびレーティング有効時の縦持ちで使用）。
+- `ImagePiPController.isSupported`（`AVPictureInPictureController.isPictureInPictureSupported()`）が `false` の環境ではボタンを無効化する。
+- タップ時の挙動は後述の「PiP表示」を参照。
 
 ### 評価・カラーラベルバー（RatingLabelBarView、保存ボタンの上）
 
@@ -258,8 +267,8 @@ zoomScale = targetZoom
 - 縦の区切り線
 - カラーラベルボタン6個（`circle.fill`/`circle.inset.filled`、24×32pt、`PhotoColorLabel` の色でtint）
 - タップは UIMenu ではなく直接の `UIButton.touchUpInside`。`onStarTapped`/`onColorTapped` コールバック経由で `viewModel.setRating`/`setColorLabel` を呼ぶ（トグルオフのロジックは ViewModel 側が持つ）。
-- 制約（縦持ち）：`bottom` = `saveButtonView.top` - 8pt、`centerX` = `view.centerXAnchor`。`saveButtonView.centerX` も `view.centerXAnchor` に揃える。
-- 制約（横持ち）：`centerY` = `saveButtonView.centerYAnchor`、`trailing` = `saveButtonView.leading` - 8pt（保存ボタンと左右に並ぶ）。`saveButtonView` 単体は中央揃えせず、`bottomBarGroupGuide`（不可視の `UILayoutGuide`。`leading` = `ratingLabelBarView.leading`、`trailing` = `saveButtonView.trailing`）の `centerX` を `view.centerXAnchor` に揃えることで、レーティングバー＋保存ボタンの組を左右中央に配置する。
+- 制約（縦持ち）：`bottom` = `saveButtonView.top` - 8pt、`centerX` = `view.centerXAnchor`。`saveButtonGroupGuide.centerX` も `view.centerXAnchor` に揃える。
+- 制約（横持ち）：`centerY` = `saveButtonView.centerYAnchor`、`trailing` = `saveButtonView.leading` - 8pt（保存ボタンと左右に並ぶ）。`saveButtonView` 単体は中央揃えせず、`bottomBarGroupGuide`（不可視の `UILayoutGuide`。`leading` = `ratingLabelBarView.leading`、`trailing` = `pipButtonView.trailing`）の `centerX` を `view.centerXAnchor` に揃えることで、レーティングバー＋保存ボタン＋PiPボタンの組を左右中央に配置する。
 - 縦持ち/横持ちの切り替えは `PhotoViewerViewController.viewWillLayoutSubviews()` 内で `view.bounds.width > view.bounds.height` を判定し、該当する制約セットを activate/deactivate して行う。
 
 ### ローディングインジケーター
@@ -305,7 +314,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 ## オーバーレイの表示・非表示
 
 - `viewModel.isOverlayVisible` の変化を `updateProperties()` で検知する。
-- `UIView.animate(withDuration: 0.2)` で閉じるボタン・画面回転ボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
+- `UIView.animate(withDuration: 0.2)` で閉じるボタン・画面回転ボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・PiPボタン・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
 - オーバーレイが非表示の場合はステータスバーも非表示にする（`prefersStatusBarHidden` で制御）。
 - `updateProperties()` 内で `setNeedsStatusBarAppearanceUpdate()` を呼ぶ。
 
@@ -437,6 +446,48 @@ ToastKit.show(duration: TimeInterval? = nil) { /* SwiftUI View */ }
 ```
 
 **現在の呼び出し箇所：** `PhotoInfoPillView` のファイル名＋Exifコピー時のみ（クリップボードアイコン＋コピー完了メッセージ）。保存成功・失敗や評価変更はトーストではなく、保存ボタンの表示・触覚フィードバック・`lastSavedDateLabel` で通知する。
+
+---
+
+## PiP表示
+
+現在表示中の写真をシステムの Picture in Picture ウィンドウに表示する機能。自動的に次の写真へ送る機能は無く、PiP表示中は現在の写真をそのまま表示し続ける。動画を使わず、静止画をシステムPiPに表示するための汎用エンジンとして `Modules/Sources/ImagePiPKit/` を独立モジュールで実装している（`PhotoViewer` のみが依存し、`Core` を介さない）。
+
+### ImagePiPController（ImagePiPKit）
+
+`AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)`（iOS 15+ の非動画コンテンツ向けPiP API）を使い、`UIImage` を `CVPixelBuffer` → `CMSampleBuffer` に変換して `AVSampleBufferDisplayLayer`（`SampleBufferDisplayView`、`layerClass` として保持）へ `enqueue` する。
+
+```swift
+public final class ImagePiPController: NSObject {
+    public static var isSupported: Bool                      // AVPictureInPictureController.isPictureInPictureSupported()
+    public var onDidStart: (() -> Void)?
+    public var onDidStop: (() -> Void)?
+
+    public init(containerView: UIView)
+    public func attach()                                      // containerView全面にPiPソースレイヤーを配置する
+    public func start(image: UIImage)
+    public func stop()
+    public func update(image: UIImage)                        // 表示中の画像を差し替える
+}
+```
+
+**実機検証で判明した実装上の注意点：**
+
+- **フレームサイズの縮小が必須**：PiPウィンドウはシステムの別プロセスでレンダリングされるため、フル解像度の写真（数千万画素になり得る）をそのまま`CVPixelBuffer`化して渡すとプロセス間転送のペイロードが過大になり、`FigSampleBufferSerialization`エラーで映像が表示されない。長辺 `maxPixelDimension`（1280px）まで縮小してから変換する。
+- **`CVPixelBuffer`はIOSurfaceで裏付けする**：`CVPixelBufferCreate`の属性に`kCVPixelBufferIOSurfacePropertiesKey`を含めないと、同じくプロセス間転送に失敗し`FigSampleBufferSerialization`エラーになる。
+- **`isPictureInPicturePossible`は数回のenqueueを経てからtrueになる**：1枚だけ`enqueue`して`startPictureInPicture()`を呼んでも`isPictureInPicturePossible`が`false`のままで反応しない（無反応に見える）。`true`になるまで同じ画像を0.2秒間隔で再`enqueue`し続けてから`startPictureInPicture()`を呼ぶ「ウォームアップ」処理（`startPriming`、最大25回・約5秒でタイムアウト）を行う。
+- `AVAudioSession.sharedInstance().setCategory(.playback)` をPiPコントローラ生成前に呼ぶ（バックグラウンドでのPiP継続に必要）。
+
+### PhotoViewerViewController側の配線
+
+- `viewDidLoad()` で `ImagePiPController(containerView: view)` を生成し `attach()` を呼ぶ。`ImagePiPController.isSupported == false` の環境ではPiPボタンを無効化する。
+- `updateProperties()` で `viewModel.currentImage` の変化を検知した際、PiPがアクティブな場合は `pipController.update(image:)` で表示画像も同期する（写真間を移動した場合、PiP側の表示も追従する）。
+- PiPボタンタップ時、非アクティブなら `pipController.start(image:)` を呼ぶ。アクティブなら `pipController.stop()` を呼ぶ（開始/停止のトグル）。
+- `viewWillDisappear(_:)` で `isBeingDismissed` の場合、PiPソースレイヤーの土台である `view` が破棄される前に `pipController.stop()` を呼ぶ。
+
+### バックグラウンド動作
+
+`Info.plist` の `UIBackgroundModes` に `audio`（Audio, AirPlay, and Picture in Picture）を追加している。PiP表示中にアプリをバックグラウンドへ遷移してもPiPウィンドウの表示を継続するため。
 
 ---
 
