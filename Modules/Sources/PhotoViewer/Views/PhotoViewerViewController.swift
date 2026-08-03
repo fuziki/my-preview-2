@@ -612,6 +612,25 @@ public final class PhotoViewerViewController: UIViewController {
         pipController.onDidStop = { [weak self] in
             self?.isPiPActive = false
         }
+        pipController.onSkipForward = { [weak self] in
+            Task {
+                await self?.viewModel.navigateNext()
+                self?.pushCurrentImageToPiPIfNeeded()
+            }
+        }
+        pipController.onSkipBackward = { [weak self] in
+            Task {
+                await self?.viewModel.navigatePrevious()
+                self?.pushCurrentImageToPiPIfNeeded()
+            }
+        }
+    }
+
+    /// バックグラウンドではupdateProperties()（UIKitの通常の描画更新サイクルに連動）が呼ばれにくく、
+    /// PiPスキップ操作による画像変更が反映されないことがあるため、ナビゲーション直後に直接反映する
+    private func pushCurrentImageToPiPIfNeeded() {
+        guard isPiPActive, let image = viewModel.currentImage else { return }
+        pipController.update(image: image)
     }
 
     // MARK: - 画面回転ボタン

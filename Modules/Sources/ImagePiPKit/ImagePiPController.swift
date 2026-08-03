@@ -19,6 +19,10 @@ public final class ImagePiPController: NSObject {
     public var onDidStart: (() -> Void)?
     /// PiPが終了した時に呼ばれる（開始失敗時も含む）
     public var onDidStop: (() -> Void)?
+    /// PiP標準の「進む」スキップボタンがタップされた時に呼ばれる
+    public var onSkipForward: (() -> Void)?
+    /// PiP標準の「戻る」スキップボタンがタップされた時に呼ばれる
+    public var onSkipBackward: (() -> Void)?
 
     public var isActive: Bool { pipController?.isPictureInPictureActive ?? false }
 
@@ -26,11 +30,20 @@ public final class ImagePiPController: NSObject {
     /// PiPウィンドウは小さく表示されるため、フルサイズの写真をそのまま渡すとプロセス間転送のペイロードが
     /// 過大になりFigSampleBufferSerializationエラーの原因になる。長辺をこのサイズまで縮小する
     private static let maxPixelDimension: CGFloat = 1280
+    /// システムに「ライブ配信ではなく、十分に長い通常コンテンツ」と伝えるための仮想的な尺（24時間分）。
+    /// pictureInPictureControllerTimeRangeForPlaybackにdurationとして.positiveInfinityを返すと
+    /// 「ライブ配信」の合図になり一時停止・スキップの操作系が丸ごと無効化されるため、有限値にする必要がある
+    private static let virtualDuration = CMTime(seconds: 24 * 60 * 60, preferredTimescale: 600)
 
     private let containerView: UIView
     private let displayView = SampleBufferDisplayView()
     private var pipController: AVPictureInPictureController?
     private var primingTask: Task<Void, Never>?
+    /// レイヤーに「再生中」であることを認識させるためのタイムベース。
+    /// これが無い（またはrateが0の）ままだとPiPが停止中とみなされ、スキップボタンが機能しない
+    private var controlTimebase: CMTimebase?
+    /// PiP標準の一時停止ボタンで操作された状態。isPlaybackPausedで返し、システム側の表示と一致させる
+    private var isPaused = false
 
     public init(containerView: UIView) {
         self.containerView = containerView
@@ -49,19 +62,38 @@ public final class ImagePiPController: NSObject {
             displayView.topAnchor.constraint(equalTo: containerView.topAnchor),
             displayView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
         ])
+        setupControlTimebase()
+    }
+
+    private func setupControlTimebase() {
+        var timebase: CMTimebase?
+        CMTimebaseCreateWithSourceClock(
+            allocator: kCFAllocatorDefault,
+            sourceClock: CMClockGetHostTimeClock(),
+            timebaseOut: &timebase
+        )
+        guard let timebase else { return }
+        CMTimebaseSetTime(timebase, time: .zero)
+        // rateを1にして進行させることで、システムに「再生中」と認識させる
+        CMTimebaseSetRate(timebase, rate: 1.0)
+        displayView.sampleBufferDisplayLayer.controlTimebase = timebase
+        controlTimebase = timebase
     }
 
     /// PiPを開始する
     public func start(image: UIImage) {
         if pipController == nil {
-            // PiPのバックグラウンド継続にはaudioセッションのアクティブ化が必要
-            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            // PiPのバックグラウンド継続にはaudioセッションのアクティブ化が必要（無音でも必須）
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try? AVAudioSession.sharedInstance().setActive(true)
             let contentSource = AVPictureInPictureController.ContentSource(
                 sampleBufferDisplayLayer: displayView.sampleBufferDisplayLayer,
                 playbackDelegate: self
             )
             let controller = AVPictureInPictureController(contentSource: contentSource)
             controller.delegate = self
+            // trueのままだとスキップボタンが常に無効化されるため、明示的にfalseにする
+            controller.requiresLinearPlayback = false
             pipController = controller
         }
         guard let pipController else { return }
@@ -99,7 +131,7 @@ public final class ImagePiPController: NSObject {
 
     /// 表示中の画像を更新する
     public func update(image: UIImage) {
-        guard let sampleBuffer = Self.makeSampleBuffer(from: image) else {
+        guard let sampleBuffer = makeSampleBuffer(from: image) else {
             Self.logger.error("CMSampleBufferの作成に失敗したためenqueueをスキップした")
             return
         }
@@ -113,8 +145,8 @@ public final class ImagePiPController: NSObject {
 
     // MARK: - UIImage → CMSampleBuffer変換
 
-    private static func makeSampleBuffer(from image: UIImage) -> CMSampleBuffer? {
-        guard let pixelBuffer = makePixelBuffer(from: image) else { return nil }
+    private func makeSampleBuffer(from image: UIImage) -> CMSampleBuffer? {
+        guard let pixelBuffer = Self.makePixelBuffer(from: image) else { return nil }
         var formatDescription: CMVideoFormatDescription?
         let formatStatus = CMVideoFormatDescriptionCreateForImageBuffer(
             allocator: kCFAllocatorDefault,
@@ -122,12 +154,15 @@ public final class ImagePiPController: NSObject {
             formatDescriptionOut: &formatDescription
         )
         guard let formatDescription else {
-            logger.error("CMVideoFormatDescriptionCreateForImageBufferに失敗: status=\(formatStatus)")
+            Self.logger.error("CMVideoFormatDescriptionCreateForImageBufferに失敗: status=\(formatStatus)")
             return nil
         }
+        // presentationTimeStampはcontrolTimebaseと同じ時間軸から取る。durationを無限大にすることで
+        // 次にenqueueするまでこの画像を表示し続けさせる
+        let presentationTime = controlTimebase.map { CMTimebaseGetTime($0) } ?? CMClockGetTime(CMClockGetHostTimeClock())
         var timingInfo = CMSampleTimingInfo(
-            duration: .invalid,
-            presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()),
+            duration: .positiveInfinity,
+            presentationTimeStamp: presentationTime,
             decodeTimeStamp: .invalid
         )
         var sampleBuffer: CMSampleBuffer?
@@ -139,7 +174,7 @@ public final class ImagePiPController: NSObject {
             sampleBufferOut: &sampleBuffer
         )
         guard status == noErr else {
-            logger.error("CMSampleBufferCreateReadyWithImageBufferに失敗: status=\(status)")
+            Self.logger.error("CMSampleBufferCreateReadyWithImageBufferに失敗: status=\(status)")
             return nil
         }
         return sampleBuffer
@@ -220,14 +255,23 @@ extension ImagePiPController: AVPictureInPictureControllerDelegate {
 // MARK: - AVPictureInPictureSampleBufferPlaybackDelegate
 
 extension ImagePiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
-    public func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {}
+    public func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, setPlaying playing: Bool) {
+        // 実際にタイムベースのrateを止める/進めることでシステム側の状態と一致させる。
+        // これをしないとisPlaybackPausedが実態と食い違い、ボタン操作が反映されない
+        isPaused = !playing
+        if let controlTimebase {
+            CMTimebaseSetRate(controlTimebase, rate: playing ? 1.0 : 0.0)
+        }
+    }
 
     public func pictureInPictureControllerTimeRangeForPlayback(_ pictureInPictureController: AVPictureInPictureController) -> CMTimeRange {
-        CMTimeRange(start: .negativeInfinity, end: .positiveInfinity)
+        // durationに.positiveInfinityを返すと「ライブ配信」の合図になり一時停止・スキップが
+        // 丸ごと無効化されるため、有限（十分に長い）durationを返して通常コンテンツとして扱わせる
+        CMTimeRange(start: .zero, duration: Self.virtualDuration)
     }
 
     public func pictureInPictureControllerIsPlaybackPaused(_ pictureInPictureController: AVPictureInPictureController) -> Bool {
-        false
+        isPaused
     }
 
     public func pictureInPictureController(
@@ -235,12 +279,24 @@ extension ImagePiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
         didTransitionToRenderSize newRenderSize: CMVideoDimensions
     ) {}
 
+    // completionハンドラ版とasync版は同一のObjective-Cセレクタに衝突するため両方は実装できない。
+    // デプロイ対象がiOS 26のためasync版のみ実装する
     public func pictureInPictureController(
         _ pictureInPictureController: AVPictureInPictureController,
-        skipByInterval skipInterval: CMTime,
-        completion completionHandler: @escaping () -> Void
-    ) {
-        completionHandler()
+        skipByInterval skipInterval: CMTime
+    ) async {
+        handleSkip(interval: skipInterval)
+    }
+
+    private func handleSkip(interval: CMTime) {
+        switch CMTimeCompare(interval, .zero) {
+        case let comparison where comparison > 0:
+            onSkipForward?()
+        case let comparison where comparison < 0:
+            onSkipBackward?()
+        default:
+            break
+        }
     }
 
     public func pictureInPictureControllerShouldProhibitBackgroundAudioPlayback(_ pictureInPictureController: AVPictureInPictureController) -> Bool {

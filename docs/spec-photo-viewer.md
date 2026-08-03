@@ -462,6 +462,8 @@ public final class ImagePiPController: NSObject {
     public static var isSupported: Bool                      // AVPictureInPictureController.isPictureInPictureSupported()
     public var onDidStart: (() -> Void)?
     public var onDidStop: (() -> Void)?
+    public var onSkipForward: (() -> Void)?                   // PiP標準の「進む」スキップボタン
+    public var onSkipBackward: (() -> Void)?                  // PiP標準の「戻る」スキップボタン
 
     public init(containerView: UIView)
     public func attach()                                      // containerView全面にPiPソースレイヤーを配置する
@@ -476,13 +478,24 @@ public final class ImagePiPController: NSObject {
 - **フレームサイズの縮小が必須**：PiPウィンドウはシステムの別プロセスでレンダリングされるため、フル解像度の写真（数千万画素になり得る）をそのまま`CVPixelBuffer`化して渡すとプロセス間転送のペイロードが過大になり、`FigSampleBufferSerialization`エラーで映像が表示されない。長辺 `maxPixelDimension`（1280px）まで縮小してから変換する。
 - **`CVPixelBuffer`はIOSurfaceで裏付けする**：`CVPixelBufferCreate`の属性に`kCVPixelBufferIOSurfacePropertiesKey`を含めないと、同じくプロセス間転送に失敗し`FigSampleBufferSerialization`エラーになる。
 - **`isPictureInPicturePossible`は数回のenqueueを経てからtrueになる**：1枚だけ`enqueue`して`startPictureInPicture()`を呼んでも`isPictureInPicturePossible`が`false`のままで反応しない（無反応に見える）。`true`になるまで同じ画像を0.2秒間隔で再`enqueue`し続けてから`startPictureInPicture()`を呼ぶ「ウォームアップ」処理（`startPriming`、最大25回・約5秒でタイムアウト）を行う。
-- `AVAudioSession.sharedInstance().setCategory(.playback)` をPiPコントローラ生成前に呼ぶ（バックグラウンドでのPiP継続に必要）。
+- `AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)` を設定し `setActive(true)` を呼ぶ（バックグラウンドでのPiP継続に必要。無音でも必須）。
+- `AVPictureInPictureController.requiresLinearPlayback` を明示的に `false` にする。`true`（既定）のままだとスキップボタンが常に無効化され押せない。
+- **`AVSampleBufferDisplayLayer.controlTimebase` にホストクロック起点・rate 1.0 の `CMTimebase` を設定する**。これが無い（またはrateが0の）ままだとレイヤーが「停止中」とみなされ、スキップボタンが機能しない。
+- **`pictureInPictureControllerTimeRangeForPlayback` の `duration` に `.positiveInfinity` を返してはいけない**：Appleの仕様上、無限長のdurationは「これはライブ配信である」という合図になり、一時停止・スキップの操作系が丸ごと無効化される（LIVE表示になり操作不能になる）。`virtualDuration`（24時間分の `CMTime`）という有限（ただし十分に長い）値を返し、「ライブではない通常コンテンツ」として扱わせる。`start` は `.zero` にする（`.negativeInfinity`にするとスキップボタンの状態計算が壊れる）。
+- **`isPlaybackPaused` を実際の状態に連動させる**：常に `false` を返すとシステム側の一時停止ボタン操作が反映されない。`setPlaying(_:)` で受け取った状態を `isPaused` に保持して返し、あわせて `controlTimebase` の `rate` も 0（一時停止）/ 1（再生）に切り替える。
+- `enqueue` するサンプルバッファの `presentationTimeStamp` は `controlTimebase` から取得した時刻（`CMTimebaseGetTime`）を使い、`duration` は `.positiveInfinity` にする（次に`enqueue`するまでその画像を表示し続けさせる。これはサンプルバッファ単位のdurationであり、`pictureInPictureControllerTimeRangeForPlayback`が返すコンテンツ全体のdurationとは別物）。
+
+### PiP標準のスキップボタンによる写真送り
+
+PiPウィンドウにはシステム標準の±10秒スキップボタンが表示される。`AVPictureInPictureSampleBufferPlaybackDelegate.pictureInPictureController(_:skipByInterval:)`（async版。completionハンドラ版と同一のObjective-Cセレクタに衝突するため両方は実装できず、デプロイ対象がiOS 26のためasync版のみ実装する）の `skipInterval` の符号（`CMTimeCompare(skipInterval, .zero)`）で進む/戻るを判定し、`onSkipForward`/`onSkipBackward` を呼ぶ。
 
 ### PhotoViewerViewController側の配線
 
 - `viewDidLoad()` で `ImagePiPController(containerView: view)` を生成し `attach()` を呼ぶ。`ImagePiPController.isSupported == false` の環境ではPiPボタンを無効化する。
 - `updateProperties()` で `viewModel.currentImage` の変化を検知した際、PiPがアクティブな場合は `pipController.update(image:)` で表示画像も同期する（写真間を移動した場合、PiP側の表示も追従する）。
 - PiPボタンタップ時、非アクティブなら `pipController.start(image:)` を呼ぶ。アクティブなら `pipController.stop()` を呼ぶ（開始/停止のトグル）。
+- `onSkipForward`/`onSkipBackward` から既存の `viewModel.navigateNext()`/`navigatePrevious()` を呼ぶ。これらは先頭/末尾で何もしない（ループしない）ため、端まで到達すると自動的に無反応になる。
+  - ナビゲーション完了後、`pushCurrentImageToPiPIfNeeded()` で `pipController.update(image:)` を直接呼び出す。`updateProperties()`はUIKitの通常の描画更新サイクルに連動して呼ばれるため、アプリがバックグラウンドの間はスケジュールされにくく、スキップ操作による画像変更がPiP側に反映されないことがある（アプリをフォアグラウンドに戻すと反映される）。この直接呼び出しによりフォアグラウンド/バックグラウンドどちらでも即座に反映させる。
 - `viewWillDisappear(_:)` で `isBeingDismissed` の場合、PiPソースレイヤーの土台である `view` が破棄される前に `pipController.stop()` を呼ぶ。
 
 ### バックグラウンド動作
