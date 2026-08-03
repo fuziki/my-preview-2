@@ -35,6 +35,7 @@ final class PhotoViewerViewModel {
     var currentFileName: String { currentURL.lastPathComponent }
     var canGoPrevious: Bool { currentIndex > 0 }
     var canGoNext: Bool { currentIndex < allURLs.count - 1 }
+    var pipAutoAdvanceIntervalSeconds: Int { settings.pipAutoAdvanceIntervalSeconds }
 }
 ```
 
@@ -52,6 +53,7 @@ final class PhotoViewerViewModel {
 | `setColorLabel(_ label: PhotoColorLabel) async` | カラーラベルを設定。同じ値を再度指定すると nil（解除）。`colorLabelStore` へ永続化後、フィルタ外なら自動遷移 |
 | `save() async`                              | 権限確認後に現在の写真を写真ライブラリへ保存し `saveStatus`・`lastSavedDate` を更新、触覚フィードバックを発行 |
 | `toggleOverlay()`                          | `isOverlayVisible` を反転する                                                                 |
+| `advanceForPictureInPictureAutoPlay() async` | PiP再生中の自動送り用のナビゲーション。`navigateNext()` と異なり末尾で停止せず、`(currentIndex + 1) % allURLs.count` で先頭へ固定でループする |
 
 **評価・カラーラベルフィルタと自動遷移：** ViewModel は `PhotoViewerInput` 由来の `ratingFilter`/`colorLabelFilter` を保持する。`setRating`/`setColorLabel` で写真が現在のフィルタ条件に合わなくなった場合、`autoNavigateIfFilteredOut()` が呼ばれ、前方→後方の順でフィルタに一致する最も近い写真へ自動的に遷移する。一致する写真が他に無い場合は `shouldDismiss = true` となり、VC がフォトビューアを閉じる。
 
@@ -451,7 +453,7 @@ ToastKit.show(duration: TimeInterval? = nil) { /* SwiftUI View */ }
 
 ## PiP表示
 
-現在表示中の写真をシステムの Picture in Picture ウィンドウに表示する機能。自動的に次の写真へ送る機能は無く、PiP表示中は現在の写真をそのまま表示し続ける。動画を使わず、静止画をシステムPiPに表示するための汎用エンジンとして `Modules/Sources/ImagePiPKit/` を独立モジュールで実装している（`PhotoViewer` のみが依存し、`Core` を介さない）。
+現在表示中の写真をシステムの Picture in Picture ウィンドウに表示する機能。動画を使わず、静止画をシステムPiPに表示するための汎用エンジンとして `Modules/Sources/ImagePiPKit/` を独立モジュールで実装している（`PhotoViewer` のみが依存し、`Core` を介さない）。実機検証で判明した落とし穴の詳細は [静止画PiP表示の実装知見](pip-display.md) を参照。
 
 ### ImagePiPController（ImagePiPKit）
 
@@ -464,10 +466,11 @@ public final class ImagePiPController: NSObject {
     public var onDidStop: (() -> Void)?
     public var onSkipForward: (() -> Void)?                   // PiP標準の「進む」スキップボタン
     public var onSkipBackward: (() -> Void)?                  // PiP標準の「戻る」スキップボタン
+    public var onAutoAdvanceTick: (() -> Void)?                // 再生中、自動送りタイマー発火時（画像取得はしない）
 
     public init(containerView: UIView)
     public func attach()                                      // containerView全面にPiPソースレイヤーを配置する
-    public func start(image: UIImage)
+    public func start(image: UIImage, autoAdvanceInterval: TimeInterval)
     public func stop()
     public func update(image: UIImage)                        // 表示中の画像を差し替える
 }
@@ -489,13 +492,20 @@ public final class ImagePiPController: NSObject {
 
 PiPウィンドウにはシステム標準の±10秒スキップボタンが表示される。`AVPictureInPictureSampleBufferPlaybackDelegate.pictureInPictureController(_:skipByInterval:)`（async版。completionハンドラ版と同一のObjective-Cセレクタに衝突するため両方は実装できず、デプロイ対象がiOS 26のためasync版のみ実装する）の `skipInterval` の符号（`CMTimeCompare(skipInterval, .zero)`）で進む/戻るを判定し、`onSkipForward`/`onSkipBackward` を呼ぶ。
 
+### PiP標準の再生/一時停止に連動する自動送り
+
+PiP標準の再生/一時停止ボタンをスライドショーのON/OFFに割り当てる。`AVPictureInPictureSampleBufferPlaybackDelegate.setPlaying(_:)` で受け取った再生状態に応じて、`ImagePiPController` 内部の自動送りタイマー（`Task` ベース、`autoAdvanceInterval` 秒間隔）を開始/停止し、発火するたびに `onAutoAdvanceTick` を呼ぶ。PiP開始直後は「再生中」扱いのため、`pictureInPictureControllerDidStartPictureInPicture` でもタイマーを開始する。
+
+- 自動送りの間隔（秒）は設定Menuから変更でき、`UserDefaultsSettings.pipAutoAdvanceIntervalSeconds`（デフォルト `5`、範囲 1〜30）として永続化される（[ファイルブラウザ画面の仕様](spec-file-browser.md)の設定メニューを参照）。
+- 自動送りは `viewModel.advanceForPictureInPictureAutoPlay()` を呼ぶ。前後ボタン・スキップボタンの `navigateNext()`/`navigatePrevious()` とは異なり、末尾で停止せず先頭へ固定でループする。
+
 ### PhotoViewerViewController側の配線
 
 - `viewDidLoad()` で `ImagePiPController(containerView: view)` を生成し `attach()` を呼ぶ。`ImagePiPController.isSupported == false` の環境ではPiPボタンを無効化する。
 - `updateProperties()` で `viewModel.currentImage` の変化を検知した際、PiPがアクティブな場合は `pipController.update(image:)` で表示画像も同期する（写真間を移動した場合、PiP側の表示も追従する）。
-- PiPボタンタップ時、非アクティブなら `pipController.start(image:)` を呼ぶ。アクティブなら `pipController.stop()` を呼ぶ（開始/停止のトグル）。
-- `onSkipForward`/`onSkipBackward` から既存の `viewModel.navigateNext()`/`navigatePrevious()` を呼ぶ。これらは先頭/末尾で何もしない（ループしない）ため、端まで到達すると自動的に無反応になる。
-  - ナビゲーション完了後、`pushCurrentImageToPiPIfNeeded()` で `pipController.update(image:)` を直接呼び出す。`updateProperties()`はUIKitの通常の描画更新サイクルに連動して呼ばれるため、アプリがバックグラウンドの間はスケジュールされにくく、スキップ操作による画像変更がPiP側に反映されないことがある（アプリをフォアグラウンドに戻すと反映される）。この直接呼び出しによりフォアグラウンド/バックグラウンドどちらでも即座に反映させる。
+- PiPボタンタップ時、非アクティブなら `pipController.start(image:autoAdvanceInterval:)` を呼ぶ（`autoAdvanceInterval` は `viewModel.pipAutoAdvanceIntervalSeconds` 秒）。アクティブなら `pipController.stop()` を呼ぶ（開始/停止のトグル）。
+- `onSkipForward`/`onSkipBackward`/`onAutoAdvanceTick` から、それぞれ `viewModel.navigateNext()`/`navigatePrevious()`/`advanceForPictureInPictureAutoPlay()` を呼ぶ。
+  - ナビゲーション完了後、`pushCurrentImageToPiPIfNeeded()` で `pipController.update(image:)` を直接呼び出す。`updateProperties()`はUIKitの通常の描画更新サイクルに連動して呼ばれるため、アプリがバックグラウンドの間はスケジュールされにくく、スキップ操作・自動送りによる画像変更がPiP側に反映されないことがある（アプリをフォアグラウンドに戻すと反映される）。この直接呼び出しによりフォアグラウンド/バックグラウンドどちらでも即座に反映させる。
 - `viewWillDisappear(_:)` で `isBeingDismissed` の場合、PiPソースレイヤーの土台である `view` が破棄される前に `pipController.stop()` を呼ぶ。
 
 ### バックグラウンド動作

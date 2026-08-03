@@ -28,6 +28,10 @@
 "file_browser.rating_filter_at_most" = "以下";
 "file_browser.rating_filter_exactly" = "同値";
 "file_browser.color_label" = "カラーラベル";
+"file_browser.pip_auto_advance_interval" = "PiP自動送り間隔";
+"file_browser.pip_auto_advance_interval_decrement" = "間隔を減らす";
+"file_browser.pip_auto_advance_interval_increment" = "間隔を増やす";
+"file_browser.pip_auto_advance_interval_value" = "%d秒";
 "file_browser.rating_feature_title" = "%@ (%@)";
 "file_browser.state_on" = "オン";
 "file_browser.state_off" = "オフ";

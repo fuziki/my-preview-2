@@ -23,6 +23,8 @@ public final class ImagePiPController: NSObject {
     public var onSkipForward: (() -> Void)?
     /// PiP標準の「戻る」スキップボタンがタップされた時に呼ばれる
     public var onSkipBackward: (() -> Void)?
+    /// 再生中に自動送りタイマーが発火した時に呼ばれる。次の画像の取得・反映は呼び出し側の責務
+    public var onAutoAdvanceTick: (() -> Void)?
 
     public var isActive: Bool { pipController?.isPictureInPictureActive ?? false }
 
@@ -44,6 +46,8 @@ public final class ImagePiPController: NSObject {
     private var controlTimebase: CMTimebase?
     /// PiP標準の一時停止ボタンで操作された状態。isPlaybackPausedで返し、システム側の表示と一致させる
     private var isPaused = false
+    private var autoAdvanceInterval: TimeInterval?
+    private var autoAdvanceTask: Task<Void, Never>?
 
     public init(containerView: UIView) {
         self.containerView = containerView
@@ -80,8 +84,10 @@ public final class ImagePiPController: NSObject {
         controlTimebase = timebase
     }
 
-    /// PiPを開始する
-    public func start(image: UIImage) {
+    /// PiPを開始する。autoAdvanceIntervalの間隔で、再生中（一時停止されていない間）自動的にonAutoAdvanceTickを呼ぶ
+    public func start(image: UIImage, autoAdvanceInterval: TimeInterval) {
+        self.autoAdvanceInterval = autoAdvanceInterval
+        isPaused = false
         if pipController == nil {
             // PiPのバックグラウンド継続にはaudioセッションのアクティブ化が必要（無音でも必須）
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -126,7 +132,26 @@ public final class ImagePiPController: NSObject {
     public func stop() {
         primingTask?.cancel()
         primingTask = nil
+        stopAutoAdvanceTimer()
         pipController?.stopPictureInPicture()
+    }
+
+    // MARK: - 自動送りタイマー（PiP標準の再生/一時停止に連動）
+
+    private func startAutoAdvanceTimerIfNeeded() {
+        guard autoAdvanceTask == nil, let interval = autoAdvanceInterval, interval > 0 else { return }
+        autoAdvanceTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled else { break }
+                self?.onAutoAdvanceTick?()
+            }
+        }
+    }
+
+    private func stopAutoAdvanceTimer() {
+        autoAdvanceTask?.cancel()
+        autoAdvanceTask = nil
     }
 
     /// 表示中の画像を更新する
@@ -234,6 +259,7 @@ extension ImagePiPController: AVPictureInPictureControllerDelegate {
     public func pictureInPictureControllerDidStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
         primingTask?.cancel()
         primingTask = nil
+        startAutoAdvanceTimerIfNeeded()
         onDidStart?()
     }
 
@@ -244,10 +270,12 @@ extension ImagePiPController: AVPictureInPictureControllerDelegate {
         Self.logger.error("PiP開始に失敗: \(error.localizedDescription, privacy: .public)")
         primingTask?.cancel()
         primingTask = nil
+        stopAutoAdvanceTimer()
         onDidStop?()
     }
 
     public func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        stopAutoAdvanceTimer()
         onDidStop?()
     }
 }
@@ -261,6 +289,12 @@ extension ImagePiPController: AVPictureInPictureSampleBufferPlaybackDelegate {
         isPaused = !playing
         if let controlTimebase {
             CMTimebaseSetRate(controlTimebase, rate: playing ? 1.0 : 0.0)
+        }
+        // 再生/一時停止に自動送りタイマーを連動させる
+        if playing {
+            startAutoAdvanceTimerIfNeeded()
+        } else {
+            stopAutoAdvanceTimer()
         }
     }
 

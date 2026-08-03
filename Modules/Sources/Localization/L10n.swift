@@ -38,6 +38,13 @@ public enum L10n {
         public static var ratingFilterAtMost: String { tr("file_browser.rating_filter_at_most") }
         public static var ratingFilterExactly: String { tr("file_browser.rating_filter_exactly") }
         public static var colorLabel: String { tr("file_browser.color_label") }
+        public static var pipAutoAdvanceInterval: String { tr("file_browser.pip_auto_advance_interval") }
+        public static var pipAutoAdvanceIntervalDecrement: String { tr("file_browser.pip_auto_advance_interval_decrement") }
+        public static var pipAutoAdvanceIntervalIncrement: String { tr("file_browser.pip_auto_advance_interval_increment") }
+
+        public static func pipAutoAdvanceIntervalValue(_ seconds: Int) -> String {
+            tr("file_browser.pip_auto_advance_interval_value", seconds)
+        }
 
         public static func ratingFilterStarValue(_ stars: Int) -> String {
             tr("file_browser.rating_filter_star_value", stars)

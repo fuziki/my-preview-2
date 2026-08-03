@@ -71,6 +71,14 @@ public final class FileBrowserViewModel {
         }
     }
 
+    /// PiP自動送りの間隔（秒）の選択可能範囲
+    public static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
+
+    /// PiP再生中に自動的に次の写真へ進める間隔（秒）。変更時にUserDefaultsへ自動保存される
+    public var pipAutoAdvanceIntervalSeconds: Int {
+        didSet { settings.pipAutoAdvanceIntervalSeconds = pipAutoAdvanceIntervalSeconds }
+    }
+
     /// 現在のディレクトリで最後に閲覧したファイル名（ディレクトリパスごとに永続化されたものから引く）
     private var lastViewedFileName: String? {
         guard let directoryPath = rootURL?.path else { return nil }
@@ -213,6 +221,7 @@ public final class FileBrowserViewModel {
         self.isRatingEnabled = settings.isRatingEnabled
         self.ratingFilter = settings.ratingFilter
         self.colorLabelFilter = settings.colorLabelFilter
+        self.pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
     }
 
     // MARK: - アクション
@@ -238,6 +247,7 @@ public final class FileBrowserViewModel {
         isRatingEnabled = settings.isRatingEnabled
         ratingFilter = settings.ratingFilter
         colorLabelFilter = settings.colorLabelFilter
+        pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
         lastViewedItemID = nil
         ratingsByURL = [:]
         labelsByURL = [:]

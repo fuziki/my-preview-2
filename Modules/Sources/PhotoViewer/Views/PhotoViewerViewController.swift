@@ -624,6 +624,12 @@ public final class PhotoViewerViewController: UIViewController {
                 self?.pushCurrentImageToPiPIfNeeded()
             }
         }
+        pipController.onAutoAdvanceTick = { [weak self] in
+            Task {
+                await self?.viewModel.advanceForPictureInPictureAutoPlay()
+                self?.pushCurrentImageToPiPIfNeeded()
+            }
+        }
     }
 
     /// バックグラウンドではupdateProperties()（UIKitの通常の描画更新サイクルに連動）が呼ばれにくく、
@@ -672,7 +678,7 @@ public final class PhotoViewerViewController: UIViewController {
             return
         }
         guard let image = viewModel.currentImage else { return }
-        pipController.start(image: image)
+        pipController.start(image: image, autoAdvanceInterval: TimeInterval(viewModel.pipAutoAdvanceIntervalSeconds))
     }
 
     @objc private func prevLongPressed(_ gesture: UILongPressGestureRecognizer) {

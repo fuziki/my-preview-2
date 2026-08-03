@@ -176,7 +176,9 @@ class MyViewController: UIViewController {
 ## PiP表示機能
 
 - フォトビューア画面の保存ボタン右隣にあるPiPボタンから、現在表示中の写真をシステムの Picture in Picture ウィンドウに表示できる（動画は使わず、`ImagePiPKit` が静止画をシステムPiPへ表示する）。
-- PiP表示中は現在の写真を表示し続けるのみで、自動的に次の写真へ送る機能は無い。
+- PiPウィンドウの標準の±10秒スキップボタンで前後の写真に切り替えられる（先頭/末尾では無反応）。
+- PiPウィンドウの標準の再生/一時停止ボタンをスライドショーのON/OFFとして使う。再生中は一定間隔（`pipAutoAdvanceIntervalSeconds`、デフォルト5秒）で次の写真へ自動的に進み、最後の写真まで到達すると先頭へ固定でループする。一時停止すると自動送りは止まる。
+- 自動送りの間隔（秒）は設定メニューから変更でき、`UserDefaultsSettings.pipAutoAdvanceIntervalSeconds` として永続化される。
 - 詳細は [フォトビューア画面の仕様](spec-photo-viewer.md) の「PiP表示」を参照。
 
 ---
@@ -303,6 +305,7 @@ struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
     var colorLabelFilter: Set<PhotoColorLabel> // デフォルト []
     var lastViewedEntries: [DirectoryLastViewedEntry] // デフォルト []
     var orientationLock: PhotoViewerOrientationLock // デフォルト .followSystem。フォトビューア画面のみに適用
+    var pipAutoAdvanceIntervalSeconds: Int   // デフォルト 5（範囲 1...30）。PiP再生中に自動的に次の写真へ進める間隔
 }
 ```
 

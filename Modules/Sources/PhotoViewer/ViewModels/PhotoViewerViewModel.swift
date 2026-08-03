@@ -33,6 +33,9 @@ public final class PhotoViewerViewModel {
     public var canGoPrevious: Bool { currentIndex > 0 }
     public var canGoNext: Bool { currentIndex < allURLs.count - 1 }
 
+    /// PiP再生中に自動的に次の写真へ進める間隔（秒。設定Menuで変更可能）
+    public var pipAutoAdvanceIntervalSeconds: Int { settings.pipAutoAdvanceIntervalSeconds }
+
     // MARK: - 依存関係
 
     private let imageLoader: any ImageLoaderServiceProtocol
@@ -85,6 +88,12 @@ public final class PhotoViewerViewModel {
     public func navigateNext() async {
         guard canGoNext else { return }
         await navigate(to: currentIndex + 1)
+    }
+
+    /// PiP再生中の自動送り用のナビゲーション。前後ボタンと異なり末尾では停止せず、先頭へ固定でループする
+    public func advanceForPictureInPictureAutoPlay() async {
+        guard allURLs.count > 1 else { return }
+        await navigate(to: (currentIndex + 1) % allURLs.count)
     }
 
     /// 任意のインデックスへ遷移する（ボタンナビゲーションとレーティング変更による自動遷移で使用）

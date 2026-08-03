@@ -236,6 +236,7 @@ UINavigationController
 | 保存フォーマット   | 「JPEG」「JPEG + RAW」の単一選択インラインメニュー                                        |
 | 並び順             | 「古い順」「新しい順」の単一選択インラインメニュー                                        |
 | 評価機能のON/OFF   | 星評価・フィルタ UI 全体の表示/非表示を切り替える単一アクション                           |
+| PiP自動送り間隔    | フォトビューアのPiP表示中、再生状態で自動的に次の写真へ進む間隔（秒）。減算／現在値表示（無効ボタン）／加算の3ボタン、範囲 1〜30秒でクランプ |
 | キャッシュを消去   | 破壊的アクション。確認ダイアログ後 `viewModel.resetToDefaults()` を実行                   |
 
 ## フィルタメニュー（FileBrowserMenuBuilder.makeFilterMenu）
