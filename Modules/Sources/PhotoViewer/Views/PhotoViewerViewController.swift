@@ -122,11 +122,9 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let ratingLabelBarView = RatingLabelBarView()
 
-    /// PiP開始ボタン。保存ボタンの右隣に配置する
+    /// PiP開始ボタン。ファイル名 + EXIFピルの左隣（上部の閉じる/回転ボタンと同じ行）に配置する
     private let pipButtonView = GlassButtonView.circle(systemImageName: "pip.enter")
     private lazy var pipController = ImagePiPController(containerView: view)
-    /// 保存ボタン + PiPボタンの組を左右中央に配置するための不可視ガイド
-    private let saveButtonGroupGuide = UILayoutGuide()
 
     private let lastSavedDateLabel: UILabel = {
         let label = UILabel()
@@ -389,20 +387,29 @@ public final class PhotoViewerViewController: UIViewController {
             nextButtonView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
         ])
 
-        // ファイル名 + EXIF: 右上のフローティングピル。コンテンツ幅に応じて自身も収縮するため、
-        // leadingはcloseButtonViewと重ならないための床（下限）のみ
+        // ファイル名 + EXIF: 右上のフローティングピル。コンテンツ幅に応じて自身も収縮する。
         view.addSubview(photoInfoPillView)
         NSLayoutConstraint.activate([
             photoInfoPillView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            photoInfoPillView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
             photoInfoPillView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
         ])
 
-        // 画面回転ボタン: ファイル名 + EXIFピルの左隣、上safeArea揃え
+        // PiP開始ボタン: ファイル名 + EXIFピルの左隣、上safeArea揃え（タップエリアの拡張なし）
+        view.addSubview(pipButtonView)
+        NSLayoutConstraint.activate([
+            pipButtonView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            pipButtonView.trailingAnchor.constraint(equalTo: photoInfoPillView.leadingAnchor, constant: -8),
+        ])
+
+        // 画面回転ボタン: PiPボタンの左隣、上safeArea揃え。
+        // leadingはcloseButtonViewと重ならないための床（下限）。ここに床を置くことで、ファイル名が長く
+        // ピルが伸びようとした場合でも回転ボタン・PiPボタンが閉じるボタン側へ押し出されず、
+        // ピル側（コンテンツ幅に応じて収縮する）が閉じる分だけ縮んで収まる（ファイル名は中略で1行表示）
         view.addSubview(orientationLockButtonView)
         NSLayoutConstraint.activate([
             orientationLockButtonView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            orientationLockButtonView.trailingAnchor.constraint(equalTo: photoInfoPillView.leadingAnchor, constant: -8),
+            orientationLockButtonView.trailingAnchor.constraint(equalTo: pipButtonView.leadingAnchor, constant: -8),
+            orientationLockButtonView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
         ])
 
         // サムネイル: ファイル名ラベルの下、右揃え
@@ -416,25 +423,15 @@ public final class PhotoViewerViewController: UIViewController {
         // centerXは縦持ち/横持ちで意味が変わる（横持ちはレーティングバーとの組を中央揃えするため）ため、
         // レーティング有効時はここでは固定せずportrait/landscapeの制約セット側で設定する。
         view.addSubview(saveButtonView)
-        // PiP開始ボタン: 保存ボタンの右隣（タップエリアの拡張なし）
-        view.addSubview(pipButtonView)
-        view.addLayoutGuide(saveButtonGroupGuide)
         NSLayoutConstraint.activate([
             saveButtonView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
             saveButtonView.leadingAnchor.constraint(greaterThanOrEqualTo: prevButtonView.trailingAnchor, constant: 8),
+            saveButtonView.trailingAnchor.constraint(lessThanOrEqualTo: nextButtonView.leadingAnchor, constant: -8),
             saveButtonView.heightAnchor.constraint(equalToConstant: 44),
             saveButtonView.button.topAnchor.constraint(equalTo: saveButtonView.topAnchor),
             saveButtonView.button.bottomAnchor.constraint(equalTo: saveButtonView.bottomAnchor),
             saveButtonView.button.leadingAnchor.constraint(equalTo: saveButtonView.leadingAnchor),
             saveButtonView.button.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
-
-            pipButtonView.leadingAnchor.constraint(equalTo: saveButtonView.trailingAnchor, constant: 8),
-            pipButtonView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
-            pipButtonView.trailingAnchor.constraint(lessThanOrEqualTo: nextButtonView.leadingAnchor, constant: -8),
-
-            // 保存ボタン + PiPボタンをひとつの組とみなし、中央揃えの基準として使う
-            saveButtonGroupGuide.leadingAnchor.constraint(equalTo: saveButtonView.leadingAnchor),
-            saveButtonGroupGuide.trailingAnchor.constraint(equalTo: pipButtonView.trailingAnchor),
         ])
 
         // レーティング星 + カラーラベル: 保存ボタンの上のカプセル（レーティング有効時のみ）
@@ -443,21 +440,21 @@ public final class PhotoViewerViewController: UIViewController {
             view.addSubview(ratingLabelBarView)
             view.addLayoutGuide(bottomBarGroupGuide)
             portraitBottomBarConstraints = [
-                saveButtonGroupGuide.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
                 ratingLabelBarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ]
             landscapeBottomBarConstraints = [
                 ratingLabelBarView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
                 ratingLabelBarView.trailingAnchor.constraint(equalTo: saveButtonView.leadingAnchor, constant: -8),
-                // レーティングバー＋保存ボタン＋PiPボタンの組をひとつのグループとみなし、左右中央に配置する
+                // レーティングバー＋保存ボタンの組をひとつのグループとみなし、左右中央に配置する
                 bottomBarGroupGuide.leadingAnchor.constraint(equalTo: ratingLabelBarView.leadingAnchor),
-                bottomBarGroupGuide.trailingAnchor.constraint(equalTo: pipButtonView.trailingAnchor),
+                bottomBarGroupGuide.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
                 bottomBarGroupGuide.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ]
         } else {
             NSLayoutConstraint.activate([
-                saveButtonGroupGuide.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ])
         }
 
