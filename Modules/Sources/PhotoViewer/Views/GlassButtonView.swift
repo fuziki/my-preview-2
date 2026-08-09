@@ -44,18 +44,22 @@ public final class GlassButtonView: UIView {
 // MARK: - ファクトリ
 
 public extension GlassButtonView {
-    /// SF Symbolsアイコンを持つ 44×44 の円形ガラスボタンを生成する。
-    static func circle(systemImageName: String) -> GlassButtonView {
+    /// SF Symbolsアイコンを持つ円形ガラスボタンを生成する。デフォルトは44×44。
+    static func circle(systemImageName: String, diameter: CGFloat = 44) -> GlassButtonView {
         var config = UIButton.Configuration.borderless()
         config.image = UIImage(systemName: systemImageName)
         config.baseForegroundColor = .white
+        // 44pt以外の直径の場合、アイコンサイズも比例して縮小する（44ptは既存ボタンと同じ既定サイズのまま）
+        if diameter != 44 {
+            config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: diameter * 0.45)
+        }
         let button = UIButton(configuration: config)
-        let view = GlassButtonView(button: button, cornerRadius: 22)
+        let view = GlassButtonView(button: button, cornerRadius: diameter / 2)
         NSLayoutConstraint.activate([
-            view.widthAnchor.constraint(equalToConstant: 44),
-            view.heightAnchor.constraint(equalToConstant: 44),
-            button.widthAnchor.constraint(equalToConstant: 44),
-            button.heightAnchor.constraint(equalToConstant: 44),
+            view.widthAnchor.constraint(equalToConstant: diameter),
+            view.heightAnchor.constraint(equalToConstant: diameter),
+            button.widthAnchor.constraint(equalToConstant: diameter),
+            button.heightAnchor.constraint(equalToConstant: diameter),
         ])
         return view
     }
