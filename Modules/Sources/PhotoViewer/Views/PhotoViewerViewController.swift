@@ -86,9 +86,6 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let photoInfoPillView = PhotoInfoPillView()
 
-    /// 画面回転設定を循環させるボタン（端末の設定に追従 → 縦画面固定 → 横画面固定）
-    private let orientationLockButtonView = GlassButtonView.circle(systemImageName: "arrow.triangle.2.circlepath")
-
     private let thumbnailImageView: UIImageView = {
         let iv = UIImageView()
         iv.translatesAutoresizingMaskIntoConstraints = false
@@ -100,14 +97,12 @@ public final class PhotoViewerViewController: UIViewController {
 
     private var thumbnailSizeConstraints: [NSLayoutConstraint] = []
 
-    /// レーティングバー・PiPボタン・保存ボタン付近の縦持ち/横持ち向けの制約セット
+    /// レーティングバー・PiP/回転座布団・保存ボタン付近の縦持ち/横持ち向けの制約セット
     private var portraitBottomBarConstraints: [NSLayoutConstraint] = []
     private var landscapeBottomBarConstraints: [NSLayoutConstraint] = []
     private var isCurrentlyLandscape: Bool?
-    /// 横持ち時にレーティングバー＋PiPボタン＋保存ボタンの組を左右中央揃えするための不可視ガイド（isRatingEnabled時のみ使用）
+    /// 横持ち時にレーティングバー＋保存ボタン＋PiP/回転座布団の組を左右中央揃えするための不可視ガイド（isRatingEnabled時のみ使用）
     private let bottomBarGroupGuide = UILayoutGuide()
-    /// 縦持ち時にレーティングバー＋PiPボタンの組を左右中央揃えするための不可視ガイド（isRatingEnabled時のみ使用）
-    private let ratingPipGroupGuide = UILayoutGuide()
 
     private let saveButtonView: GlassButtonView = {
         var config = UIButton.Configuration.borderless()
@@ -124,9 +119,12 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let ratingLabelBarView = RatingLabelBarView()
 
-    /// PiP開始ボタン。評価機能有効時は星+カラーラベルの座布団（高さ32pt）の右隣に、
-    /// 同じ高さの円として配置する。無効時は座布団があった位置の右端（保存ボタン基準）に配置する
-    private let pipButtonView = GlassButtonView.circle(systemImageName: "pip.enter", diameter: 32)
+    /// PiP開始ボタン + 画面回転ボタンをまとめた座布団。評価機能有効時は星+カラーラベルの座布団の右隣に、
+    /// 無効時は座布団があった位置の右端（保存ボタン基準）に配置する
+    private let pipOrientationBarView = PiPOrientationBarView(
+        pipSystemImageName: "pip.enter",
+        orientationSystemImageName: "arrow.triangle.2.circlepath"
+    )
     private lazy var pipController = ImagePiPController(containerView: view)
 
     private let lastSavedDateLabel: UILabel = {
@@ -263,7 +261,7 @@ public final class PhotoViewerViewController: UIViewController {
         nextButtonView.button.tintColor = viewModel.canGoNext ? .white : .systemGray
         nextHitAreaButton.isEnabled = viewModel.canGoNext
         updateSaveButton(status: viewModel.saveStatus)
-        orientationLockButtonView.button.configuration?.image = UIImage(systemName: orientationLockIconName(for: viewModel.orientationLock))
+        pipOrientationBarView.orientationButton.configuration?.image = UIImage(systemName: orientationLockIconName(for: viewModel.orientationLock))
         ratingLabelBarView.setRating(viewModel.currentRating)
         ratingLabelBarView.setColorLabel(viewModel.currentColorLabel)
         if viewModel.shouldDismiss, !isBeingDismissed {
@@ -389,22 +387,13 @@ public final class PhotoViewerViewController: UIViewController {
             nextButtonView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
         ])
 
-        // ファイル名 + EXIF: 右上のフローティングピル。コンテンツ幅に応じて自身も収縮する。
+        // ファイル名 + EXIF: 右上のフローティングピル。コンテンツ幅に応じて自身も収縮するため、
+        // leadingはcloseButtonViewと重ならないための床（下限）のみ（ファイル名は中略で1行表示）
         view.addSubview(photoInfoPillView)
         NSLayoutConstraint.activate([
             photoInfoPillView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            photoInfoPillView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
             photoInfoPillView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-        ])
-
-        // 画面回転ボタン: ファイル名 + EXIFピルの左隣、上safeArea揃え。
-        // leadingはcloseButtonViewと重ならないための床（下限）。ファイル名が長くピルが伸びようとした場合でも
-        // 回転ボタンが閉じるボタン側へ押し出されて重ならないよう、ピル側（コンテンツ幅に応じて収縮する）が
-        // 縮んで収まる（ファイル名は中略で1行表示）
-        view.addSubview(orientationLockButtonView)
-        NSLayoutConstraint.activate([
-            orientationLockButtonView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            orientationLockButtonView.trailingAnchor.constraint(equalTo: photoInfoPillView.leadingAnchor, constant: -8),
-            orientationLockButtonView.leadingAnchor.constraint(greaterThanOrEqualTo: closeButtonView.trailingAnchor, constant: 8),
         ])
 
         // サムネイル: ファイル名ラベルの下、右揃え
@@ -429,53 +418,45 @@ public final class PhotoViewerViewController: UIViewController {
             saveButtonView.button.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
         ])
 
-        // PiP開始ボタン: 星+カラーラベルの座布団と同じ高さ（32pt）の円。タップエリアの拡張なし。
-        // 座布団の有無に関わらずサイズは共通のためここで一度だけ設定する
-        view.addSubview(pipButtonView)
-        NSLayoutConstraint.activate([
-            pipButtonView.widthAnchor.constraint(equalToConstant: 32),
-            pipButtonView.heightAnchor.constraint(equalToConstant: 32),
-        ])
+        // PiP開始ボタン + 画面回転ボタンの座布団: タップエリアの拡張なし
+        view.addSubview(pipOrientationBarView)
 
         // レーティング星 + カラーラベル: 保存ボタンの上のカプセル（レーティング有効時のみ）
         // 縦持ち/横持ちで配置が異なるため、両方の制約セットを用意しviewWillLayoutSubviewsで切り替える
         if viewModel.isRatingEnabled {
             view.addSubview(ratingLabelBarView)
             view.addLayoutGuide(bottomBarGroupGuide)
-            view.addLayoutGuide(ratingPipGroupGuide)
-            NSLayoutConstraint.activate([
-                // PiPボタンは座布団の右隣、座布団と同じ高さで中央揃え（縦持ち/横持ちで共通）
-                pipButtonView.leadingAnchor.constraint(equalTo: ratingLabelBarView.trailingAnchor, constant: 8),
-                pipButtonView.centerYAnchor.constraint(equalTo: ratingLabelBarView.centerYAnchor),
-            ])
             portraitBottomBarConstraints = [
                 saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 ratingLabelBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
-                // レーティングバー＋PiPボタンの組をひとつのグループとみなし、左右中央に配置する
-                ratingPipGroupGuide.leadingAnchor.constraint(equalTo: ratingLabelBarView.leadingAnchor),
-                ratingPipGroupGuide.trailingAnchor.constraint(equalTo: pipButtonView.trailingAnchor),
-                ratingPipGroupGuide.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                ratingLabelBarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                // PiP+回転の座布団はレーティングバーの上、画面右端揃え
+                pipOrientationBarView.bottomAnchor.constraint(equalTo: ratingLabelBarView.topAnchor, constant: -8),
+                pipOrientationBarView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             ]
             landscapeBottomBarConstraints = [
                 ratingLabelBarView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
-                pipButtonView.trailingAnchor.constraint(equalTo: saveButtonView.leadingAnchor, constant: -8),
-                // レーティングバー＋PiPボタン＋保存ボタンの組をひとつのグループとみなし、左右中央に配置する
+                ratingLabelBarView.trailingAnchor.constraint(equalTo: saveButtonView.leadingAnchor, constant: -8),
+                // PiP+回転の座布団は保存ボタンの右側
+                pipOrientationBarView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
+                pipOrientationBarView.leadingAnchor.constraint(equalTo: saveButtonView.trailingAnchor, constant: 8),
+                // レーティングバー＋保存ボタン＋PiP/回転座布団の組をひとつのグループとみなし、左右中央に配置する
                 bottomBarGroupGuide.leadingAnchor.constraint(equalTo: ratingLabelBarView.leadingAnchor),
-                bottomBarGroupGuide.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
+                bottomBarGroupGuide.trailingAnchor.constraint(equalTo: pipOrientationBarView.trailingAnchor),
                 bottomBarGroupGuide.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ]
         } else {
             NSLayoutConstraint.activate([
                 saveButtonView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             ])
-            // 座布団が無い場合は、座布団があった位置の右端（保存ボタン基準）にPiPボタンを配置する
+            // 座布団が無い場合は、レーティングバーがあった分の余白を詰め、画面右端揃えで保存ボタンの真上に配置する
             portraitBottomBarConstraints = [
-                pipButtonView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
-                pipButtonView.trailingAnchor.constraint(equalTo: saveButtonView.trailingAnchor),
+                pipOrientationBarView.bottomAnchor.constraint(equalTo: saveButtonView.topAnchor, constant: -8),
+                pipOrientationBarView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             ]
             landscapeBottomBarConstraints = [
-                pipButtonView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
-                pipButtonView.trailingAnchor.constraint(equalTo: saveButtonView.leadingAnchor, constant: -8),
+                pipOrientationBarView.centerYAnchor.constraint(equalTo: saveButtonView.centerYAnchor),
+                pipOrientationBarView.leadingAnchor.constraint(equalTo: saveButtonView.trailingAnchor, constant: 8),
             ]
         }
 
@@ -529,12 +510,12 @@ public final class PhotoViewerViewController: UIViewController {
 
     private func setupActions() {
         closeButtonView.button.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        orientationLockButtonView.button.addTarget(self, action: #selector(orientationLockTapped), for: .touchUpInside)
+        pipOrientationBarView.orientationButton.addTarget(self, action: #selector(orientationLockTapped), for: .touchUpInside)
         // タップ・長押しはガラスボタンの前面にある広いタッチ領域ボタンで検出する。
         prevHitAreaButton.addTarget(self, action: #selector(prevTapped), for: .touchUpInside)
         nextHitAreaButton.addTarget(self, action: #selector(nextTapped), for: .touchUpInside)
         saveButtonView.button.addTarget(self, action: #selector(saveTapped), for: .touchUpInside)
-        pipButtonView.button.addTarget(self, action: #selector(pipTapped), for: .touchUpInside)
+        pipOrientationBarView.pipButton.addTarget(self, action: #selector(pipTapped), for: .touchUpInside)
         ratingLabelBarView.onStarTapped = { [weak self] stars in
             Task { await self?.viewModel.setRating(stars) }
         }
@@ -579,10 +560,9 @@ public final class PhotoViewerViewController: UIViewController {
             self.prevHitAreaButton.alpha = alpha
             self.nextHitAreaButton.alpha = alpha
             self.photoInfoPillView.alpha = alpha
-            self.orientationLockButtonView.alpha = alpha
             self.thumbnailImageView.alpha = alpha
             self.saveButtonView.alpha = alpha
-            self.pipButtonView.alpha = alpha
+            self.pipOrientationBarView.alpha = alpha
             self.ratingLabelBarView.alpha = alpha
             self.lastSavedDateLabel.alpha = alpha
         }
@@ -620,7 +600,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     private func setupPictureInPicture() {
         guard ImagePiPController.isSupported else {
-            pipButtonView.button.isEnabled = false
+            pipOrientationBarView.pipButton.isEnabled = false
             return
         }
         pipController.attach()

@@ -96,13 +96,12 @@ view（黒背景）
   │                 └── UIImageView（写真）
   └── 各フローティング要素（view に直接追加、UICollectionView より前面）
         ├── 閉じるボタン（GlassButtonView、左上）
-        ├── 画面回転ボタン（GlassButtonView、ファイル名 + Exif パネルの左隣・右上）
         ├── ファイル名 + Exif パネル（PhotoInfoPillView、右上）
         ├── サムネイル（UIImageView、パネルの下・右寄せ）
         ├── 前へボタン（GlassButtonView + 拡大ヒットエリア、左下）
         ├── 次へボタン（GlassButtonView + 拡大ヒットエリア、右下）
         ├── 保存ボタン（GlassButtonView、下部中央）
-        ├── PiP開始ボタン（GlassButtonView、直径32ptの円。isRatingEnabled時は評価・カラーラベルバーの右隣、無効時はその位置があった右端。タップエリアの拡張は無し）
+        ├── PiP開始ボタン + 画面回転ボタンの座布団（PiPOrientationBarView。縦持ちは評価・カラーラベルバーの上・画面右端、横持ちは保存ボタンの右側。タップエリアの拡張は無し）
         ├── 評価・カラーラベルバー（RatingLabelBarView、保存ボタンの上。isRatingEnabled時のみ）
         ├── ローディングインジケーター（UIActivityIndicatorView、評価バー or 保存ボタンの上）
         └── 最終保存日時ラベル（lastSavedDateLabel、保存ボタンの下）
@@ -205,26 +204,6 @@ zoomScale = targetZoom
 - `GlassButtonView.circle(systemImageName: "xmark")`
 - 制約：`top` = `view.safeAreaLayoutGuide.topAnchor` + 12pt、`leading` = `view.safeAreaLayoutGuide.leadingAnchor` + 16pt
 
-### 画面回転ボタン（ファイル名 + Exif パネルの左隣）
-
-- `GlassButtonView.circle(systemImageName:)`。タップエリアの拡張は無し（44×44）。
-- 制約：`top` = `safeArea` + 12pt（`photoInfoPillView`・`closeButtonView` と同じ）、`trailing` = `photoInfoPillView.leading` - 8pt、`leading` ≥ `closeButtonView.trailing` + 8pt（`closeButtonView` と重ならないための床）。
-  - `photoInfoPillView` はコンテンツ幅（ファイル名の長さ）に応じて自身の `leading` が伸縮するため、画面回転ボタン側に固定の `leading` を与えずに床のみとすることで、ファイル名が長い場合はパネル側が縮み（`fileNameLabel` が中略される。後述）、画面回転ボタンが閉じるボタンへ押し出されて重なることを防ぐ。
-- タップするたびに画面回転設定を「端末の設定に追従」→「縦画面固定」→「横画面固定」→（最初に戻る）の順に循環させる（`PhotoViewerViewModel.cycleOrientationLock()`）。設定は `UserDefaultsSettings.orientationLock`（`PhotoViewerOrientationLock`、デフォルト `.followSystem`）として永続化され、次回フォトビューア表示時にも引き継がれる。この設定が影響するのはフォトビューア画面のみで、他の画面は常に端末の設定に従う。
-- アイコンは現在の状態を表す（`updateProperties()` で反映）：
-
-  | 状態             | アイコン（SF Symbols）      |
-  |------------------|------------------------------|
-  | 端末の設定に追従 | `arrow.triangle.2.circlepath` |
-  | 縦画面固定       | `iphone`                     |
-  | 横画面固定       | `iphone.landscape`           |
-
-**回転の反映方法：**
-
-- `PhotoViewerViewController.supportedInterfaceOrientations` を `viewModel.orientationLock` に応じてオーバーライドする（`.followSystem` は `super.supportedInterfaceOrientations` でInfo.plist準拠の端末設定、`.portrait` は `.portrait`、`.landscape` は `.landscape`）。
-- 許可範囲を絞るだけでは実際には回転しないため、`windowScene.requestGeometryUpdate(.iOS(interfaceOrientations:))` を能動的に呼んで回転を発生させる（ボタンタップ時・表示直後の `viewDidAppear` で発火。`setNeedsUpdateOfSupportedInterfaceOrientations()` とセットで呼ぶ）。
-- 縦/横固定中（`.followSystem` 以外）にフォトビューアを閉じる場合、コントロールセンターの回転ロック（縦固定）を一時的に上書きしていた可能性があるため、`presentingViewController` の許容範囲へ `requestGeometryUpdate` を出し直し、遷移先画面が向きを引き継がないようにする。`presentingViewController`/`view.window` は `viewDidDisappear` 時点で `nil` になるため `viewWillDisappear` で `weak` プロパティに捕捉し、実際の要求は（dismissアニメーション進行中との衝突を避けるため）トランジション完了後にしか呼ばれない `viewDidDisappear` で行う。それ以外（`.followSystem`）の場合はUIKit標準の再評価に任せる。詳細は [画面回転制御の実装知見](orientation-control.md) を参照。
-
 ### ファイル名 + Exif パネル（右上・PhotoInfoPillView）
 
 `Modules/Sources/PhotoViewer/Views/PhotoInfoPillView.swift`。従来の素の `UIVisualEffectView` パネルを置き換え、共通の `GlassBackdropView`（`cornerRadius: 16`）を背景に使う。
@@ -233,8 +212,8 @@ zoomScale = targetZoom
 - `fileNameLabel` は `numberOfLines = 1`・`lineBreakMode = .byTruncatingMiddle` を指定し、長いファイル名でも改行させず常に1行で表示する。中略（`…`）は文字列の真ん中に入る（拡張子側の情報も見えるようにするため、末尾切り捨てではなく中央切り捨てを選んでいる）。
 - Exif ラベルは `iso · focalLength · exposureValue · fNumber · shutterSpeed` を連結し、`flashFired` が true の場合は末尾に `"  ⚡️"` を付与する。
 - パネル全体に透明な `copyButton` を重ねており、タップでファイル名＋Exifの整形テキストをクリップボードへコピーし、中程度の触覚フィードバック（`UIImpactFeedbackGenerator`）と `ToastKit` によるトースト通知（クリップボードアイコン＋コピー完了メッセージ）を発行する。
-- パネル自身の `leadingAnchor` はコンテンツ幅（ファイル名・Exifの長さ）に応じて収縮する（内部でガラス背景の `leadingAnchor` と一致させているため）。外側からは `trailing` を固定し、`leading` は左隣の画面回転ボタンとの間隔（8pt）を与える。ファイル名が長い場合にパネルが実際にどこまで縮むかは、画面回転ボタン側の `closeButtonView` に対する床（下限。前述）によって決まる。
-- 制約：`top` = `safeArea` + 12pt、`trailing` = `view.safeAreaLayoutGuide.trailingAnchor` - 16pt、`leading` = `orientationLockButtonView.trailing` + 8pt、`height` ≥ 44pt。
+- パネル自身の `leadingAnchor` はコンテンツ幅（ファイル名・Exifの長さ）に応じて収縮する（内部でガラス背景の `leadingAnchor` と一致させているため）。外側からは `trailing` を固定し、`leading` は他要素との重なりを防ぐための床（下限）のみを与える。
+- 制約：`top` = `safeArea` + 12pt、`trailing` = `view.safeAreaLayoutGuide.trailingAnchor` - 16pt、`leading` ≥ `closeButtonView.trailing` + 8pt、`height` ≥ 44pt。
 
 ### サムネイル（パネルの下・右寄せ）
 
@@ -263,21 +242,33 @@ zoomScale = targetZoom
 - 縦の区切り線
 - カラーラベルボタン6個（`circle.fill`/`circle.inset.filled`、24×32pt、`PhotoColorLabel` の色でtint）
 - タップは UIMenu ではなく直接の `UIButton.touchUpInside`。`onStarTapped`/`onColorTapped` コールバック経由で `viewModel.setRating`/`setColorLabel` を呼ぶ（トグルオフのロジックは ViewModel 側が持つ）。
-- 制約（縦持ち）：`bottom` = `saveButtonView.top` - 8pt。`saveButtonView.centerX` は `view.centerXAnchor` に揃える。レーティングバー自身の `centerX` は固定せず、PiPボタンとの組で中央揃えする（後述）。
-- 制約（横持ち）：`centerY` = `saveButtonView.centerYAnchor`。`leading` は固定せず、`trailing` はPiPボタンとの間隔（8pt）で決まる（後述）。`saveButtonView` 単体は中央揃えせず、`bottomBarGroupGuide`（不可視の `UILayoutGuide`。`leading` = `ratingLabelBarView.leading`、`trailing` = `saveButtonView.trailing`）の `centerX` を `view.centerXAnchor` に揃えることで、レーティングバー＋PiPボタン＋保存ボタンの組を左右中央に配置する。
+- 制約（縦持ち）：`bottom` = `saveButtonView.top` - 8pt、`centerX` = `view.centerXAnchor`。`saveButtonView.centerX` も `view.centerXAnchor` に揃える。
+- 制約（横持ち）：`centerY` = `saveButtonView.centerYAnchor`、`trailing` = `saveButtonView.leading` - 8pt（保存ボタンと左右に並ぶ）。`saveButtonView` 単体は中央揃えせず、`bottomBarGroupGuide`（不可視の `UILayoutGuide`。`leading` = `ratingLabelBarView.leading`、`trailing` = `pipOrientationBarView.trailing`）の `centerX` を `view.centerXAnchor` に揃えることで、レーティングバー＋保存ボタン＋PiP/回転座布団の組を左右中央に配置する。
 - 縦持ち/横持ちの切り替えは `PhotoViewerViewController.viewWillLayoutSubviews()` 内で `view.bounds.width > view.bounds.height` を判定し、該当する制約セットを activate/deactivate して行う。
 
-### PiPボタン（評価・カラーラベルバーの右隣）
+### PiP開始ボタン + 画面回転ボタンの座布団
 
-- `GlassButtonView.circle(systemImageName: "pip.enter", diameter: 32)`。評価・カラーラベルバー（座布団）と同じ高さ32ptの円。タップエリアの拡張は無し。
-- `isRatingEnabled` が true の場合：`leading` = `ratingLabelBarView.trailing` + 8pt、`centerY` = `ratingLabelBarView.centerYAnchor`（縦持ち/横持ちで共通の固定関係。orientationによる制約セットの切り替え対象に含めない）。
-  - 縦持ち：レーティングバー＋PiPボタンの組をひとつのグループとみなし、不可視の `UILayoutGuide`（`ratingPipGroupGuide`。`leading` = `ratingLabelBarView.leading`、`trailing` = `pipButtonView.trailing`）の `centerX` を `view.centerXAnchor` に揃えて左右中央に配置する。
-  - 横持ち：`trailing` = `saveButtonView.leading` - 8pt（レーティングバーとPiPボタンの間に保存ボタンが続く形）。この3要素の組は `bottomBarGroupGuide` で中央揃えする（前述）。
-- `isRatingEnabled` が false の場合（評価・カラーラベルバー自体が存在しない）：座布団があった位置の右端に相当する、保存ボタン基準の位置に配置する。
-  - 縦持ち：`bottom` = `saveButtonView.top` - 8pt、`trailing` = `saveButtonView.trailing`
-  - 横持ち：`centerY` = `saveButtonView.centerYAnchor`、`trailing` = `saveButtonView.leading` - 8pt
-- `ImagePiPController.isSupported`（`AVPictureInPictureController.isPictureInPictureSupported()`）が `false` の環境ではボタンを無効化する。
-- タップ時の挙動は後述の「PiP表示」を参照。
+`Modules/Sources/PhotoViewer/Views/PiPOrientationBarView.swift`。PiP開始ボタンと画面回転ボタンを1つの `GlassBackdropView`（`cornerRadius: 16`）ベースの横長カプセルにまとめたビュー。高さ・アイコン構成は `RatingLabelBarView` に合わせつつ、ボタンは32×32ptの正方形にしている（アイコンは `pointSize: 12`）。
+
+- `pipButton`（`pip.enter`）・`orientationButton`（回転状態に応じたアイコン。後述）を横並びのスタックビューで並べる。区切り線は無し。
+- 縦持ち：評価・カラーラベルバーの上、画面右端揃え。`bottom` = `ratingLabelBarView.top` - 8pt、`trailing` = `view.safeAreaLayoutGuide.trailingAnchor` - 16pt。`isRatingEnabled` が false の場合（評価・カラーラベルバー自体が存在しない）は、その分の余白を詰めて保存ボタンの真上に配置する：`bottom` = `saveButtonView.top` - 8pt、`trailing` = `view.safeAreaLayoutGuide.trailingAnchor` - 16pt（画面右端揃えは共通）。
+- 横持ち：`isRatingEnabled` の有無に関わらず保存ボタンの右側に配置する。`centerY` = `saveButtonView.centerYAnchor`、`leading` = `saveButtonView.trailing` + 8pt。
+- `ImagePiPController.isSupported`（`AVPictureInPictureController.isPictureInPictureSupported()`）が `false` の環境では `pipButton` のみを無効化する（`orientationButton` はPiPの対応可否と無関係に常に有効）。
+- PiPボタンタップ時の挙動は後述の「PiP表示」を参照。
+- `orientationButton` をタップするたびに画面回転設定を「端末の設定に追従」→「縦画面固定」→「横画面固定」→（最初に戻る）の順に循環させる（`PhotoViewerViewModel.cycleOrientationLock()`）。設定は `UserDefaultsSettings.orientationLock`（`PhotoViewerOrientationLock`、デフォルト `.followSystem`）として永続化され、次回フォトビューア表示時にも引き継がれる。この設定が影響するのはフォトビューア画面のみで、他の画面は常に端末の設定に従う。
+- アイコンは現在の状態を表す（`updateProperties()` で反映）：
+
+  | 状態             | アイコン（SF Symbols）      |
+  |------------------|------------------------------|
+  | 端末の設定に追従 | `arrow.triangle.2.circlepath` |
+  | 縦画面固定       | `iphone`                     |
+  | 横画面固定       | `iphone.landscape`           |
+
+**回転の反映方法：**
+
+- `PhotoViewerViewController.supportedInterfaceOrientations` を `viewModel.orientationLock` に応じてオーバーライドする（`.followSystem` は `super.supportedInterfaceOrientations` でInfo.plist準拠の端末設定、`.portrait` は `.portrait`、`.landscape` は `.landscape`）。
+- 許可範囲を絞るだけでは実際には回転しないため、`windowScene.requestGeometryUpdate(.iOS(interfaceOrientations:))` を能動的に呼んで回転を発生させる（ボタンタップ時・表示直後の `viewDidAppear` で発火。`setNeedsUpdateOfSupportedInterfaceOrientations()` とセットで呼ぶ）。
+- 縦/横固定中（`.followSystem` 以外）にフォトビューアを閉じる場合、コントロールセンターの回転ロック（縦固定）を一時的に上書きしていた可能性があるため、`presentingViewController` の許容範囲へ `requestGeometryUpdate` を出し直し、遷移先画面が向きを引き継がないようにする。`presentingViewController`/`view.window` は `viewDidDisappear` 時点で `nil` になるため `viewWillDisappear` で `weak` プロパティに捕捉し、実際の要求は（dismissアニメーション進行中との衝突を避けるため）トランジション完了後にしか呼ばれない `viewDidDisappear` で行う。それ以外（`.followSystem`）の場合はUIKit標準の再評価に任せる。詳細は [画面回転制御の実装知見](orientation-control.md) を参照。
 
 ### ローディングインジケーター
 
@@ -322,7 +313,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 ## オーバーレイの表示・非表示
 
 - `viewModel.isOverlayVisible` の変化を `updateProperties()` で検知する。
-- `UIView.animate(withDuration: 0.2)` で閉じるボタン・画面回転ボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・PiPボタン・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
+- `UIView.animate(withDuration: 0.2)` で閉じるボタン・前後ボタン（ヒットエリア含む）・`photoInfoPillView`・サムネイル・保存ボタン・`pipOrientationBarView`（PiP開始ボタン + 画面回転ボタンの座布団）・`ratingLabelBarView`・`lastSavedDateLabel` の `alpha` を 0.0 / 1.0 に切り替える。
 - オーバーレイが非表示の場合はステータスバーも非表示にする（`prefersStatusBarHidden` で制御）。
 - `updateProperties()` 内で `setNeedsStatusBarAppearanceUpdate()` を呼ぶ。
 
