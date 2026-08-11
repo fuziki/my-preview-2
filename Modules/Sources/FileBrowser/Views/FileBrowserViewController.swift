@@ -387,6 +387,9 @@ public final class FileBrowserViewController: UIViewController {
             // レーティング変更など、既存セルの表示内容が変わった可能性がある場合に全セルを再設定する
             snapshot.reconfigureItems(snapshot.itemIdentifiers)
         }
+        // 異なるフォルダ間で同じ日付キーのセクションIDが再利用されると、
+        // 枚数が変わってもヘッダーViewが使い回されて古い枚数のまま表示され続けるため、毎回強制的に再構成する
+        snapshot.reloadSections(snapshot.sectionIdentifiers)
         dataSource.apply(snapshot, animatingDifferences: true)
     }
 
