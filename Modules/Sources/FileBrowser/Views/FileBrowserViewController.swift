@@ -479,6 +479,8 @@ public final class FileBrowserViewController: UIViewController {
             emptyStateView.configure(state: .noFolder)
         } else if isLoading {
             emptyStateView.configure(state: .loading)
+        } else if viewModel.isFilterActive {
+            emptyStateView.configure(state: .noMatchingPhotos)
         } else {
             emptyStateView.configure(state: .noPhotos)
         }

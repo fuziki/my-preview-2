@@ -113,7 +113,7 @@ struct FileBrowserSection {
 
 ### フォルダ選択後
 
-- `EmptyStateView` を非表示にする。ローディング中／写真0件の場合も `EmptyStateView` の別状態（`.loading`/`.noPhotos`）を表示する。
+- `EmptyStateView` を非表示にする。ローディング中／写真0件の場合も `EmptyStateView` の別状態を表示する（`.loading`／未フィルタで写真0件なら `.noPhotos`／フィルタ適用中で写真0件なら `.noMatchingPhotos`）。
 - `UICollectionView` を表示し、選択したフォルダ内の JPEG 画像をリスト／グリッド表示する。
 - ナビゲーションタイトルは選択したフォルダ名（`folderName`）。
 

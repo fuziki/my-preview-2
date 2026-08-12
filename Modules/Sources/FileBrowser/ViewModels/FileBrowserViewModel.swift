@@ -128,6 +128,11 @@ public final class FileBrowserViewModel {
         return items.first(where: { $0.name == fileName })
     }
 
+    /// レーティング・カラーラベルフィルタが有効かどうか（updateSectionsの適用条件と同一）
+    public var isFilterActive: Bool {
+        isRatingEnabled && (ratingFilter != nil || !colorLabelFilter.isEmpty)
+    }
+
     // MARK: - 最後に閲覧したアイテムID
 
     /// 最後に閲覧していたアイテムのID（「最後に表示」バッジ・メニュー・スクロールに使用）
@@ -285,7 +290,7 @@ public final class FileBrowserViewModel {
     /// sortOrderに従ってセクションとアイテムを並べてsectionsを更新する
     private func updateSections() {
         let visibleItems: [FileItem]
-        if isRatingEnabled, ratingFilter != nil || !colorLabelFilter.isEmpty {
+        if isFilterActive {
             visibleItems = loadedItems.filter { matchesFilters($0.url) }
         } else {
             visibleItems = loadedItems

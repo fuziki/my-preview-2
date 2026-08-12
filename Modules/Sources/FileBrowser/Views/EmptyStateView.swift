@@ -7,6 +7,7 @@ public final class EmptyStateView: UIView {
         case noFolder
         case loading
         case noPhotos
+        case noMatchingPhotos
     }
 
     private let label: UILabel = {
@@ -70,6 +71,9 @@ public final class EmptyStateView: UIView {
         case .noPhotos:
             activityIndicator.stopAnimating()
             label.text = L10n.FileBrowser.EmptyState.noPhotos
+        case .noMatchingPhotos:
+            activityIndicator.stopAnimating()
+            label.text = L10n.FileBrowser.EmptyState.noMatchingPhotos
         }
     }
 }

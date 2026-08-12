@@ -70,6 +70,7 @@ public enum L10n {
             public static var noFolder: String { tr("file_browser.empty_state.no_folder") }
             public static var loading: String { tr("file_browser.empty_state.loading") }
             public static var noPhotos: String { tr("file_browser.empty_state.no_photos") }
+            public static var noMatchingPhotos: String { tr("file_browser.empty_state.no_matching_photos") }
         }
     }
 

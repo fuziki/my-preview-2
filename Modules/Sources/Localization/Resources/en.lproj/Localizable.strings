@@ -41,6 +41,7 @@
 "file_browser.empty_state.no_folder" = "Please select a folder";
 "file_browser.empty_state.loading" = "Loading...";
 "file_browser.empty_state.no_photos" = "This folder contains no photos";
+"file_browser.empty_state.no_matching_photos" = "No photos match the current filter";
 
 /* ColorLabel */
 "color_label.green" = "Green";
