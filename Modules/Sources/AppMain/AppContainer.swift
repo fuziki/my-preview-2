@@ -70,6 +70,15 @@ final class AppContainer {
                     colorLabelFilter: colorLabelFilter,
                     onChange: onChange
                 )
+            },
+            advancedSettingsViewControllerFactory: { isRatingEnabled, pipAutoAdvanceIntervalSeconds, onRatingEnabledChange, onPipAutoAdvanceIntervalSecondsChange, onClearCacheRequested in
+                FileBrowserAdvancedSettingsViewController(
+                    isRatingEnabled: isRatingEnabled,
+                    pipAutoAdvanceIntervalSeconds: pipAutoAdvanceIntervalSeconds,
+                    onRatingEnabledChange: onRatingEnabledChange,
+                    onPipAutoAdvanceIntervalSecondsChange: onPipAutoAdvanceIntervalSecondsChange,
+                    onClearCacheRequested: onClearCacheRequested
+                )
             }
         )
     }

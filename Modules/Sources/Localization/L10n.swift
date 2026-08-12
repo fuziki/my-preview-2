@@ -41,21 +41,15 @@ public enum L10n {
         public static var filterTitle: String { tr("file_browser.filter_title") }
         public static var colorLabel: String { tr("file_browser.color_label") }
         public static var pipAutoAdvanceInterval: String { tr("file_browser.pip_auto_advance_interval") }
-        public static var pipAutoAdvanceIntervalDecrement: String { tr("file_browser.pip_auto_advance_interval_decrement") }
-        public static var pipAutoAdvanceIntervalIncrement: String { tr("file_browser.pip_auto_advance_interval_increment") }
 
         public static func pipAutoAdvanceIntervalValue(_ seconds: Int) -> String {
             tr("file_browser.pip_auto_advance_interval_value", seconds)
         }
 
+        public static var advancedSettings: String { tr("file_browser.advanced_settings") }
+
         public static func ratingFilterStarValue(_ stars: Int) -> String {
             tr("file_browser.rating_filter_star_value", stars)
-        }
-
-        /// 「レーティング (オン)」「レーティング (オフ)」のように現在の状態を括弧書きで付加したタイトルを返す
-        public static func ratingFeatureTitle(isEnabled: Bool) -> String {
-            let state = isEnabled ? tr("file_browser.state_on") : tr("file_browser.state_off")
-            return tr("file_browser.rating_feature_title", ratingFeature, state)
         }
 
         public static func columnCountValue(_ count: Int) -> String {

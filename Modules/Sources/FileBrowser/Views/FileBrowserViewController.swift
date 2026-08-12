@@ -27,6 +27,17 @@ public final class FileBrowserViewController: UIViewController {
         _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
     ) -> UIViewController
 
+    /// 詳細設定画面を生成するファクトリ。AppMainから注入される。
+    /// AppContainer側でFileBrowserAdvancedSettingsViewModelとFileBrowserAdvancedSettingsViewを組み立ててUIHostingControllerで包む。
+    /// 各onChangeクロージャは呼び出し側（本クラス）で用意し、変更のたびにFileBrowserViewModelへ書き戻す。
+    private let advancedSettingsViewControllerFactory: (
+        _ isRatingEnabled: Bool,
+        _ pipAutoAdvanceIntervalSeconds: Int,
+        _ onRatingEnabledChange: @escaping (Bool) -> Void,
+        _ onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
+        _ onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
+    ) -> UIViewController
+
     private let thumbnailService: any ThumbnailServiceProtocol
 
     // セル登録 — configureDataSource() で初期化する
@@ -43,12 +54,20 @@ public final class FileBrowserViewController: UIViewController {
             _ ratingFilter: RatingFilter?,
             _ colorLabelFilter: Set<PhotoColorLabel>,
             _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+        ) -> UIViewController,
+        advancedSettingsViewControllerFactory: @escaping (
+            _ isRatingEnabled: Bool,
+            _ pipAutoAdvanceIntervalSeconds: Int,
+            _ onRatingEnabledChange: @escaping (Bool) -> Void,
+            _ onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
+            _ onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
         ) -> UIViewController
     ) {
         self.viewModel = viewModel
         self.thumbnailService = thumbnailService
         self.photoViewerFactory = photoViewerFactory
         self.filterViewControllerFactory = filterViewControllerFactory
+        self.advancedSettingsViewControllerFactory = advancedSettingsViewControllerFactory
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -174,13 +193,7 @@ public final class FileBrowserViewController: UIViewController {
     private lazy var menuBuilder = FileBrowserMenuBuilder(
         viewModel: viewModel,
         onSettingsMenuChanged: { [weak self] in self?.refreshSettingsMenu() },
-        onRatingToggled: { [weak self] in
-            guard let self else { return }
-            updateNavigationBarItems()
-            applySnapshot(reconfiguringAllItems: true)
-            refreshSettingsMenu()
-        },
-        onClearCacheRequested: { [weak self] in self?.presentClearCacheConfirmation() }
+        onAdvancedSettingsRequested: { [weak self] in self?.pushAdvancedSettings() }
     )
 
     private lazy var settingsBarButtonItem = UIBarButtonItem(
@@ -244,22 +257,36 @@ public final class FileBrowserViewController: UIViewController {
         present(filterViewController, animated: true)
     }
 
-    /// キャッシュクリアの確認アラートを表示し、承認された場合のみ初期状態へ戻す
-    private func presentClearCacheConfirmation() {
-        let alert = UIAlertController(
-            title: L10n.FileBrowser.clearCache,
-            message: L10n.FileBrowser.clearCacheAlertMessage,
-            preferredStyle: .alert
+    /// 詳細設定画面をpushで表示する。
+    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はAppContainer経由のfactoryへ委譲し、
+    /// 変更のたびに呼ばれる各クロージャでFileBrowserViewModelへ書き戻す。
+    private func pushAdvancedSettings() {
+        let advancedSettingsViewController = advancedSettingsViewControllerFactory(
+            viewModel.isRatingEnabled,
+            viewModel.pipAutoAdvanceIntervalSeconds,
+            { [weak self] isRatingEnabled in
+                guard let self else { return }
+                viewModel.isRatingEnabled = isRatingEnabled
+                updateNavigationBarItems()
+                applySnapshot(reconfiguringAllItems: true)
+                refreshSettingsMenu()
+            },
+            { [weak self] seconds in
+                self?.viewModel.pipAutoAdvanceIntervalSeconds = seconds
+            },
+            { [weak self] in
+                guard let self else {
+                    let defaults = UserDefaultsSettings.default()
+                    return (defaults.isRatingEnabled, defaults.pipAutoAdvanceIntervalSeconds)
+                }
+                viewModel.resetToDefaults()
+                updateNavigationBarItems()
+                applySnapshot(reconfiguringAllItems: true)
+                refreshSettingsMenu()
+                return (viewModel.isRatingEnabled, viewModel.pipAutoAdvanceIntervalSeconds)
+            }
         )
-        alert.addAction(UIAlertAction(title: L10n.Common.cancel, style: .cancel))
-        alert.addAction(UIAlertAction(title: L10n.Common.clear, style: .destructive) { [weak self] _ in
-            guard let self else { return }
-            viewModel.resetToDefaults()
-            updateNavigationBarItems()
-            applySnapshot(reconfiguringAllItems: true)
-            refreshSettingsMenu()
-        })
-        present(alert, animated: true)
+        navigationController?.pushViewController(advancedSettingsViewController, animated: true)
     }
 
     private func configureDataSource() {

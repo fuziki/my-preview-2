@@ -235,9 +235,28 @@ UINavigationController
 | 列数（グリッド時のみ） | 減算／現在値表示（無効ボタン）／加算の3ボタン、範囲 2〜5 でクランプ                     |
 | 保存フォーマット   | 「JPEG」「JPEG + RAW」の単一選択インラインメニュー                                        |
 | 並び順             | 「古い順」「新しい順」の単一選択インラインメニュー                                        |
-| 評価機能のON/OFF   | 星評価・フィルタ UI 全体の表示/非表示を切り替える単一アクション                           |
-| PiP自動送り間隔    | フォトビューアのPiP表示中、再生状態で自動的に次の写真へ進む間隔（秒）。減算／現在値表示（無効ボタン）／加算の3ボタン、範囲 1〜30秒でクランプ |
-| キャッシュを消去   | 破壊的アクション。確認ダイアログ後 `viewModel.resetToDefaults()` を実行                   |
+| 詳細設定           | タップで詳細設定画面（後述）へpush遷移する単一アクション                                  |
+
+## 詳細設定画面（FileBrowserAdvancedSettingsViewController / FileBrowserAdvancedSettingsView / FileBrowserAdvancedSettingsViewModel）
+
+設定メニュー最下部の「詳細設定」をタップすると、`UINavigationController` のpushでSwiftUI製の詳細設定画面を表示する。評価機能のON/OFF・PiP自動送り間隔・キャッシュ消去をこの画面にまとめている。フィルタ設定画面と同様、`FileBrowserViewModel` を直接共有せず専用ViewModelを持つ（1画面1ViewController・ViewModelの使い回し禁止という規約に従う）。
+
+### 画面生成（AppContainer経由）
+
+- `FileBrowserViewController` は自分でViewModel・Viewを組み立てず、init時に注入された `advancedSettingsViewControllerFactory` クロージャ（`filterViewControllerFactory` と同様のパターン）を呼び出す。渡す引数は現在の `isRatingEnabled`/`pipAutoAdvanceIntervalSeconds` と、変更のたびに呼ばれる `onRatingEnabledChange: (Bool) -> Void`/`onPipAutoAdvanceIntervalSecondsChange: (Int) -> Void`、キャッシュ消去確定時に呼ばれ最新値を返す `onClearCacheRequested: () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)`。
+- `AppContainer` はこのクロージャの実体として `FileBrowserAdvancedSettingsViewController(isRatingEnabled:pipAutoAdvanceIntervalSeconds:onRatingEnabledChange:onPipAutoAdvanceIntervalSecondsChange:onClearCacheRequested:)` をそのまま呼ぶだけ。
+- `FileBrowserAdvancedSettingsViewController`（`UIHostingController<FileBrowserAdvancedSettingsView>` のサブクラス、`Modules/Sources/FileBrowser/Views/FileBrowserAdvancedSettingsViewController.swift`）が公開initでこれらの引数のみを受け取り、内部で `FileBrowserAdvancedSettingsViewModel` を生成して `FileBrowserAdvancedSettingsView` に渡し、`title` に「詳細設定」を設定する。`FileBrowserAdvancedSettingsViewModel`・`FileBrowserAdvancedSettingsView.init` はモジュール内部にのみ公開する。
+- `FileBrowserViewController.pushAdvancedSettings()` はfactoryから受け取ったViewControllerを `navigationController?.pushViewController(_:animated:)` する。各onChangeクロージャ内で `viewModel.isRatingEnabled`/`viewModel.pipAutoAdvanceIntervalSeconds` へ書き戻し、レーティングのON/OFF・キャッシュ消去時はあわせて `updateNavigationBarItems()` / `applySnapshot(reconfiguringAllItems: true)` / `refreshSettingsMenu()` を呼び、裏のファイルリストへ即座に反映する。
+
+### FileBrowserAdvancedSettingsViewModel
+
+- `FileBrowserViewModel` とは独立した、詳細設定画面専用の `@Observable` ViewModel（`Modules/Sources/FileBrowser/ViewModels/FileBrowserAdvancedSettingsViewModel.swift`、モジュール内部限定）。
+- `isRatingEnabled`/`pipAutoAdvanceIntervalSeconds` を保持し、`didSet` のたびに対応するonChangeクロージャを呼ぶ。
+- `clearCache()` は `onClearCacheRequested()` を呼んで `viewModel.resetToDefaults()` 後の最新値を受け取り、自身の `isRatingEnabled`/`pipAutoAdvanceIntervalSeconds` へ反映する（画面を離れず即座にUIへ反映するため）。
+
+### FileBrowserAdvancedSettingsView
+
+SwiftUI `Form`。`@State private var viewModel: FileBrowserAdvancedSettingsViewModel` を保持し、`Toggle`（レーティング機能ON/OFF）・`Stepper`（PiP自動送り間隔、範囲 1〜30秒）・destructiveな `Button`（キャッシュ消去、`.alert` で確認後 `viewModel.clearCache()`）を配置する。
 
 ## フィルタ設定（FileBrowserFilterViewController / FileBrowserFilterView / FileBrowserFilterViewModel）
 
@@ -267,9 +286,8 @@ UINavigationController
 
 | 項目           | 内容                                                                                     |
 |----------------|--------------------------------------------------------------------------------------------|
-| タイトル       | 「フィルター」（プレーンな`Text`。ナビゲーションバーは使わない）                          |
-| 星評価＋条件   | 同じ行にまとめて表示。★1〜5（タップでその位置まで選択、同じ位置を再タップで0に戻す。選択中は`Color.primary`＝ライトテーマ黒・ダークテーマ白、未選択は`Color.secondary`）＋区切り線＋比較条件を`Picker`（`.pickerStyle(.segmented)`、ラベルは≧・≦・半角=）で選択 |
-| カラーラベル   | 緑・黄・青・ピンク・赤・白の6色を横並び（各44×44ptのタップ領域）。タップで複数選択のON/OFFを切り替える。アイコンは`RatingLabelBarView`と同じ組み合わせ（未選択`circle.fill`／選択中`circle.inset.filled`、いずれもラベル自身の色でtint） |
+| 星評価＋条件   | 同じ行にまとめて表示。★1〜5（`systemGray5`のグレーのカプセル座布団の上に配置。タップでその位置まで選択、同じ位置を再タップで0に戻す。選択中は`Color.primary`＝ライトテーマ黒・ダークテーマ白、未選択は`Color.secondary`）＋区切り線＋比較条件を`Picker`（`.pickerStyle(.segmented)`、ラベルは≧・≦・半角=）で選択 |
+| カラーラベル   | 緑・黄・青・ピンク・赤・白の6色を横並び（`systemGray5`のグレーのカプセル座布団の上、各44×44ptのタップ領域）。タップで複数選択のON/OFFを切り替える。アイコンは`RatingLabelBarView`と同じ組み合わせ（未選択`circle.fill`／選択中`circle.inset.filled`、いずれもラベル自身の色でtint） |
 | フィルタークリア | 最下部に配置した破壊的ボタン（`.buttonStyle(.bordered)`、赤）。星評価・カラーラベルフィルタを両方クリアする（`viewModel.clearFilters()`） |
 
 星評価・比較条件の変更は `RatingFilter(stars:comparison:)` を都度組み立てて `viewModel.ratingFilter` に反映する。変更はリアルタイムに反映されるため、閉じる操作は下スワイプのみで良い（Doneボタン・グラバーは表示しない）。

@@ -31,12 +31,8 @@
 "file_browser.filter_title" = "フィルター";
 "file_browser.color_label" = "カラーラベル";
 "file_browser.pip_auto_advance_interval" = "PiP自動送り間隔";
-"file_browser.pip_auto_advance_interval_decrement" = "間隔を減らす";
-"file_browser.pip_auto_advance_interval_increment" = "間隔を増やす";
 "file_browser.pip_auto_advance_interval_value" = "%d秒";
-"file_browser.rating_feature_title" = "%@ (%@)";
-"file_browser.state_on" = "オン";
-"file_browser.state_off" = "オフ";
+"file_browser.advanced_settings" = "詳細設定";
 "file_browser.section_title_with_count" = "%@ (%d枚)";
 "file_browser.empty_state.no_folder" = "フォルダを選択してください";
 "file_browser.empty_state.loading" = "読み込み中...";

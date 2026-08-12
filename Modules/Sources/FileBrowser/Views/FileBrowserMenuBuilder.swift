@@ -9,19 +9,16 @@ final class FileBrowserMenuBuilder {
 
     private let viewModel: FileBrowserViewModel
     private let onSettingsMenuChanged: () -> Void
-    private let onRatingToggled: () -> Void
-    private let onClearCacheRequested: () -> Void
+    private let onAdvancedSettingsRequested: () -> Void
 
     init(
         viewModel: FileBrowserViewModel,
         onSettingsMenuChanged: @escaping () -> Void,
-        onRatingToggled: @escaping () -> Void,
-        onClearCacheRequested: @escaping () -> Void
+        onAdvancedSettingsRequested: @escaping () -> Void
     ) {
         self.viewModel = viewModel
         self.onSettingsMenuChanged = onSettingsMenuChanged
-        self.onRatingToggled = onRatingToggled
-        self.onClearCacheRequested = onClearCacheRequested
+        self.onAdvancedSettingsRequested = onAdvancedSettingsRequested
     }
 
     // MARK: - 設定メニュー
@@ -122,41 +119,20 @@ final class FileBrowserMenuBuilder {
         )
         sortOrderMenu.preferredElementSize = .medium
 
-        // レーティング機能 セクション（オンオフトグル）
-        // チェックマークではなく、タイトルに現在の状態を括弧書きで示すトグル表現にする
-        let ratingToggleAction = UIAction(
-            title: L10n.FileBrowser.ratingFeatureTitle(isEnabled: viewModel.isRatingEnabled),
-            image: UIImage(systemName: viewModel.isRatingEnabled ? "star.fill" : "star"),
-            attributes: .keepsMenuPresented
+        // 詳細設定 セクション（最下部・タップでpush遷移）
+        let advancedSettingsAction = UIAction(
+            title: L10n.FileBrowser.advancedSettings,
+            image: UIImage(systemName: "gearshape.2")
         ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.isRatingEnabled.toggle()
-            onRatingToggled()
+            self?.onAdvancedSettingsRequested()
         }
-        let ratingMenu = UIMenu(
+        let advancedSettingsMenu = UIMenu(
             title: "",
             options: .displayInline,
-            children: [ratingToggleAction]
+            children: [advancedSettingsAction]
         )
 
-        // PiP自動送り間隔 セクション
-        let pipAutoAdvanceIntervalMenu = makePiPAutoAdvanceIntervalMenu()
-
-        // キャッシュクリア セクション（最下部）
-        let clearCacheAction = UIAction(
-            title: L10n.FileBrowser.clearCache,
-            image: UIImage(systemName: "trash"),
-            attributes: .destructive
-        ) { [weak self] _ in
-            self?.onClearCacheRequested()
-        }
-        let clearCacheMenu = UIMenu(
-            title: "",
-            options: .displayInline,
-            children: [clearCacheAction]
-        )
-
-        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu, ratingMenu, pipAutoAdvanceIntervalMenu, clearCacheMenu].compactMap { $0 }
+        return [viewModeMenu, columnCountMenu, sortOrderMenu, saveFormatMenu, advancedSettingsMenu].compactMap { $0 }
     }
 
     /// グリッドの列数を増減するステッパー形式のメニューセクションを生成する
@@ -198,41 +174,4 @@ final class FileBrowserMenuBuilder {
         return menu
     }
 
-    /// PiP再生中の自動送り間隔を増減するステッパー形式のメニューセクションを生成する
-    private func makePiPAutoAdvanceIntervalMenu() -> UIMenu {
-        let seconds = viewModel.pipAutoAdvanceIntervalSeconds
-        let range = FileBrowserViewModel.pipAutoAdvanceIntervalSecondsRange
-
-        let decrementAction = UIAction(
-            title: L10n.FileBrowser.pipAutoAdvanceIntervalDecrement,
-            image: UIImage(systemName: "minus.circle"),
-            attributes: seconds <= range.lowerBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.pipAutoAdvanceIntervalSeconds = max(seconds - 1, range.lowerBound)
-            onSettingsMenuChanged()
-        }
-        let currentAction = UIAction(
-            title: L10n.FileBrowser.pipAutoAdvanceIntervalValue(seconds),
-            image: UIImage(systemName: "timer"),
-            attributes: .disabled
-        ) { _ in }
-        let incrementAction = UIAction(
-            title: L10n.FileBrowser.pipAutoAdvanceIntervalIncrement,
-            image: UIImage(systemName: "plus.circle"),
-            attributes: seconds >= range.upperBound ? [.disabled, .keepsMenuPresented] : .keepsMenuPresented
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.pipAutoAdvanceIntervalSeconds = min(seconds + 1, range.upperBound)
-            onSettingsMenuChanged()
-        }
-
-        let menu = UIMenu(
-            title: L10n.FileBrowser.pipAutoAdvanceInterval,
-            options: .displayInline,
-            children: [decrementAction, currentAction, incrementAction]
-        )
-        menu.preferredElementSize = .small
-        return menu
-    }
 }

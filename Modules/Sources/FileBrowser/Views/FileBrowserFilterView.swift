@@ -60,6 +60,9 @@ public struct FileBrowserFilterView: View {
                     starButton(position)
                 }
             }
+            .padding(.horizontal, 8)
+            .background(Capsule().fill(Color(.systemGray5).opacity(0.6)))
+
             pillSeparator
             comparisonPicker
         }
@@ -119,6 +122,8 @@ public struct FileBrowserFilterView: View {
                 colorLabelButton(for: label)
             }
         }
+        .padding(.horizontal, 8)
+        .background(Capsule().fill(Color(.systemGray5).opacity(0.6)))
     }
 
     private func colorLabelButton(for label: PhotoColorLabel) -> some View {

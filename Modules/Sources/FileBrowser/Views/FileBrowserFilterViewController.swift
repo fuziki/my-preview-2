@@ -24,7 +24,7 @@ public final class FileBrowserFilterViewController: UIHostingController<FileBrow
         // 呼び出し側（FileBrowserViewController）がハーフモーダルの高さをコンテンツに合わせられるようにする
         sizingOptions = [.preferredContentSize]
         // UIHostingControllerの既定の不透明背景を外す
-        view.backgroundColor = .gray.withAlphaComponent(0.4)
+        view.backgroundColor = .clear
     }
 
     required init?(coder: NSCoder) {
