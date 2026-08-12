@@ -34,6 +34,11 @@
 			path = .claude;
 			sourceTree = "<group>";
 		};
+		47B8EA86302C31FC0089E8DD /* docs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = docs;
+			sourceTree = "<group>";
+		};
 		47D00D6D2FA2085100F217FE /* my-preview-2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -65,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				47B8EA5030117E990089E8DD /* .claude */,
+				47B8EA86302C31FC0089E8DD /* docs */,
 				47B8EA17300BCA030089E8DD /* CLAUDE.md */,
 				47B8EA18300BCA030089E8DD /* Makefile */,
 				47B8EA19300BCA030089E8DD /* README.md */,
