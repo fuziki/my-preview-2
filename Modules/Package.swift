@@ -21,6 +21,7 @@ let package = Package(
         // アセット（カラー等）のタイプセーフアクセサモジュール
         .target(
             name: "Resources",
+            path: "Sources/Core/Resources",
             resources: [.process("Resources")],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
@@ -28,39 +29,46 @@ let package = Package(
         .target(
             name: "Core",
             dependencies: ["Resources"],
+            path: "Sources/Core/Core",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // 多言語対応のタイプセーフ文言モジュール（en/jaのみ対応、デフォルトはen）
         .target(
             name: "Localization",
+            path: "Sources/Core/Localization",
             resources: [.process("Resources")]
         ),
         // ファイルブラウザー機能モジュール（Core / Localizationに依存）
         .target(
             name: "FileBrowser",
             dependencies: ["Core", "Localization"],
+            path: "Sources/Features/FileBrowser",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // トースト通知UI（UIKit / SwiftUI のみに依存）
         .target(
             name: "ToastKit",
+            path: "Sources/Kits/ToastKit",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // 静止画のPicture in Picture表示を扱う汎用エンジン（依存なし、UIKit/AVKitのみ使用）
         .target(
             name: "ImagePiPKit",
+            path: "Sources/Kits/ImagePiPKit",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // フォトビューアー機能モジュール（Core / ToastKit / Localization / ImagePiPKitに依存）
         .target(
             name: "PhotoViewer",
             dependencies: ["Core", "ToastKit", "Localization", "ImagePiPKit"],
+            path: "Sources/Features/PhotoViewer",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // シミュレータビルド用のモックサービス（Coreに依存）
         .target(
             name: "Mocks",
             dependencies: ["Core"],
+            path: "Sources/Core/Mocks",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // アプリエントリーポイント（全モジュールに依存）
@@ -76,19 +84,21 @@ let package = Package(
         .target(
             name: "MocksForTest",
             dependencies: ["Core"],
-            path: "Tests/MocksForTest",
+            path: "Tests/Core/MocksForTest",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // UserDefaultsSettingsStoreのユニットテスト
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],
+            path: "Tests/Core/CoreTests",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // FileBrowserViewModelのユニットテスト
         .testTarget(
             name: "FileBrowserTests",
             dependencies: ["FileBrowser", "MocksForTest"],
+            path: "Tests/Features/FileBrowserTests",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         // PhotoViewerViewModelのユニットテスト
@@ -96,6 +106,7 @@ let package = Package(
         .testTarget(
             name: "PhotoViewerTests",
             dependencies: ["PhotoViewer", "MocksForTest"],
+            path: "Tests/Features/PhotoViewerTests",
             swiftSettings: [.defaultIsolation(MainActor.self)],
             linkerSettings: [.linkedFramework("SwiftUI", .when(platforms: [.iOS]))]
         ),
