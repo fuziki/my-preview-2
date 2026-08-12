@@ -62,4 +62,9 @@ public final class PhotoLibraryService: PhotoLibraryServiceProtocol {
         }
         return nil
     }
+
+    /// findRawFileをテストから直接検証するためのinternal公開口。モジュール外には公開しない
+    func findRawFileForTest(for jpegURL: URL) -> URL? {
+        findRawFile(for: jpegURL)
+    }
 }

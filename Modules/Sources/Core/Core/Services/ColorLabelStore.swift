@@ -24,23 +24,25 @@ public final class ColorLabelRecord {
 public final class ColorLabelStore: ColorLabelStoreProtocol {
     private let modelContext: ModelContext
 
-    public init() {
+    public init(modelContainer: ModelContainer) {
+        modelContext = ModelContext(modelContainer)
+    }
+
+    /// 本番用のModelContainerを生成する。永続化ストアの初期化に失敗した場合はインメモリで動作を継続する
+    public static func makeDefaultModelContainer() -> ModelContainer {
         let schema = Schema([ColorLabelRecord.self])
-        let container: ModelContainer
         do {
             // 他ストアの既定ストアファイルと衝突しないよう名前付きストアに保存する
-            container = try ModelContainer(
+            return try ModelContainer(
                 for: schema,
                 configurations: [ModelConfiguration("ColorLabel", schema: schema)]
             )
         } catch {
-            // 永続化ストアの初期化に失敗した場合はインメモリで動作を継続する
-            container = try! ModelContainer(
+            return try! ModelContainer(
                 for: schema,
                 configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
             )
         }
-        modelContext = ModelContext(container)
     }
 
     public func label(for url: URL) -> PhotoColorLabel? {

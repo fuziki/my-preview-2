@@ -23,19 +23,21 @@ public final class SavedDateRecord {
 public final class SavedDateStore: SavedDateStoreProtocol {
     private let modelContext: ModelContext
 
-    public init() {
+    public init(modelContainer: ModelContainer) {
+        modelContext = ModelContext(modelContainer)
+    }
+
+    /// 本番用のModelContainerを生成する。永続化ストアの初期化に失敗した場合はインメモリで動作を継続する
+    public static func makeDefaultModelContainer() -> ModelContainer {
         let schema = Schema([SavedDateRecord.self])
-        let container: ModelContainer
         do {
-            container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema)])
+            return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema)])
         } catch {
-            // 永続化ストアの初期化に失敗した場合はインメモリで動作を継続する
-            container = try! ModelContainer(
+            return try! ModelContainer(
                 for: schema,
                 configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
             )
         }
-        modelContext = ModelContext(container)
     }
 
     public func date(for url: URL) -> Date? {

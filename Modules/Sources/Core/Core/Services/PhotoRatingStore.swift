@@ -24,23 +24,25 @@ public final class PhotoRatingRecord {
 public final class PhotoRatingStore: PhotoRatingStoreProtocol {
     private let modelContext: ModelContext
 
-    public init() {
+    public init(modelContainer: ModelContainer) {
+        modelContext = ModelContext(modelContainer)
+    }
+
+    /// 本番用のModelContainerを生成する。永続化ストアの初期化に失敗した場合はインメモリで動作を継続する
+    public static func makeDefaultModelContainer() -> ModelContainer {
         let schema = Schema([PhotoRatingRecord.self])
-        let container: ModelContainer
         do {
             // SavedDateStoreの既定ストアファイルと衝突しないよう名前付きストアに保存する
-            container = try ModelContainer(
+            return try ModelContainer(
                 for: schema,
                 configurations: [ModelConfiguration("PhotoRating", schema: schema)]
             )
         } catch {
-            // 永続化ストアの初期化に失敗した場合はインメモリで動作を継続する
-            container = try! ModelContainer(
+            return try! ModelContainer(
                 for: schema,
                 configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
             )
         }
-        modelContext = ModelContext(container)
     }
 
     public func rating(for url: URL) -> Int {

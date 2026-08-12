@@ -6,8 +6,6 @@ import MocksForTest
 
 // MARK: - テスト
 
-@Suite
-@MainActor
 struct FileBrowserViewModelTests {
 
     let fileSystemService: MockFileSystemService
@@ -577,7 +575,6 @@ struct FileBrowserViewModelTests {
 
 // MARK: - PhotoColorLabelテスト
 
-@Suite
 struct PhotoColorLabelTests {
 
     @Test
@@ -601,7 +598,6 @@ struct PhotoColorLabelTests {
 
 // MARK: - RatingFilterテスト
 
-@Suite
 struct RatingFilterTests {
 
     @Test

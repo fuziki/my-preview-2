@@ -2,7 +2,6 @@ import Testing
 import Foundation
 @testable import Core
 
-@Suite
 struct UserDefaultsSettingsStoreTests {
 
     /// テストごとに独立したUserDefaultsスイートを生成する
@@ -182,7 +181,6 @@ struct UserDefaultsSettingsStoreTests {
 
 // MARK: - DirectoryLastViewedEntry.updatingLastViewed
 
-@Suite
 struct DirectoryLastViewedEntryUpdatingTests {
 
     @Test

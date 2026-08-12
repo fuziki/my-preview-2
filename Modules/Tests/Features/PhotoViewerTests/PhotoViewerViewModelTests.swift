@@ -7,8 +7,6 @@ import MocksForTest
 
 // MARK: - テスト
 
-@Suite
-@MainActor
 struct PhotoViewerViewModelTests {
 
     let url1 = URL(fileURLWithPath: "/tmp/photo1.jpg")

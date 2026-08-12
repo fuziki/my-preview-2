@@ -17,13 +17,19 @@ final class AppContainer {
     let tracker = FileLoadingTracker()
 
     /// セッションをまたいで保存日時を保持するため、AppContainerが所有する
-    private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore()
+    private let savedDateStore: any SavedDateStoreProtocol = SavedDateStore(
+        modelContainer: SavedDateStore.makeDefaultModelContainer()
+    )
 
     /// セッションをまたいでレーティングを保持するため、AppContainerが所有する
-    private let ratingStore: any PhotoRatingStoreProtocol = PhotoRatingStore()
+    private let ratingStore: any PhotoRatingStoreProtocol = PhotoRatingStore(
+        modelContainer: PhotoRatingStore.makeDefaultModelContainer()
+    )
 
     /// セッションをまたいでカラーラベルを保持するため、AppContainerが所有する
-    private let colorLabelStore: any ColorLabelStoreProtocol = ColorLabelStore()
+    private let colorLabelStore: any ColorLabelStoreProtocol = ColorLabelStore(
+        modelContainer: ColorLabelStore.makeDefaultModelContainer()
+    )
 
     /// FileBrowserとPhotoViewerの保存設定を同一の値で参照させるため、AppContainerが所有する
     private let settingsStore: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings> = UserDefaultsSettingsStore(
