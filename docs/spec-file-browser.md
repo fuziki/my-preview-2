@@ -249,8 +249,11 @@ UINavigationController
 - `AppContainer` はこのクロージャの実体として `FileBrowserFilterViewController(ratingFilter:colorLabelFilter:onChange:)` をそのまま呼ぶだけ（`FileBrowserFilterViewModel`・`FileBrowserFilterView` を直接構築しない）。
 - `FileBrowserFilterViewController`（`UIHostingController<FileBrowserFilterView>` のサブクラス、`Modules/Sources/FileBrowser/Views/FileBrowserFilterViewController.swift`）が公開initで `ratingFilter`/`colorLabelFilter`/`onChange` の3引数のみを受け取り、内部で `FileBrowserFilterViewModel` を生成して `FileBrowserFilterView` に渡す。`FileBrowserFilterViewModel`・`FileBrowserFilterView.init` はモジュール内部にのみ公開し、AppContainer側からは見えない。
   - `sizingOptions = [.preferredContentSize]` を設定し、SwiftUIコンテンツの理想サイズを `preferredContentSize` に反映させる。
-  - `view.backgroundColor = .clear` を設定し、UIHostingControllerの既定の不透明背景を外す。
-- `FileBrowserViewController.presentFilterSheet()` はfactoryから受け取ったViewControllerに対して `UISheetPresentationController` を設定してモーダル表示する。固定の `.medium()` ではなく `.custom { _ in filterViewController.preferredContentSize.height }` でコンテンツの理想の高さにフィットさせる。グラバー・Doneボタンは表示しない（閉じるのはスワイプのみ）。画面遷移の生成はAppContainer、表示・破棄（sheetの詳細設定）はFileBrowserViewControllerが担う。
+  - `view.backgroundColor = .systemBackground.withAlphaComponent(0.4)` を設定し、UIHostingControllerの既定の不透明背景を外して半透明にする。
+- `FileBrowserViewController.presentFilterSheet()` はfactoryから受け取ったViewControllerに対して `UISheetPresentationController` を設定してモーダル表示する。固定の `.medium()` ではなく、`UIViewController.contentFittingSheetDetent(presentingViewWidth:)`（`Core/Extensions/UIViewController+ContentFittingSheetDetent.swift`、`public extension UIViewController`）が返すコンテンツの理想の高さにフィットするカスタムdetentを使う。
+  - このCore共通実装は、`present` を呼ぶ**前**に `loadViewIfNeeded()` + `view.layoutIfNeeded()` でレイアウトを確定し、`systemLayoutSizeFitting` で算出した高さを `preferredContentSize` へ反映してからdetentを返す。未確定のまま（`preferredContentSize.height == 0`の状態で）presentすると、iOS 26のシート遷移で左下から浮き出るような見え方になる不具合を避けるための対応。ハーフモーダルの高さをコンテンツに合わせたい他画面でも再利用できる。
+  - `sheet.largestUndimmedDetentIdentifier = .contentFitting`（同じくCoreで定義する `UISheetPresentationController.Detent.Identifier.contentFitting`）を設定し、ダイミングビューを外す。これによりシート表示中も裏のファイルリスト（フォルダボタン・写真タップなど）をそのまま操作できる。
+  - グラバー・Doneボタンは表示しない（閉じるのはスワイプのみ）。画面遷移の生成はAppContainer、表示・破棄（sheetの詳細設定）はFileBrowserViewControllerが担う。
 
 ### FileBrowserFilterViewModel
 

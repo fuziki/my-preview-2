@@ -41,7 +41,7 @@ public struct FileBrowserFilterView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

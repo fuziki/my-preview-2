@@ -235,10 +235,10 @@ public final class FileBrowserViewController: UIViewController {
             viewModel.colorLabelFilter = colorLabelFilter
         }
         if let sheet = filterViewController.sheetPresentationController {
-            // 固定のhalf detentではなく、コンテンツの理想の高さ（preferredContentSize）にフィットさせる
-            sheet.detents = [.custom { [weak filterViewController] _ in
-                filterViewController?.preferredContentSize.height ?? 0
-            }]
+            // 固定のhalf detentではなく、コンテンツの理想の高さにフィットさせる（Core共通実装）
+            sheet.detents = [filterViewController.contentFittingSheetDetent(presentingViewWidth: view.bounds.width)]
+            // ダイミングビューを外し、シート表示中も裏のファイルリストを操作できるようにする
+            sheet.largestUndimmedDetentIdentifier = .contentFitting
             sheet.delegate = self
         }
         present(filterViewController, animated: true)
