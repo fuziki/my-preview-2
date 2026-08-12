@@ -1,12 +1,13 @@
 import UIKit
 import Observation
-import Core
 
-final class LoadingIndicatorWindow: UIWindow {
+/// 画面右上に青い点を表示し、isActive の値に応じてフェードイン・アウトさせるウィンドウ。
+/// 用途を問わず「アクティブ/非アクティブ」な状態を示すための汎用オーバーレイ。
+public final class CornerDotWindow: UIWindow {
 
-    init(windowScene: UIWindowScene, tracker: FileLoadingTracker) {
+    public init(windowScene: UIWindowScene, isActive: @escaping () -> Bool) {
         super.init(windowScene: windowScene)
-        rootViewController = LoadingIndicatorViewController(tracker: tracker)
+        rootViewController = CornerDotViewController(isActive: isActive)
         windowLevel = .alert + 1
         isUserInteractionEnabled = false
         backgroundColor = .clear
@@ -16,15 +17,15 @@ final class LoadingIndicatorWindow: UIWindow {
     required init?(coder: NSCoder) { fatalError() }
 }
 
-private final class LoadingIndicatorViewController: UIViewController {
+private final class CornerDotViewController: UIViewController {
 
-    private let tracker: FileLoadingTracker
+    private let isActive: () -> Bool
     private let dotView = UIView()
     private var observationTask: Task<Void, Never>?
     private var streamContinuation: AsyncStream<Bool>.Continuation?
 
-    init(tracker: FileLoadingTracker) {
-        self.tracker = tracker
+    init(isActive: @escaping () -> Bool) {
+        self.isActive = isActive
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -56,10 +57,10 @@ private final class LoadingIndicatorViewController: UIViewController {
         trackObservation(continuation: continuation)
 
         observationTask = Task { [weak self] in
-            for await isLoading in stream {
+            for await active in stream {
                 guard let self else { break }
                 UIView.animate(withDuration: 0.2) {
-                    self.dotView.alpha = isLoading ? 1 : 0
+                    self.dotView.alpha = active ? 1 : 0
                 }
             }
         }
@@ -68,7 +69,7 @@ private final class LoadingIndicatorViewController: UIViewController {
     // onChange は @Sendable nonisolated なので、Task { @MainActor in } 経由で再帰する
     private func trackObservation(continuation: AsyncStream<Bool>.Continuation) {
         _ = withObservationTracking {
-            continuation.yield(tracker.isLoading)
+            continuation.yield(isActive())
         } onChange: {
             Task { @MainActor [weak self] in
                 guard let self else {

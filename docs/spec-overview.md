@@ -82,11 +82,14 @@ class MyViewController: UIViewController {
 
 ### モジュール構成と依存方向
 
-- `FileBrowser` ↔ `PhotoViewer` は直接依存しない。両モジュールは `Core` にのみ依存する。
+`Modules/Sources/` は `AppMain`（エントリーポイント）・`Core`（Core, Localization, Resources, Mocks）・`Features`（FileBrowser, PhotoViewer）・`Kits`（ImagePiPKit, ToastKit）にグループ化されている。詳細は `feature-planning` スキルの `references/architecture.md` を参照。
+
+- `Kits` は独立ライブラリで、このリポジトリの他のどのモジュールにも依存しない（`ImagePiPKit`・`ToastKit`いずれも UIKit/AVKit 等のシステムフレームワークのみに依存）。
+- `Core` 配下のモジュール同士は依存の順番に注意すれば依存し合ってよい（`Core` は `Resources` に依存、`Mocks` は `Core` に依存）。
+- `FileBrowser` ↔ `PhotoViewer` は直接依存しない。`Features` のモジュールは他の `Features` モジュールと `AppMain` 以外なら依存してよく、`PhotoViewer` は `Core` に加えて `ToastKit`・`Localization`・`ImagePiPKit` にも依存している。
 - `AppMain` だけが全モジュールに依存し、`AppContainer`（`Modules/Sources/AppMain/AppContainer.swift`）がサービス層のインスタンス生成と注入を一元管理する。`FileBrowser` は `photoViewerFactory` クロージャ経由で `PhotoViewer` の ViewController を生成する（`PhotoViewer` を直接 import しない）。
-- `FileBrowserViewController` → `PhotoViewerViewController` の情報取得（表示中 URL・dismiss 通知）は `Core/Services/ViewControllerBridges.swift` の `CurrentURLProvider` / `DismissNotifiable` プロトコルを介して行う。
-- `AppState`（`Modules/Sources/AppMain/AppState.swift`）が唯一許容される singleton で、`AppContainer` のライフタイムをアプリ起動〜終了まで保持する。
-- `ImagePiPKit`（依存なし、UIKit/AVKitのみ使用）は静止画のPicture in Picture表示を扱う汎用エンジンモジュールで、`ToastKit` と同様に `PhotoViewer` が利用する。
+- `FileBrowserViewController` → `PhotoViewerViewController` の情報取得（表示中 URL・dismiss 通知）は `Core/Core/Services/ViewControllerBridges.swift` の `CurrentURLProvider` / `DismissNotifiable` プロトコルを介して行う。
+- `AppState`（`Modules/Sources/AppMain/AppState.swift`）が `Core`・`Features`・`AppMain` の中で唯一許容される singleton で、`AppContainer` のライフタイムをアプリ起動〜終了まで保持する。`Kits` は独立ライブラリとしての可用性を優先するため、この制約の対象外（`ToastWindowManager.shared`・`ToastQueue.shared`が実例）。
 
 ---
 

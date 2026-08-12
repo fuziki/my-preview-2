@@ -1,16 +1,17 @@
 import UIKit
 import FileBrowser
 import ToastKit
+import CornerDotKit
 
 /// アプリのウィンドウを生成して返す。SceneDelegateから呼び出す。
 /// AppState.shared.container からFileBrowserViewControllerを生成してナビゲーション階層を構築する。
-/// 同じwindowSceneにファイル読み込みインジゲーターウィンドウも作成する。
+/// 同じwindowSceneにファイル読み込み中インジケーター（CornerDotWindow）も作成する。
 public func makeWindow(windowScene: UIWindowScene) -> UIWindow {
     let container = AppState.shared.container
 
-    AppState.shared.indicatorWindow = LoadingIndicatorWindow(
+    AppState.shared.indicatorWindow = CornerDotWindow(
         windowScene: windowScene,
-        tracker: container.tracker
+        isActive: { container.tracker.isLoading }
     )
     ToastKit.setup(windowScene: windowScene)
 

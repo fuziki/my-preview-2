@@ -13,7 +13,7 @@ final class AppContainer {
 
     // MARK: - 共有サービス
 
-    /// ファイルシステムへの読み込み中フラグを一元管理する。LoadingIndicatorWindowが観察する。
+    /// ファイルシステムへの読み込み中フラグを一元管理する。CornerDotWindowが観察する。
     let tracker = FileLoadingTracker()
 
     /// セッションをまたいで保存日時を保持するため、AppContainerが所有する

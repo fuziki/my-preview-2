@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "PhotoViewer", targets: ["PhotoViewer"]),
         .library(name: "ToastKit", targets: ["ToastKit"]),
         .library(name: "ImagePiPKit", targets: ["ImagePiPKit"]),
+        .library(name: "CornerDotKit", targets: ["CornerDotKit"]),
         .library(name: "Mocks", targets: ["Mocks"]),
         .library(name: "AppMain", targets: ["AppMain"]),
     ],
@@ -57,6 +58,12 @@ let package = Package(
             path: "Sources/Kits/ImagePiPKit",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
+        // 右上に青い点を表示しON/OFFをフェードで示す汎用オーバーレイ（依存なし、UIKitのみ使用）
+        .target(
+            name: "CornerDotKit",
+            path: "Sources/Kits/CornerDotKit",
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         // フォトビューアー機能モジュール（Core / ToastKit / Localization / ImagePiPKitに依存）
         .target(
             name: "PhotoViewer",
@@ -74,7 +81,7 @@ let package = Package(
         // アプリエントリーポイント（全モジュールに依存）
         .target(
             name: "AppMain",
-            dependencies: ["Core", "FileBrowser", "PhotoViewer", "ToastKit", "Mocks"],
+            dependencies: ["Core", "FileBrowser", "PhotoViewer", "ToastKit", "CornerDotKit", "Mocks"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
 
