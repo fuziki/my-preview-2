@@ -10,6 +10,7 @@ public enum L10n {
     public enum Common {
         public static var cancel: String { tr("common.cancel") }
         public static var clear: String { tr("common.clear") }
+        public static var done: String { tr("common.done") }
         public static var copiedToClipboard: String { tr("common.copied_to_clipboard") }
     }
 
@@ -37,6 +38,7 @@ public enum L10n {
         public static var ratingFilterAtLeast: String { tr("file_browser.rating_filter_at_least") }
         public static var ratingFilterAtMost: String { tr("file_browser.rating_filter_at_most") }
         public static var ratingFilterExactly: String { tr("file_browser.rating_filter_exactly") }
+        public static var filterTitle: String { tr("file_browser.filter_title") }
         public static var colorLabel: String { tr("file_browser.color_label") }
         public static var pipAutoAdvanceInterval: String { tr("file_browser.pip_auto_advance_interval") }
         public static var pipAutoAdvanceIntervalDecrement: String { tr("file_browser.pip_auto_advance_interval_decrement") }

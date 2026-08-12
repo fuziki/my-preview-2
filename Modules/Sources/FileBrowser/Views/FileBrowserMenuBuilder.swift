@@ -2,7 +2,7 @@ import UIKit
 import Core
 import Localization
 
-/// FileBrowserViewControllerの設定メニュー・フィルターメニューのUIMenuElement構築を担当する。
+/// FileBrowserViewControllerの設定メニューのUIMenuElement構築を担当する。
 /// メニュー選択後の画面更新（BarButtonItemのmenu再代入・スナップショット再適用・アラート表示等）は
 /// コールバック経由でFileBrowserViewControllerに委譲する。
 final class FileBrowserMenuBuilder {
@@ -10,20 +10,17 @@ final class FileBrowserMenuBuilder {
     private let viewModel: FileBrowserViewModel
     private let onSettingsMenuChanged: () -> Void
     private let onRatingToggled: () -> Void
-    private let onFilterMenuChanged: () -> Void
     private let onClearCacheRequested: () -> Void
 
     init(
         viewModel: FileBrowserViewModel,
         onSettingsMenuChanged: @escaping () -> Void,
         onRatingToggled: @escaping () -> Void,
-        onFilterMenuChanged: @escaping () -> Void,
         onClearCacheRequested: @escaping () -> Void
     ) {
         self.viewModel = viewModel
         self.onSettingsMenuChanged = onSettingsMenuChanged
         self.onRatingToggled = onRatingToggled
-        self.onFilterMenuChanged = onFilterMenuChanged
         self.onClearCacheRequested = onClearCacheRequested
     }
 
@@ -237,107 +234,5 @@ final class FileBrowserMenuBuilder {
         )
         menu.preferredElementSize = .small
         return menu
-    }
-
-    // MARK: - フィルターメニュー
-
-    /// フィルターメニューを生成する。UIDeferredMenuElement.uncached でメニュー表示のたびに最新状態を反映する。
-    func makeFilterMenu() -> UIMenu {
-        let deferred = UIDeferredMenuElement.uncached { [weak self] completion in
-            completion(self?.buildFilterMenuElements() ?? [])
-        }
-        return UIMenu(title: "", children: [deferred])
-    }
-
-    private func buildFilterMenuElements() -> [UIMenuElement] {
-        let current = viewModel.ratingFilter
-        // 星・条件の選択時に引き継ぐベース値（フィルターなしの場合はデフォルト値）
-        let base = current ?? RatingFilter(stars: 0, comparison: .atLeast)
-
-        // フィルターなし（レーティング・カラーラベルの両方を解除）
-        let offAction = UIAction(
-            title: L10n.FileBrowser.ratingFilterOff,
-            image: UIImage(systemName: "xmark.circle"),
-            state: current == nil && viewModel.colorLabelFilter.isEmpty ? .on : .off
-        ) { [weak self] _ in
-            guard let self else { return }
-            viewModel.ratingFilter = nil
-            viewModel.colorLabelFilter = []
-            onFilterMenuChanged()
-        }
-        let offMenu = UIMenu(title: "", options: .displayInline, children: [offAction])
-
-        // 星の数（0〜5）
-        let starActions = RatingFilter.starsRange.map { stars in
-            UIAction(
-                title: L10n.FileBrowser.ratingFilterStarValue(stars),
-                image: UIImage(systemName: stars == 0 ? "star.slash" : "star.fill"),
-                attributes: .keepsMenuPresented,
-                state: current?.stars == stars ? .on : .off
-            ) { [weak self] _ in
-                self?.applyRatingFilter(RatingFilter(stars: stars, comparison: base.comparison))
-            }
-        }
-        let starsMenu = UIMenu(
-            title: L10n.FileBrowser.ratingFilterStars,
-            options: [.displayInline, .singleSelection],
-            children: starActions
-        )
-
-        // 条件（以上・以下・同値）
-        let comparisonData: [(RatingFilter.Comparison, String, String)] = [
-            (.atLeast, L10n.FileBrowser.ratingFilterAtLeast, "greaterthanorequalto"),
-            (.atMost, L10n.FileBrowser.ratingFilterAtMost, "lessthanorequalto"),
-            (.exactly, L10n.FileBrowser.ratingFilterExactly, "equal"),
-        ]
-        let comparisonActions = comparisonData.map { comparison, title, imageName in
-            UIAction(
-                title: title,
-                image: UIImage(systemName: imageName),
-                attributes: .keepsMenuPresented,
-                state: current?.comparison == comparison ? .on : .off
-            ) { [weak self] _ in
-                self?.applyRatingFilter(RatingFilter(stars: base.stars, comparison: comparison))
-            }
-        }
-        let comparisonMenu = UIMenu(
-            title: L10n.FileBrowser.ratingFilterComparison,
-            options: [.displayInline, .singleSelection],
-            children: comparisonActions
-        )
-
-        // カラーラベル（複数選択・0〜6個）
-        let colorActions = PhotoColorLabel.allCases.map { label in
-            UIAction(
-                title: L10n.ColorLabel.name(forRawValue: label.rawValue),
-                image: UIImage(systemName: "circle.fill")?
-                    .withTintColor(label.uiColor, renderingMode: .alwaysOriginal),
-                attributes: .keepsMenuPresented,
-                state: viewModel.colorLabelFilter.contains(label) ? .on : .off
-            ) { [weak self] _ in
-                guard let self else { return }
-                var selection = viewModel.colorLabelFilter
-                if selection.contains(label) {
-                    selection.remove(label)
-                } else {
-                    selection.insert(label)
-                }
-                viewModel.colorLabelFilter = selection
-                onFilterMenuChanged()
-            }
-        }
-        let colorMenu = UIMenu(
-            title: L10n.FileBrowser.colorLabel,
-            options: .displayInline,
-            children: colorActions
-        )
-
-        return [offMenu, starsMenu, comparisonMenu, colorMenu]
-    }
-
-    /// フィルターを適用する（BarButtonItem表示の更新はコールバック経由でVCに委譲する）
-    private func applyRatingFilter(_ filter: RatingFilter?) {
-        viewModel.ratingFilter = filter
-        onFilterMenuChanged()
     }
 }

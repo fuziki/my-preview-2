@@ -18,6 +18,15 @@ public final class FileBrowserViewController: UIViewController {
     /// FileBrowserモジュールはPhotoViewerモジュールに依存しないため、UIViewControllerとして受け取る。
     private let photoViewerFactory: (PhotoViewerInput) -> UIViewController
 
+    /// フィルターのハーフモーダルを生成するファクトリ。AppMainから注入される。
+    /// AppContainer側でFileBrowserFilterViewModelとFileBrowserFilterViewを組み立ててUIHostingControllerで包む。
+    /// onChangeクロージャは呼び出し側（本クラス）で用意し、変更のたびにFileBrowserViewModelへ書き戻す。
+    private let filterViewControllerFactory: (
+        _ ratingFilter: RatingFilter?,
+        _ colorLabelFilter: Set<PhotoColorLabel>,
+        _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+    ) -> UIViewController
+
     private let thumbnailService: any ThumbnailServiceProtocol
 
     // セル登録 — configureDataSource() で初期化する
@@ -29,11 +38,17 @@ public final class FileBrowserViewController: UIViewController {
     public init(
         viewModel: FileBrowserViewModel,
         thumbnailService: any ThumbnailServiceProtocol,
-        photoViewerFactory: @escaping (PhotoViewerInput) -> UIViewController
+        photoViewerFactory: @escaping (PhotoViewerInput) -> UIViewController,
+        filterViewControllerFactory: @escaping (
+            _ ratingFilter: RatingFilter?,
+            _ colorLabelFilter: Set<PhotoColorLabel>,
+            _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+        ) -> UIViewController
     ) {
         self.viewModel = viewModel
         self.thumbnailService = thumbnailService
         self.photoViewerFactory = photoViewerFactory
+        self.filterViewControllerFactory = filterViewControllerFactory
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -165,11 +180,6 @@ public final class FileBrowserViewController: UIViewController {
             applySnapshot(reconfiguringAllItems: true)
             refreshSettingsMenu()
         },
-        onFilterMenuChanged: { [weak self] in
-            guard let self else { return }
-            refreshFilterMenu()
-            updateFilterButtonAppearance()
-        },
         onClearCacheRequested: { [weak self] in self?.presentClearCacheConfirmation() }
     )
 
@@ -180,7 +190,7 @@ public final class FileBrowserViewController: UIViewController {
 
     private lazy var filterBarButtonItem = UIBarButtonItem(
         image: UIImage(systemName: "line.3.horizontal.decrease.circle"),
-        menu: menuBuilder.makeFilterMenu()
+        primaryAction: UIAction { [weak self] _ in self?.presentFilterSheet() }
     )
 
     private func setupNavigationBar() {
@@ -212,8 +222,26 @@ public final class FileBrowserViewController: UIViewController {
         settingsBarButtonItem.menu = menuBuilder.makeSettingsMenu()
     }
 
-    private func refreshFilterMenu() {
-        filterBarButtonItem.menu = menuBuilder.makeFilterMenu()
+    /// フィルター設定をハーフモーダルで表示する。
+    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はAppContainer経由のfactoryへ委譲し、
+    /// 変更のたびに呼ばれるonChangeでFileBrowserViewModelへ書き戻す。
+    private func presentFilterSheet() {
+        let filterViewController = filterViewControllerFactory(
+            viewModel.ratingFilter,
+            viewModel.colorLabelFilter
+        ) { [weak self] ratingFilter, colorLabelFilter in
+            guard let self else { return }
+            viewModel.ratingFilter = ratingFilter
+            viewModel.colorLabelFilter = colorLabelFilter
+        }
+        if let sheet = filterViewController.sheetPresentationController {
+            // 固定のhalf detentではなく、コンテンツの理想の高さ（preferredContentSize）にフィットさせる
+            sheet.detents = [.custom { [weak filterViewController] _ in
+                filterViewController?.preferredContentSize.height ?? 0
+            }]
+            sheet.delegate = self
+        }
+        present(filterViewController, animated: true)
     }
 
     /// キャッシュクリアの確認アラートを表示し、承認された場合のみ初期状態へ戻す
@@ -610,5 +638,14 @@ extension FileBrowserViewController: UIDocumentPickerDelegate {
     public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
         Task { await viewModel.selectFolder(url) }
+    }
+}
+
+// MARK: - UISheetPresentationControllerDelegate
+
+extension FileBrowserViewController: UISheetPresentationControllerDelegate {
+    // フィルターのハーフモーダルを閉じたタイミングでフィルターボタンの塗りつぶし状態を最新化する
+    public func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        updateFilterButtonAppearance()
     }
 }

@@ -137,8 +137,8 @@ UINavigationController
 - タイトルはフォルダ未選択時「My Preview」、選択後は選択したフォルダ名。
 - 右側の `UIBarButtonItem`：
   - 設定ボタン（歯車アイコン）：常に表示。メニューは `FileBrowserMenuBuilder.makeSettingsMenu()`。
-  - フィルタボタン（`line.3.horizontal.decrease.circle`、フィルタ有効時は `.fill`）：`viewModel.isRatingEnabled` の場合のみ表示。メニューは `FileBrowserMenuBuilder.makeFilterMenu()`。
-- 各アクション実行後、対応するメニューを再構築して `.menu` に再代入し、チェック状態を最新に保つ。
+  - フィルタボタン（`line.3.horizontal.decrease.circle`、フィルタ有効時は `.fill`）：`viewModel.isRatingEnabled` の場合のみ表示。タップで `FileBrowserFilterView`（SwiftUI）をハーフモーダル表示する。
+- 設定メニューはアクション実行後、メニューを再構築して `.menu` に再代入し、チェック状態を最新に保つ。フィルタボタンのアイコン塗りつぶし状態は、ハーフモーダルが閉じたタイミング（`UISheetPresentationControllerDelegate.presentationControllerDidDismiss`）で更新する。
 
 ---
 
@@ -239,18 +239,37 @@ UINavigationController
 | PiP自動送り間隔    | フォトビューアのPiP表示中、再生状態で自動的に次の写真へ進む間隔（秒）。減算／現在値表示（無効ボタン）／加算の3ボタン、範囲 1〜30秒でクランプ |
 | キャッシュを消去   | 破壊的アクション。確認ダイアログ後 `viewModel.resetToDefaults()` を実行                   |
 
-## フィルタメニュー（FileBrowserMenuBuilder.makeFilterMenu）
+## フィルタ設定（FileBrowserFilterViewController / FileBrowserFilterView / FileBrowserFilterViewModel）
 
-`line.3.horizontal.decrease.circle` アイコンのメニュー（評価機能が有効な場合のみ表示）。
+`line.3.horizontal.decrease.circle` アイコンをタップすると表示するボトムシート風のハーフモーダル（評価機能が有効な場合のみ表示）。
+
+### 画面生成（AppContainer経由）
+
+- `FileBrowserViewController` は自分でViewModel・Viewを組み立てず、init時に注入された `filterViewControllerFactory` クロージャ（`photoViewerFactory` と同様のパターン）を呼び出す。渡す引数は現在の `ratingFilter`/`colorLabelFilter` と、変更のたびに呼ばれる `onChange: (RatingFilter?, Set<PhotoColorLabel>) -> Void`。
+- `AppContainer` はこのクロージャの実体として `FileBrowserFilterViewController(ratingFilter:colorLabelFilter:onChange:)` をそのまま呼ぶだけ（`FileBrowserFilterViewModel`・`FileBrowserFilterView` を直接構築しない）。
+- `FileBrowserFilterViewController`（`UIHostingController<FileBrowserFilterView>` のサブクラス、`Modules/Sources/FileBrowser/Views/FileBrowserFilterViewController.swift`）が公開initで `ratingFilter`/`colorLabelFilter`/`onChange` の3引数のみを受け取り、内部で `FileBrowserFilterViewModel` を生成して `FileBrowserFilterView` に渡す。`FileBrowserFilterViewModel`・`FileBrowserFilterView.init` はモジュール内部にのみ公開し、AppContainer側からは見えない。
+  - `sizingOptions = [.preferredContentSize]` を設定し、SwiftUIコンテンツの理想サイズを `preferredContentSize` に反映させる。
+  - `view.backgroundColor = .clear` を設定し、UIHostingControllerの既定の不透明背景を外す。
+- `FileBrowserViewController.presentFilterSheet()` はfactoryから受け取ったViewControllerに対して `UISheetPresentationController` を設定してモーダル表示する。固定の `.medium()` ではなく `.custom { _ in filterViewController.preferredContentSize.height }` でコンテンツの理想の高さにフィットさせる。グラバー・Doneボタンは表示しない（閉じるのはスワイプのみ）。画面遷移の生成はAppContainer、表示・破棄（sheetの詳細設定）はFileBrowserViewControllerが担う。
+
+### FileBrowserFilterViewModel
+
+- `FileBrowserViewModel` とは独立した、フィルター画面専用の `@Observable` ViewModel（`Modules/Sources/FileBrowser/ViewModels/FileBrowserFilterViewModel.swift`、モジュール内部限定）。
+- `ratingFilter`/`colorLabelFilter` をローカルに保持し、`didSet` のたびにinit時に注入された `onChange` クロージャを呼ぶ。
+- `FileBrowserViewController.presentFilterSheet()` 側の `onChange` 実装が `viewModel.ratingFilter`/`colorLabelFilter`（＝`FileBrowserViewModel`）へ書き戻すことで、変更が即座に裏のファイルリストへ反映される（`FileBrowserViewModel` の `didSet` で `updateSections()` が走るため）。
+
+### 画面内容
+
+`FileBrowserFilterView` は `@State private var viewModel: FileBrowserFilterViewModel` として保持する（参照型かつ`@Observable`のため、`@State`でもプロパティの変更はonChangeへ伝播する）。`SwiftUI.Form`・`NavigationStack`・ナビゲーションバーは使わず、コンテンツを直接並べたボトムシート風の1画面。星・カラーラベルのアイコン表現はPhotoViewerの`RatingLabelBarView`（既存UIView）に合わせている。
 
 | 項目           | 内容                                                                                     |
 |----------------|--------------------------------------------------------------------------------------------|
-| フィルタなし   | 星評価・カラーラベルフィルタを両方クリアする単一アクション                                |
-| 星評価         | `0〜5` の単一選択インラインサブメニュー                                                    |
-| 比較条件       | 「以上」「以下」「同値」の単一選択インラインサブメニュー                                  |
-| カラーラベル   | 緑・黄・青・ピンク・赤・白の複数選択可能なインラインサブメニュー（色付き丸アイコン）      |
+| タイトル       | 「フィルター」（プレーンな`Text`。ナビゲーションバーは使わない）                          |
+| 星評価＋条件   | 同じ行にまとめて表示。★1〜5（タップでその位置まで選択、同じ位置を再タップで0に戻す。選択中は`Color.primary`＝ライトテーマ黒・ダークテーマ白、未選択は`Color.secondary`）＋区切り線＋比較条件を`Picker`（`.pickerStyle(.segmented)`、ラベルは≧・≦・半角=）で選択 |
+| カラーラベル   | 緑・黄・青・ピンク・赤・白の6色を横並び（各44×44ptのタップ領域）。タップで複数選択のON/OFFを切り替える。アイコンは`RatingLabelBarView`と同じ組み合わせ（未選択`circle.fill`／選択中`circle.inset.filled`、いずれもラベル自身の色でtint） |
+| フィルタークリア | 最下部に配置した破壊的ボタン（`.buttonStyle(.bordered)`、赤）。星評価・カラーラベルフィルタを両方クリアする（`viewModel.clearFilters()`） |
 
-星評価・比較条件の変更は `RatingFilter(stars:comparison:)` を都度組み立てて `viewModel.ratingFilter` に反映する。
+星評価・比較条件の変更は `RatingFilter(stars:comparison:)` を都度組み立てて `viewModel.ratingFilter` に反映する。変更はリアルタイムに反映されるため、閉じる操作は下スワイプのみで良い（Doneボタン・グラバーは表示しない）。
 
 ---
 

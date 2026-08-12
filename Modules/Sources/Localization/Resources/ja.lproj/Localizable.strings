@@ -1,6 +1,7 @@
 /* Common */
 "common.cancel" = "キャンセル";
 "common.clear" = "クリア";
+"common.done" = "完了";
 "common.copied_to_clipboard" = "クリップボードにコピーしました";
 
 /* FileBrowser */
@@ -20,13 +21,14 @@
 "file_browser.column_count_value" = "%d列";
 "file_browser.jump_to_last_viewed" = "最後に表示";
 "file_browser.rating_feature" = "レーティング";
-"file_browser.rating_filter_off" = "フィルターなし";
+"file_browser.rating_filter_off" = "フィルタークリア";
 "file_browser.rating_filter_stars" = "星の数";
 "file_browser.rating_filter_star_value" = "星%d";
 "file_browser.rating_filter_comparison" = "条件";
 "file_browser.rating_filter_at_least" = "以上";
 "file_browser.rating_filter_at_most" = "以下";
 "file_browser.rating_filter_exactly" = "同値";
+"file_browser.filter_title" = "フィルター";
 "file_browser.color_label" = "カラーラベル";
 "file_browser.pip_auto_advance_interval" = "PiP自動送り間隔";
 "file_browser.pip_auto_advance_interval_decrement" = "間隔を減らす";

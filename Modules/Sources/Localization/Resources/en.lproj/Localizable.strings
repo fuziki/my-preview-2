@@ -1,6 +1,7 @@
 /* Common */
 "common.cancel" = "Cancel";
 "common.clear" = "Clear";
+"common.done" = "Done";
 "common.copied_to_clipboard" = "Copied to clipboard";
 
 /* FileBrowser */
@@ -20,13 +21,14 @@
 "file_browser.column_count_value" = "%d Columns";
 "file_browser.jump_to_last_viewed" = "Last Viewed";
 "file_browser.rating_feature" = "Rating";
-"file_browser.rating_filter_off" = "No Filter";
+"file_browser.rating_filter_off" = "Clear Filter";
 "file_browser.rating_filter_stars" = "Stars";
 "file_browser.rating_filter_star_value" = "%d Stars";
 "file_browser.rating_filter_comparison" = "Condition";
 "file_browser.rating_filter_at_least" = "Or More";
 "file_browser.rating_filter_at_most" = "Or Less";
 "file_browser.rating_filter_exactly" = "Exactly";
+"file_browser.filter_title" = "Filter";
 "file_browser.color_label" = "Color Labels";
 "file_browser.pip_auto_advance_interval" = "PiP Auto Advance Interval";
 "file_browser.pip_auto_advance_interval_decrement" = "Decrease Interval";
