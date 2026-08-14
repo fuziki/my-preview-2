@@ -37,17 +37,13 @@ final class FileBrowserViewModel {
 }
 ```
 
-**init（引数にデフォルト値を持たせない、すべて protocol 型で注入）：**
+**init（依存はすべて `FileBrowserDependencies` 経由で注入、デフォルト値なし）：**
 
 ```swift
-init(
-    fileSystemService: any FileSystemServiceProtocol,
-    savedDateStore: any SavedDateStoreProtocol,
-    ratingStore: any PhotoRatingStoreProtocol,
-    colorLabelStore: any ColorLabelStoreProtocol,
-    settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
-)
+init(dependencies: FileBrowserDependencies)
 ```
+
+`FileBrowserDependencies` は `fileSystemService`・`savedDateStore`・`ratingStore`・`colorLabelStore`・`settings`（ViewModelが使用）・`thumbnailService`（ViewControllerが使用）をまとめた画面単位の依存関係バンドル。
 
 初期化時に `viewMode`/`saveFormat`/`sortOrder`/`gridColumnCount`（クランプ済み）/`isRatingEnabled`/`ratingFilter`/`colorLabelFilter` を `settings` から復元する。
 
@@ -128,7 +124,7 @@ UINavigationController
 
 - `FileBrowserViewController` が `UINavigationController` のルートとなる。
 - サブフォルダへの遷移は行わないため、`UINavigationController` のプッシュ遷移は使用しない。
-- `init(viewModel:thumbnailService:photoViewerFactory:)` で ViewModel・サムネイルサービス・フォトビューア生成クロージャを注入する。`photoViewerFactory` により `PhotoViewer` モジュールへの直接依存を避ける。
+- `init(viewModel:dependencies:photoViewerFactory:filterViewControllerFactory:advancedSettingsViewControllerFactory:)` で ViewModel・`FileBrowserDependencies`（サムネイルサービスを含む）・各種生成クロージャを注入する。`photoViewerFactory` 等のクロージャにより他機能モジュールへの直接依存を避ける。
 
 ---
 

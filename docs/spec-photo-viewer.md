@@ -39,7 +39,7 @@ final class PhotoViewerViewModel {
 }
 ```
 
-`init(input: PhotoViewerInput, services: PhotoViewerServices)` で `allURLs`・`currentIndex`（`initialURL` の位置）・`isRatingEnabled`・評価/カラーラベルフィルタを初期化する。
+`init(input: PhotoViewerInput, dependencies: PhotoViewerDependencies)` で `allURLs`・`currentIndex`（`initialURL` の位置）・`isRatingEnabled`・評価/カラーラベルフィルタを初期化する。
 
 **ViewModel のメソッド：**
 

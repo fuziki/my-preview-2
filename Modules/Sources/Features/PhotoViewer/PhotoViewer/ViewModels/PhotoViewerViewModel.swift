@@ -51,24 +51,24 @@ public final class PhotoViewerViewModel {
 
     // MARK: - 初期化
 
-    public init(input: PhotoViewerInput, services: PhotoViewerServices) {
+    public init(input: PhotoViewerInput, dependencies: PhotoViewerDependencies) {
         allURLs = input.allURLs
         currentIndex = input.allURLs.firstIndex(of: input.initialURL) ?? 0
         isRatingEnabled = input.isRatingEnabled
         ratingFilter = input.ratingFilter
         colorLabelFilter = input.colorLabelFilter
-        imageLoader = services.imageLoader
-        exifService = services.exifService
-        photoLibrary = services.photoLibrary
-        savedDateStore = services.savedDateStore
-        ratingStore = services.ratingStore
-        colorLabelStore = services.colorLabelStore
-        hapticsService = services.hapticsService
-        settings = services.settings
-        orientationLock = services.settings.orientationLock
-        lastSavedDate = services.savedDateStore.date(for: input.allURLs[currentIndex])
-        currentRating = services.ratingStore.rating(for: input.allURLs[currentIndex])
-        currentColorLabel = services.colorLabelStore.label(for: input.allURLs[currentIndex])
+        imageLoader = dependencies.imageLoader
+        exifService = dependencies.exifService
+        photoLibrary = dependencies.photoLibrary
+        savedDateStore = dependencies.savedDateStore
+        ratingStore = dependencies.ratingStore
+        colorLabelStore = dependencies.colorLabelStore
+        hapticsService = dependencies.hapticsService
+        settings = dependencies.settings
+        orientationLock = dependencies.settings.orientationLock
+        lastSavedDate = dependencies.savedDateStore.date(for: input.allURLs[currentIndex])
+        currentRating = dependencies.ratingStore.rating(for: input.allURLs[currentIndex])
+        currentColorLabel = dependencies.colorLabelStore.label(for: input.allURLs[currentIndex])
     }
 
     // MARK: - ライフサイクル

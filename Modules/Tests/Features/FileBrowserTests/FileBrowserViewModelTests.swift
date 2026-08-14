@@ -13,6 +13,7 @@ struct FileBrowserViewModelTests {
     let savedDateStore: MockSavedDateStore
     let ratingStore: MockPhotoRatingStore
     let colorLabelStore: MockColorLabelStore
+    let thumbnailService: MockThumbnailService
     let viewModel: FileBrowserViewModel
 
     init() {
@@ -21,24 +22,32 @@ struct FileBrowserViewModelTests {
         savedDateStore = MockSavedDateStore()
         ratingStore = MockPhotoRatingStore()
         colorLabelStore = MockColorLabelStore()
-        viewModel = FileBrowserViewModel(
+        thumbnailService = MockThumbnailService()
+        viewModel = FileBrowserViewModel(dependencies: FileBrowserDependencies(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            settings: settings
+            settings: settings,
+            thumbnailService: thumbnailService
+        ))
+    }
+
+    /// 現在のモックを使ってDependenciesを組み立てるヘルパー
+    private func makeDependencies() -> FileBrowserDependencies {
+        FileBrowserDependencies(
+            fileSystemService: fileSystemService,
+            savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
+            settings: settings,
+            thumbnailService: thumbnailService
         )
     }
 
     /// 現在のモックを使ってViewModelを生成し直すヘルパー（設定復元のテストに使用）
     private func makeViewModel() -> FileBrowserViewModel {
-        FileBrowserViewModel(
-            fileSystemService: fileSystemService,
-            savedDateStore: savedDateStore,
-            ratingStore: ratingStore,
-            colorLabelStore: colorLabelStore,
-            settings: settings
-        )
+        FileBrowserViewModel(dependencies: makeDependencies())
     }
 
     // MARK: - 初期状態

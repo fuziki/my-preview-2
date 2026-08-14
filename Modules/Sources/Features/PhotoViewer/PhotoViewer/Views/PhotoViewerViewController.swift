@@ -154,9 +154,9 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let imageLoader: any ImageLoaderServiceProtocol
 
-    public init(input: PhotoViewerInput, services: PhotoViewerServices) {
-        viewModel = PhotoViewerViewModel(input: input, services: services)
-        imageLoader = services.imageLoader
+    public init(input: PhotoViewerInput, dependencies: PhotoViewerDependencies) {
+        viewModel = PhotoViewerViewModel(input: input, dependencies: dependencies)
+        imageLoader = dependencies.imageLoader
         super.init(nibName: nil, bundle: nil)
     }
 

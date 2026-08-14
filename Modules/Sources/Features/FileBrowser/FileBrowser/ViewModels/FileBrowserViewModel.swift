@@ -206,18 +206,12 @@ public final class FileBrowserViewModel {
 
     // MARK: - 初期化
 
-    public init(
-        fileSystemService: any FileSystemServiceProtocol,
-        savedDateStore: any SavedDateStoreProtocol,
-        ratingStore: any PhotoRatingStoreProtocol,
-        colorLabelStore: any ColorLabelStoreProtocol,
-        settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
-    ) {
-        self.fileSystemService = fileSystemService
-        self.savedDateStore = savedDateStore
-        self.ratingStore = ratingStore
-        self.colorLabelStore = colorLabelStore
-        self.settings = settings
+    public init(dependencies: FileBrowserDependencies) {
+        self.fileSystemService = dependencies.fileSystemService
+        self.savedDateStore = dependencies.savedDateStore
+        self.ratingStore = dependencies.ratingStore
+        self.colorLabelStore = dependencies.colorLabelStore
+        self.settings = dependencies.settings
         // UserDefaultsSettingsStoreから復元する（デフォルト値・クランプはそちらに一元化されている）
         self.viewMode = settings.viewMode
         self.saveFormat = settings.saveFormat

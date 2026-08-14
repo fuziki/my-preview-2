@@ -56,16 +56,18 @@ final class AppContainer {
     /// FileBrowserViewControllerを生成する。
     /// PhotoViewerViewControllerの生成はクロージャとして注入する。
     func makeFileBrowserViewController() -> UIViewController {
-        let viewModel = FileBrowserViewModel(
+        let dependencies = FileBrowserDependencies(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
-            settings: settingsStore
+            settings: settingsStore,
+            thumbnailService: thumbnailService
         )
+        let viewModel = FileBrowserViewModel(dependencies: dependencies)
         return FileBrowserViewController(
             viewModel: viewModel,
-            thumbnailService: thumbnailService,
+            dependencies: dependencies,
             photoViewerFactory: { [weak self] input in
                 guard let self else { return UIViewController() }
                 return self.makePhotoViewerViewController(input: input)
@@ -91,7 +93,7 @@ final class AppContainer {
 
     /// PhotoViewerViewControllerを生成する。
     private func makePhotoViewerViewController(input: PhotoViewerInput) -> UIViewController {
-        let services = PhotoViewerServices(
+        let dependencies = PhotoViewerDependencies(
             imageLoader: imageLoaderService,
             exifService: exifService,
             photoLibrary: PhotoLibraryService(settings: settingsStore),
@@ -101,6 +103,6 @@ final class AppContainer {
             hapticsService: HapticsService(),
             settings: settingsStore
         )
-        return PhotoViewerViewController(input: input, services: services)
+        return PhotoViewerViewController(input: input, dependencies: dependencies)
     }
 }

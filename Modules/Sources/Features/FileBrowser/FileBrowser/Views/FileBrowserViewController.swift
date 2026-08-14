@@ -48,7 +48,7 @@ public final class FileBrowserViewController: UIViewController {
 
     public init(
         viewModel: FileBrowserViewModel,
-        thumbnailService: any ThumbnailServiceProtocol,
+        dependencies: FileBrowserDependencies,
         photoViewerFactory: @escaping (PhotoViewerInput) -> UIViewController,
         filterViewControllerFactory: @escaping (
             _ ratingFilter: RatingFilter?,
@@ -64,7 +64,7 @@ public final class FileBrowserViewController: UIViewController {
         ) -> UIViewController
     ) {
         self.viewModel = viewModel
-        self.thumbnailService = thumbnailService
+        self.thumbnailService = dependencies.thumbnailService
         self.photoViewerFactory = photoViewerFactory
         self.filterViewControllerFactory = filterViewControllerFactory
         self.advancedSettingsViewControllerFactory = advancedSettingsViewControllerFactory

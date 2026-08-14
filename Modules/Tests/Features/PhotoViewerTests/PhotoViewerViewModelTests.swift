@@ -39,7 +39,7 @@ struct PhotoViewerViewModelTests {
             URL(fileURLWithPath: "/tmp/photo3.jpg"),
         ]
         let input = PhotoViewerInput(initialURL: urls[0], allURLs: urls)
-        let services = PhotoViewerServices(
+        let dependencies = PhotoViewerDependencies(
             imageLoader: imageLoader,
             exifService: exifService,
             photoLibrary: photoLibrary,
@@ -49,7 +49,7 @@ struct PhotoViewerViewModelTests {
             hapticsService: hapticsService,
             settings: settings
         )
-        viewModel = PhotoViewerViewModel(input: input, services: services)
+        viewModel = PhotoViewerViewModel(input: input, dependencies: dependencies)
     }
 
     /// テスト用のViewModelを指定のURL・レーティング設定で生成するヘルパー
@@ -66,7 +66,7 @@ struct PhotoViewerViewModelTests {
             ratingFilter: ratingFilter,
             colorLabelFilter: colorLabelFilter
         )
-        let services = PhotoViewerServices(
+        let dependencies = PhotoViewerDependencies(
             imageLoader: imageLoader,
             exifService: exifService,
             photoLibrary: photoLibrary,
@@ -76,7 +76,7 @@ struct PhotoViewerViewModelTests {
             hapticsService: hapticsService,
             settings: settings
         )
-        return PhotoViewerViewModel(input: input, services: services)
+        return PhotoViewerViewModel(input: input, dependencies: dependencies)
     }
 
     // MARK: - 初期状態
