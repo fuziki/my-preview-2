@@ -94,7 +94,7 @@ let package = Package(
             path: "Tests/Core/MocksForTest",
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
-        // UserDefaultsSettingsStoreのユニットテスト
+        // Coreの各サービス・ストアのユニットテスト
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],

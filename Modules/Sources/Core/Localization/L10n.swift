@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - L10n
 
-/// タイプセーフなローカライズ文言アクセサ（swiftgen生成コードの代替としてAIが手書きしたもの）
+/// タイプセーフなローカライズ文言アクセサ（swiftgen生成コードの代替）
 public enum L10n {
 
     // MARK: - Common
