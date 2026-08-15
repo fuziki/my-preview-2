@@ -60,16 +60,19 @@ public final class PhotoZoomScrollView: UIScrollView {
 
     // MARK: - 画像表示
 
-    /// 向きの変化に応じて表示画像を更新し、ズームを調整する。
-    public func display(image: UIImage, previousOrientation: ImageOrientation?) {
+    /// 表示画像を差し替え、フィットスケールへズームをリセットする。
+    public func display(image: UIImage) {
         currentImage = image
         imageView.image = image
-        let newOrientation = image.photoOrientation
-        if previousOrientation == nil || previousOrientation != newOrientation {
-            resetZoom(for: image)
-        } else {
-            updateZoomForSameOrientation(for: image)
-        }
+        resetZoom(for: image)
+    }
+
+    /// ズーム状態（zoomScale・contentOffset・contentSize・contentInset）を一切変えず、表示画像だけ差し替える。
+    /// imageViewは既存フレーム（旧画像サイズ）のまま新画像をscaleToFillで流し込むため、
+    /// 画像サイズが異なる場合はフィットに対する比率が変わり得る（呼び出し側が許容する前提）。
+    public func swapImageKeepingZoom(_ image: UIImage) {
+        currentImage = image
+        imageView.image = image
     }
 
     // MARK: - ズーム
@@ -94,31 +97,6 @@ public final class PhotoZoomScrollView: UIScrollView {
         onZoomChange?(zoomScale)
     }
 
-    private func updateZoomForSameOrientation(for image: UIImage) {
-        let prevMinScale = minimumZoomScale
-        let zoomRatio = prevMinScale > 0 ? zoomScale / prevMinScale : 1.0
-
-        // imageView.frame 変更前に zoomScale=1 にリセット（resetZoom と同じ理由）。
-        minimumZoomScale = 1.0
-        maximumZoomScale = 1.0
-        zoomScale = 1.0
-        contentInset = .zero
-
-        imageView.frame = CGRect(origin: .zero, size: image.size)
-        contentSize = image.size
-
-        let scale = aspectFitScale(for: image)
-        minimumZoomScale = scale
-        maximumZoomScale = max(1.0, scale)
-        // 以前のフィットレベルに比例したズームを復元し、有効範囲にクランプする。
-        let targetZoom = min(max(scale * zoomRatio, scale), max(1.0, scale))
-        zoomScale = targetZoom
-
-        centerImageView()
-        clampContentOffset()
-        onZoomChange?(zoomScale)
-    }
-
     private func aspectFitScale(for image: UIImage) -> CGFloat {
         let size = bounds.size
         guard image.size.width > 0, image.size.height > 0 else { return 1 }
@@ -135,18 +113,6 @@ public final class PhotoZoomScrollView: UIScrollView {
         contentInset = UIEdgeInsets(top: offsetY, left: offsetX, bottom: offsetY, right: offsetX)
     }
 
-    private func clampContentOffset() {
-        // クランプ時に contentInset を考慮する（インセットは有効オフセット範囲をシフトする）。
-        let inset = contentInset
-        let minX = -inset.left
-        let minY = -inset.top
-        let maxX = max(minX, contentSize.width - bounds.width)
-        let maxY = max(minY, contentSize.height - bounds.height)
-        var offset = contentOffset
-        offset.x = min(max(offset.x, minX), maxX)
-        offset.y = min(max(offset.y, minY), maxY)
-        setContentOffset(offset, animated: false)
-    }
 }
 
 // MARK: - UIScrollViewDelegate

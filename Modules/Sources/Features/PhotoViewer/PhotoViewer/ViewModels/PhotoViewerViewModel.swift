@@ -10,7 +10,6 @@ public final class PhotoViewerViewModel {
     public private(set) var currentIndex: Int
     public private(set) var allURLs: [URL]
     public private(set) var currentImage: UIImage? = nil
-    public private(set) var previousOrientation: ImageOrientation? = nil
     public private(set) var isLoading: Bool = false
     public private(set) var exifInfo: ExifInfo? = nil
     public private(set) var saveStatus: SaveStatus = .idle
@@ -23,6 +22,10 @@ public final class PhotoViewerViewModel {
     /// フォトビューア画面のみに適用される画面回転設定
     public private(set) var orientationLock: PhotoViewerOrientationLock
 
+    /// 直近のインデックス変化がスワイプ由来か（子ページャの .swiped/.button モード判定に使う）。
+    /// スワイプ（didSwipeTo）で true、ボタン/PiP/フィルタ自動遷移/初回（navigate・loadInitial）で false。
+    public private(set) var lastChangeWasSwipe: Bool = false
+
     /// レーティング機能が有効か（星ボタン・カラーラベルの表示可否）
     public let isRatingEnabled: Bool
 
@@ -32,6 +35,11 @@ public final class PhotoViewerViewModel {
     public var currentFileName: String { currentURL.lastPathComponent }
     public var canGoPrevious: Bool { currentIndex > 0 }
     public var canGoNext: Bool { currentIndex < allURLs.count - 1 }
+
+    /// ページングウィンドウ用: 現在の直前・直後の写真URL（端では nil）。
+    /// PhotoPageItemViewController の prev/current/next の3枚ウィンドウに供給する。
+    public var previousURL: URL? { currentIndex > 0 ? allURLs[currentIndex - 1] : nil }
+    public var nextURL: URL? { currentIndex < allURLs.count - 1 ? allURLs[currentIndex + 1] : nil }
 
     /// PiP再生中に自動的に次の写真へ進める間隔（秒。設定Menuで変更可能）
     public var pipAutoAdvanceIntervalSeconds: Int { settings.pipAutoAdvanceIntervalSeconds }
@@ -48,6 +56,11 @@ public final class PhotoViewerViewModel {
     private let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     private let ratingFilter: RatingFilter?
     private let colorLabelFilter: Set<PhotoColorLabel>
+
+    /// 前後ボタン長押し中の連続ナビゲーション用Task
+    private var autoNavigationTask: Task<Void, Never>?
+    /// 連続ナビゲーションの実行間隔（秒）
+    private let autoNavigationIntervalSeconds: Double = 0.12
 
     // MARK: - 初期化
 
@@ -96,9 +109,9 @@ public final class PhotoViewerViewModel {
         await navigate(to: (currentIndex + 1) % allURLs.count)
     }
 
-    /// 任意のインデックスへ遷移する（ボタンナビゲーションとレーティング変更による自動遷移で使用）
+    /// 任意のインデックスへ遷移する（ボタンナビゲーションとレーティング変更による自動遷移で使用）。
     private func navigate(to index: Int) async {
-        previousOrientation = currentImage?.photoOrientation
+        lastChangeWasSwipe = false
         currentIndex = index
         saveStatus = .idle
         lastSavedDate = savedDateStore.date(for: currentURL)
@@ -110,7 +123,7 @@ public final class PhotoViewerViewModel {
     /// UIPageViewControllerのスワイプ完了後に呼ばれる。
     /// 画像はページアイテムVCで既に表示済みのため、EXIFのみ読み込む。
     public func didSwipeTo(index: Int, image: UIImage?) async {
-        previousOrientation = nil  // スワイプは常に新しいページアイテムVCを表示するのでズームはリセットされる
+        lastChangeWasSwipe = true
         currentIndex = index
         saveStatus = .idle
         currentImage = image
@@ -118,6 +131,31 @@ public final class PhotoViewerViewModel {
         currentRating = ratingStore.rating(for: currentURL)
         currentColorLabel = colorLabelStore.label(for: currentURL)
         await loadExif(for: currentURL)
+    }
+
+    /// 前後ボタンの長押しによる連続ナビゲーションを開始する。境界（先頭/末尾）に達すると自動的に停止する。
+    public func startAutoNavigation(forward: Bool) {
+        stopAutoNavigation()
+        autoNavigationTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                if forward {
+                    guard canGoNext else { break }
+                    await navigateNext()
+                } else {
+                    guard canGoPrevious else { break }
+                    await navigatePrevious()
+                }
+                guard !Task.isCancelled else { break }
+                try? await Task.sleep(for: .seconds(autoNavigationIntervalSeconds))
+            }
+        }
+    }
+
+    /// 連続ナビゲーションを停止する。
+    public func stopAutoNavigation() {
+        autoNavigationTask?.cancel()
+        autoNavigationTask = nil
     }
 
     // MARK: - レーティング・カラーラベル

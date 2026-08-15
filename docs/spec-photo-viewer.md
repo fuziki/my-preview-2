@@ -19,7 +19,6 @@ final class PhotoViewerViewModel {
     private(set) var currentIndex: Int
     private(set) var allURLs: [URL]
     private(set) var currentImage: UIImage? = nil
-    private(set) var previousOrientation: ImageOrientation? = nil
     private(set) var isLoading: Bool = false
     private(set) var exifInfo: ExifInfo? = nil
     private(set) var saveStatus: SaveStatus = .idle
@@ -29,6 +28,12 @@ final class PhotoViewerViewModel {
     private(set) var shouldDismiss: Bool = false
     var isOverlayVisible: Bool = true
     let isRatingEnabled: Bool
+    /// 直近のインデックス変化がスワイプ由来か（子ページャの .swiped/.button モード判定に使う）
+    private(set) var lastChangeWasSwipe: Bool = false
+
+    // ページングウィンドウ（子ページャへ供給する prev/current/next）
+    var previousURL: URL? { currentIndex > 0 ? allURLs[currentIndex - 1] : nil }
+    var nextURL: URL? { currentIndex < allURLs.count - 1 ? allURLs[currentIndex + 1] : nil }
 
     // 派生プロパティ
     var currentURL: URL { allURLs[currentIndex] }
@@ -45,17 +50,21 @@ final class PhotoViewerViewModel {
 
 | メソッド                                  | 処理                                                                                          |
 |--------------------------------------------|-----------------------------------------------------------------------------------------------|
-| `loadInitial() async`                      | 初期表示の画像・Exif をバックグラウンドで読み込む（VC 準備後に1回呼ぶ）                       |
-| `navigatePrevious() async`                 | `previousOrientation` を保存後に `currentIndex` をデクリメントし画像・Exifを再読み込みする    |
-| `navigateNext() async`                     | `previousOrientation` を保存後に `currentIndex` をインクリメントし画像・Exifを再読み込みする  |
-| `didSwipeTo(index: Int, image: UIImage?) async` | スワイプ後、画像は既に表示済みとして Exif のみ再読み込み。`previousOrientation` は nil にリセット |
+| `loadInitial() async`                      | 初期表示の画像・Exif をバックグラウンドで読み込む（VC 準備後に1回呼ぶ）。`lastChangeWasSwipe` は false のまま |
+| `navigatePrevious() async`                 | `currentIndex` をデクリメントし画像・Exifを再読み込みする（`lastChangeWasSwipe = false`） |
+| `navigateNext() async`                     | `currentIndex` をインクリメントし画像・Exifを再読み込みする（`lastChangeWasSwipe = false`） |
+| `didSwipeTo(index: Int, image: UIImage?) async` | スワイプ後、画像は既に表示済みとして Exif のみ再読み込み。`lastChangeWasSwipe = true` にする |
 | `setRating(_ stars: Int) async`            | 星評価を設定。同じ値を再度指定すると 0（解除）。`ratingStore` へ永続化後、フィルタ外なら自動遷移 |
 | `setColorLabel(_ label: PhotoColorLabel) async` | カラーラベルを設定。同じ値を再度指定すると nil（解除）。`colorLabelStore` へ永続化後、フィルタ外なら自動遷移 |
 | `save() async`                              | 権限確認後に現在の写真を写真ライブラリへ保存し `saveStatus`・`lastSavedDate` を更新、触覚フィードバックを発行 |
 | `toggleOverlay()`                          | `isOverlayVisible` を反転する                                                                 |
-| `advanceForPictureInPictureAutoPlay() async` | PiP再生中の自動送り用のナビゲーション。`navigateNext()` と異なり末尾で停止せず、`(currentIndex + 1) % allURLs.count` で先頭へ固定でループする |
+| `advanceForPictureInPictureAutoPlay() async` | PiP再生中の自動送り用のナビゲーション。`navigateNext()` と異なり末尾で停止せず、`(currentIndex + 1) % allURLs.count` で先頭へ固定でループする（`lastChangeWasSwipe = false`） |
+| `startAutoNavigation(forward: Bool)`       | 前後ボタン長押し中の連続ナビゲーションを開始する（0.12秒間隔、`Task` ベース）。`canGoNext`/`canGoPrevious` が `false` になった時点で自動停止する |
+| `stopAutoNavigation()`                     | `startAutoNavigation` で開始した連続ナビゲーションを停止する                                  |
 
 **評価・カラーラベルフィルタと自動遷移：** ViewModel は `PhotoViewerInput` 由来の `ratingFilter`/`colorLabelFilter` を保持する。`setRating`/`setColorLabel` で写真が現在のフィルタ条件に合わなくなった場合、`autoNavigateIfFilteredOut()` が呼ばれ、前方→後方の順でフィルタに一致する最も近い写真へ自動的に遷移する。一致する写真が他に無い場合は `shouldDismiss = true` となり、VC がフォトビューアを閉じる。
+
+**`lastChangeWasSwipe` の意味論：** `currentIndex` を書き換える経路は「スワイプ（`didSwipeTo`）」と「それ以外（`navigate(to:)` 経由の前後ボタン・長押し連続送り・PiP自動送り・フィルタ自動遷移）」に分かれる。`didSwipeTo` は `true`、`navigate(to:)`・`loadInitial` は `false` を設定する。`PhotoViewerViewController` はこの値を見て子ページャ（`PhotoPageItemViewController`）へのウィンドウ更新モードを決める：`true` なら `.swiped`（子ページャを再センタリング）、`false` なら `.button`（中央セルを維持したままズーム保持で画像だけ差し替え）。ページング機構の詳細は後述の「ページング（子ページャ）」節を参照。
 
 ### PhotoViewerViewController の updateProperties
 
@@ -90,11 +99,12 @@ override func updateProperties() {
 
 ```
 view（黒背景）
-  ├── UICollectionView（横スクロール・ページング、写真のページング表示）
-  │     └── PhotoPageItemCell（各ページ）
-  │           └── PhotoZoomScrollView（写真のズーム・パン）
-  │                 └── UIImageView（写真）
-  └── 各フローティング要素（view に直接追加、UICollectionView より前面）
+  ├── PhotoPageItemViewController.view（子VC。写真ページングを担う。最背面）
+  │     └── UICollectionView（横スクロール・ページング、prev/current/next の3枚ウィンドウ）
+  │           └── PhotoPageItemCell（各ページ）
+  │                 └── PhotoZoomScrollView（写真のズーム・パン）
+  │                       └── UIImageView（写真）
+  └── 各フローティング要素（view に直接追加、子ページャより前面）
         ├── 閉じるボタン（GlassButtonView、左上）
         ├── ファイル名 + Exif パネル（PhotoInfoPillView、右上）
         ├── サムネイル（UIImageView、パネルの下・右寄せ）
@@ -111,16 +121,42 @@ view（黒背景）
 
 ---
 
-## ページング（UICollectionView）
+## ページング（子ページャ）
 
-写真間の移動は `UIPageViewController` ではなく、横スクロール・ページング設定の `UICollectionView`（`UICollectionViewFlowLayout`、`interPageSpacing = 16`）で行う。
+写真間の移動は、`PhotoViewerViewController` の子ViewController `PhotoPageItemViewController` が担う。内部に横スクロール・ページング設定の `UICollectionView`（`UICollectionViewFlowLayout`、`interPageSpacing = 16`）を持ち、`PhotoPageItemCell` を表示する。
+
+### SSOT（Single Source of Truth）設計
+
+`PhotoViewerViewModel.currentIndex` を「今どの写真を表示しているか」の唯一の真実（SSOT）とする。子ページャはこれから導出される **prev/current/next の3枚ウィンドウ**（`PhotoViewerViewModel.previousURL`/`currentURL`/`nextURL`）を投影するだけで、独自の位置状態（`layoutPageOffset` 等）は持たない。
+
+**中央固定3セル方式：** 子ページャ（`PhotoPageItemViewModel`）はページ数を**常に3で固定**し（page 0 = prev, 1 = current, 2 = next）、current を常に中央（page 1）に置く。端では prev/next のページが空白になり、その方向へは `scrollViewDidScroll` でスクロール範囲を**クランプ**して越えられないようにする。
+
+- ページ数が常に3で変わらないため、ボタン遷移で中央セルが作り直されず、**ズーム倍率が常に維持される**（端の出入りを含む）。
+- 端（先頭/末尾）では隣のページが存在しないため、**スワイプで境界を越えることが構造的にできない**（幽霊ページが生じない）。
+
+### 子ページャとの連携（`PhotoPageItemViewController`）
+
+- **コールバック**：`onPageChanged(方向, 画像)`（スワイプ着地）、`onTap`（オーバーレイ切替）、`onDoubleTap`（ダブルタップズーム）、`onZoomChanged`（サムネイル表示更新）を親へ通知する。`currentCell`（中央セル）を親へ公開し、ズーム状態の問い合わせ・ドラッグズーム・スワイプ閉じ判定に使う。
+- **ウィンドウ更新**：`applyWindow(prevURL:currentURL:nextURL:mode:)`。`distinct until changed` で変化がなければ何もしない。モードは2種類：
+  - `.swiped`（スワイプ由来）：`reloadData` して current を中央へ再センタリングする。着地セルが持つ**読み込み済み画像を退避**し、再センタリング後に中央セルへ即時セットして、非同期再読み込みによる**暗転を防ぐ**。
+  - `.button`（ボタン等由来）：セルは動かさず、中央セルはズーム維持で画像だけ差し替え（`swapImageKeepingZoom`。比率変化は許容）、両隣は読み直す。
+- **モード選択**：`updateProperties()` が `viewModel.lastChangeWasSwipe ? .swiped : .button` を渡す。ウィンドウ更新は毎回呼ぶが、`distinct until changed` により実変化時のみ処理される。
+- **事前読み込み**：ウィンドウが変わるたび（および初期表示）に prev/next を `preloadNeighborImages()` で先読みし、`ImageLoaderService` のキャッシュを温めておく。隣ページへスワイプした際にキャッシュヒットで即表示され、暗転を防ぐ。
 
 | ナビゲーション種別 | セルの扱い                                                                 | ズーム状態                                               |
 |--------------------|---------------------------------------------------------------------------|------------------------------------------------------------|
-| 前後ボタン         | 同じ `PhotoPageItemCell` を再利用し、`index` を更新して画像を上書き        | 同じ向きの場合は維持、向きが変わった場合はリセット        |
-| 左右スワイプ       | `UICollectionView` が隣接セルを自然に表示（`didSwipeTo(index:image:)` で通知） | 常にリセット（`previousOrientation = nil`）              |
+| 前後ボタン・PiP・フィルタ自動遷移 | `.button`：中央セルを維持し `swapImageKeepingZoom` で画像だけ差し替え | **常に維持**（比率は画像サイズが異なると変わり得る＝許容） |
+| 左右スワイプ       | `.swiped`：`reloadData` + 再センタリング（着地画像を中央へ即時セット）    | 常にリセット                                             |
 
-前後ボタンには長押しジェスチャー（`UILongPressGestureRecognizer`、`minimumPressDuration = 1.0`）による連続ナビゲーション（0.12秒間隔で自動送り）が拡大ヒットエリア（`prevHitAreaButton`/`nextHitAreaButton`）に設定されている。
+前後ボタンには長押しジェスチャー（`UILongPressGestureRecognizer`、`minimumPressDuration = 1.0`）による連続ナビゲーション（0.12秒間隔で自動送り）が拡大ヒットエリア（`prevHitAreaButton`/`nextHitAreaButton`）に設定されている。連続送りのループ自体は `PhotoViewerViewModel.startAutoNavigation(forward:)`/`stopAutoNavigation()` が保持する（VCの `.began` で `startAutoNavigation`、`.ended`/`.cancelled`/`.failed` で `stopAutoNavigation` を呼ぶだけ）。`startAutoNavigation` は内部で `Task` を起動し、`canGoNext`/`canGoPrevious` が `false` になった時点で自動停止する。
+
+### スワイプの流れ
+
+1. 子ページャで隣ページへスワイプ完了 → `scrollViewDidEndDecelerating` が着地方向を判定し `onPageChanged(方向, 着地セルの画像)` を親へ通知。
+2. 親は `viewModel.didSwipeTo(index:image:)` で `currentIndex` を更新（`lastChangeWasSwipe = true`）。
+3. `updateProperties()` が `applyWindow(.swiped)` を呼び、子ページャが新ウィンドウで再センタリングする。
+
+**ズーム維持はこのアプリのコア体験**であり、前後ボタン・PiP・フィルタ自動遷移では常に維持される。PiP から通常表示に戻った場合も同様に維持される（`.button` 経由のため）。スワイプはズームリセット（別写真への自然な移動のため）。
 
 ---
 
@@ -175,25 +211,16 @@ contentInset = UIEdgeInsets(top: offsetY, left: offsetX, bottom: offsetY, right:
 
 `layoutSubviews()` をオーバーライドし、bounds サイズが変化した場合は `resetZoom(for:)` を呼んでズームを再計算する。サイズが変わっていない場合は `centerImageView()` のみ呼ぶ。
 
-### ナビゲーション時のズーム状態
+### 画像差し替えの2経路
 
-`display(image:previousOrientation:)` を呼び出す際、`previousOrientation` との比較でズーム挙動を分岐する：
+`PhotoZoomScrollView` は表示画像を差し替える手段を2つ持つ：
 
-| 遷移パターン                                          | 挙動                                                                     |
-|-------------------------------------------------------|--------------------------------------------------------------------------|
-| 初回表示（`previousOrientation` が nil）              | `resetZoom(for:)` でズームをリセット                                      |
-| 向きが変わった場合（縦 ↔ 横）                          | `resetZoom(for:)` でズームをリセット                                      |
-| 向きが同じ場合（縦 → 縦、横 → 横）                    | `updateZoomForSameOrientation(for:)` で現在のズーム比率を新しい画像に適用 |
+| メソッド | 挙動 | 使用場面 |
+|---|---|---|
+| `display(image:)` | 画像を差し替え、`resetZoom(for:)` でフィット（最小ズーム）へリセットする | セルの自己読み込み・スワイプ着地時（ズームリセット） |
+| `swapImageKeepingZoom(_:)` | `zoomScale`・`contentOffset`・`contentSize`・`contentInset` を一切変えず、`imageView.image` だけ差し替える | ボタン/PiP/フィルタ自動遷移での中央セル（ズーム維持） |
 
-同じ向きの場合のズーム引き継ぎ計算：
-
-```swift
-let zoomRatio = zoomScale / minimumZoomScale  // 現在のズーム比率（fitの何倍か）
-let targetZoom = clamp(newMinScale * zoomRatio, newMinScale, newMaxScale)
-zoomScale = targetZoom
-```
-
-引き継ぎ後は `clampContentOffset()` でコンテンツオフセットを有効範囲に収める。
+`swapImageKeepingZoom` は既存フレーム（旧画像サイズ）のまま新画像を `scaleToFill` で流し込むため、画像サイズが異なる場合はフィットに対する比率が変わり得る（呼び出し側が許容する前提）。ズーム維持を「同じ中央セルへの画像差し替え」で実現するため、セル間でズーム比を転送する仕組みは持たない。
 
 ---
 
@@ -321,7 +348,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 
 ## ジェスチャー認識
 
-タップ系ジェスチャーは各ページの `PhotoPageItemCell`（`zoomScrollView`）に追加し、`PhotoPageItemCellDelegate` 経由で VC に通知する。
+タップ系ジェスチャーは各ページの `PhotoPageItemCell`（`zoomScrollView`）に追加し、`PhotoPageItemCellDelegate` 経由で子ページャ（`PhotoPageItemViewController`）が受け、`onTap`/`onDoubleTap`/`onZoomChanged` クロージャで親 VC へ転送する。
 
 | ジェスチャー         | 認識クラス                                              | 挙動                                                                     |
 |----------------------|-----------------------------------------------------------|--------------------------------------------------------------------------|
@@ -329,7 +356,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 | ダブルタップ         | `UITapGestureRecognizer`（`numberOfTapsRequired = 2`）    | ズームイン or ズームリセット                                              |
 | ピンチ               | `UIScrollView` 組み込み                                   | ズームイン・ズームアウト                                                   |
 | 前/次ボタン長押し    | `UILongPressGestureRecognizer`（`minimumPressDuration = 1.0`）、ヒットエリア上 | 0.12秒間隔で `navigatePrevious()`/`navigateNext()` を連続実行 |
-| ドラッグズーム       | `UILongPressGestureRecognizer`（`minimumPressDuration = 0.5`）、`UICollectionView` 上 | 縦方向ドラッグ量からズームスケールを連続変更（`exp((dx-dy)*0.01)`） |
+| ドラッグズーム       | `UILongPressGestureRecognizer`（`minimumPressDuration = 0.5`）、子ページャ（`PhotoPageItemViewController.view`）上 | 縦方向ドラッグ量から中央セルのズームスケールを連続変更（`exp((dx-dy)*0.01)`） |
 
 - シングルタップは `require(toFail:)` でダブルタップ認識の失敗を待つ。
 - `presentationController?.delegate = self` により、ズーム中は `presentationControllerShouldDismiss` が `false` を返し、スワイプでの誤ドロー・ダウン・ドミスを防止する。
@@ -348,7 +375,7 @@ static func circle(systemImageName: String) -> GlassButtonView
 ## 写真間のナビゲーション
 
 - `navigatePrevious()` / `navigateNext()` は先頭・末尾の境界チェック（`canGoPrevious` / `canGoNext`）を内部で行う。
-- ナビゲーション前に `previousOrientation = currentImage?.photoOrientation` を保存する。
+- ボタンナビゲーションは `lastChangeWasSwipe = false` を設定し、子ページャは `.button` モード（中央セル維持・ズーム保持）で画像を差し替える（詳細は前述の「ページング（子ページャ）」節を参照）。
 - ナビゲーション後に `saveStatus = .idle` にリセットする。
 - 前後ボタンの `tintColor`：有効時は `.white`、無効時は `.systemGray`。
 

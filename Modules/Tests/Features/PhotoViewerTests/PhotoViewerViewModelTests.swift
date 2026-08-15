@@ -160,6 +160,33 @@ struct PhotoViewerViewModelTests {
         #expect(viewModel.canGoPrevious == true)
     }
 
+    // MARK: - ページングウィンドウ（previousURL / nextURL）
+
+    @Test
+    func window_atFirstItem_previousIsNil() {
+        // index 0: prev なし、next は url2
+        #expect(viewModel.previousURL == nil)
+        #expect(viewModel.currentURL == url1)
+        #expect(viewModel.nextURL == url2)
+    }
+
+    @Test
+    func window_atMiddleItem_hasBothNeighbors() async {
+        await viewModel.navigateNext() // index 1
+        #expect(viewModel.previousURL == url1)
+        #expect(viewModel.currentURL == url2)
+        #expect(viewModel.nextURL == url3)
+    }
+
+    @Test
+    func window_atLastItem_nextIsNil() async {
+        await viewModel.navigateNext()
+        await viewModel.navigateNext() // index 2（末尾）
+        #expect(viewModel.previousURL == url2)
+        #expect(viewModel.currentURL == url3)
+        #expect(viewModel.nextURL == nil)
+    }
+
     // MARK: - loadInitial
 
     @Test
@@ -228,6 +255,46 @@ struct PhotoViewerViewModelTests {
         #expect(exifService.extractCallCount == 1)
     }
 
+    // MARK: - advanceForPictureInPictureAutoPlay
+
+    @Test
+    func advanceForPictureInPictureAutoPlay_incrementsCurrentIndex() async {
+        await viewModel.advanceForPictureInPictureAutoPlay()
+        #expect(viewModel.currentIndex == 1)
+    }
+
+    @Test
+    func advanceForPictureInPictureAutoPlay_atLastItem_wrapsToFirstItem() async {
+        // navigateNext()と異なり、末尾で停止せず先頭へループする（PiP自動送りの意図的な仕様）
+        await viewModel.navigateNext()
+        await viewModel.navigateNext()
+        #expect(viewModel.currentIndex == 2)
+
+        await viewModel.advanceForPictureInPictureAutoPlay()
+
+        #expect(viewModel.currentIndex == 0)
+        #expect(viewModel.currentURL == url1)
+    }
+
+    @Test
+    func advanceForPictureInPictureAutoPlay_singleItemGallery_doesNothing() async {
+        let vm = PhotoViewerViewModel(
+            input: PhotoViewerInput(initialURL: url1, allURLs: [url1]),
+            dependencies: PhotoViewerDependencies(
+                imageLoader: imageLoader,
+                exifService: exifService,
+                photoLibrary: photoLibrary,
+                savedDateStore: savedDateStore,
+                ratingStore: ratingStore,
+                colorLabelStore: colorLabelStore,
+                hapticsService: hapticsService,
+                settings: settings
+            )
+        )
+        await vm.advanceForPictureInPictureAutoPlay()
+        #expect(vm.currentIndex == 0)
+    }
+
     // MARK: - navigatePrevious
 
     @Test
@@ -282,12 +349,6 @@ struct PhotoViewerViewModelTests {
     func didSwipeTo_resetsSaveStatus() async {
         await viewModel.didSwipeTo(index: 1, image: nil)
         #expect(viewModel.saveStatus == .idle)
-    }
-
-    @Test
-    func didSwipeTo_resetsPreviousOrientation() async {
-        await viewModel.didSwipeTo(index: 1, image: nil)
-        #expect(viewModel.previousOrientation == nil)
     }
 
     @Test
@@ -626,5 +687,52 @@ struct PhotoViewerViewModelTests {
     func cycleOrientationLock_persistsToSettings() {
         viewModel.cycleOrientationLock()
         #expect(settings.orientationLock == .portrait)
+    }
+
+    // MARK: - lastChangeWasSwipe（子ページャの .swiped/.button モード判定）
+
+    @Test
+    func initialState_lastChangeWasSwipeFalse() {
+        #expect(viewModel.lastChangeWasSwipe == false)
+    }
+
+    @Test
+    func navigateNext_setsLastChangeWasSwipeFalse() async {
+        // 前後ボタン移動はスワイプ由来ではない（子ページャは .button で中央セルを維持しズーム保持）
+        await viewModel.navigateNext()
+        #expect(viewModel.lastChangeWasSwipe == false)
+    }
+
+    @Test
+    func didSwipeTo_setsLastChangeWasSwipeTrue() async {
+        await viewModel.didSwipeTo(index: 1, image: nil)
+        #expect(viewModel.lastChangeWasSwipe == true)
+    }
+
+    @Test
+    func advanceForPictureInPictureAutoPlay_setsLastChangeWasSwipeFalse() async {
+        await viewModel.advanceForPictureInPictureAutoPlay()
+        #expect(viewModel.lastChangeWasSwipe == false)
+    }
+
+    @Test
+    func navigateNext_afterSwipe_resetsLastChangeWasSwipe() async {
+        // スワイプ後にボタン移動すると .button に戻る
+        await viewModel.didSwipeTo(index: 1, image: nil)
+        await viewModel.navigateNext()
+        #expect(viewModel.lastChangeWasSwipe == false)
+    }
+
+    // MARK: - startAutoNavigation
+
+    @Test
+    func startAutoNavigation_forward_stopsAtLastItem() async throws {
+        // 境界（末尾）に到達すると自動的にループが終了することを確認する。
+        // タイミング依存のフレークを避けるため、十分な時間待ってから停止する。
+        viewModel.startAutoNavigation(forward: true)
+        try await Task.sleep(for: .seconds(1))
+        viewModel.stopAutoNavigation()
+        #expect(viewModel.currentIndex == 2)
+        #expect(viewModel.canGoNext == false)
     }
 }

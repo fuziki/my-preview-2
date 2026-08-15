@@ -9,7 +9,6 @@ public final class PhotoViewerViewController: UIViewController {
 
     private let viewModel: PhotoViewerViewModel
     private var displayedImage: UIImage?
-    private var autoNavigationTask: Task<Void, Never>?
     private var longPressZoomCircleView: UIView?
     private var longPressLastLocation: CGPoint = .zero
     /// 現在表示中のURL（FileBrowserがズーム戻り先セルを特定するために使用する）
@@ -18,51 +17,10 @@ public final class PhotoViewerViewController: UIViewController {
     /// 閉じる時に呼ばれるコールバック（最後に表示していたURLを通知する）
     public var onDismiss: ((URL) -> Void)?
 
-    // MARK: - コレクションビュー
+    // MARK: - 写真ページャ（子ViewController）
 
-    private let interPageSpacing: CGFloat = 16
-
-    /// レイアウト位置（contentOffsetベース）と論理インデックスの差分。
-    /// ボタンナビゲーション時にセルをそのまま維持するため、スクロールせずにこの値を更新する。
-    private var layoutPageOffset: Int = 0
-
-    private lazy var pageLayout: UICollectionViewFlowLayout = {
-        let layout = UICollectionViewFlowLayout()
-        layout.scrollDirection = .horizontal
-        layout.minimumLineSpacing = interPageSpacing
-        layout.minimumInteritemSpacing = 0
-        return layout
-    }()
-
-    private lazy var collectionView: UICollectionView = {
-        let cv = UICollectionView(frame: .zero, collectionViewLayout: pageLayout)
-        cv.isPagingEnabled = true
-        cv.showsHorizontalScrollIndicator = false
-        cv.backgroundColor = .black
-        cv.clipsToBounds = false
-        cv.dataSource = self
-        cv.delegate = self
-        cv.register(PhotoPageItemCell.self, forCellWithReuseIdentifier: PhotoPageItemCell.reuseIdentifier)
-        return cv
-    }()
-
-    /// contentOffsetから計算したレイアウト上の現在ページ位置（論理インデックスとは異なる場合がある）
-    private var currentLayoutPage: Int {
-        guard collectionView.bounds.width > 0 else { return viewModel.currentIndex - layoutPageOffset }
-        return Int(round(collectionView.contentOffset.x / collectionView.bounds.width))
-    }
-
-    /// 現在表示中の論理インデックス（レイアウトページ + オフセット）
-    private var currentDisplayedPage: Int {
-        currentLayoutPage + layoutPageOffset
-    }
-
-    /// 現在表示中のセル（論理インデックスからレイアウト位置を逆算して取得）
-    private var currentItemCell: PhotoPageItemCell? {
-        let layoutPos = viewModel.currentIndex - layoutPageOffset
-        guard layoutPos >= 0, layoutPos < viewModel.allURLs.count else { return nil }
-        return collectionView.cellForItem(at: IndexPath(item: layoutPos, section: 0)) as? PhotoPageItemCell
-    }
+    /// prev/current/next の3枚ウィンドウで写真を表示する子ページャ。current を常に中央に置く。
+    private var pageItemVC: PhotoPageItemViewController!
 
     // MARK: - ビュー
 
@@ -169,7 +127,7 @@ public final class PhotoViewerViewController: UIViewController {
     override public func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        setupCollectionView()
+        setupPhotoPager()
         setupOverlay()
         setupActions()
         setupPictureInPicture()
@@ -178,7 +136,6 @@ public final class PhotoViewerViewController: UIViewController {
 
     override public func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
-        updateCollectionViewFrame()
         updateBottomBarLayoutIfNeeded()
     }
 
@@ -277,6 +234,7 @@ public final class PhotoViewerViewController: UIViewController {
         viewModel.isLoading ? loadingIndicator.startAnimating() : loadingIndicator.stopAnimating()
         updateOverlayVisibility(visible: viewModel.isOverlayVisible)
 
+        // オーバーレイ用サムネイル（ズーム時のみ表示）とPiP画像をcurrentImageの変化に応じて更新する。
         if let image = viewModel.currentImage, image !== displayedImage {
             displayedImage = image
             NSLayoutConstraint.deactivate(thumbnailSizeConstraints)
@@ -293,28 +251,17 @@ public final class PhotoViewerViewController: UIViewController {
             if isPiPActive {
                 pipController.update(image: image)
             }
-
-            if currentDisplayedPage != viewModel.currentIndex {
-                // ボタンナビゲーション: セルをそのまま維持して画像を差し替える（ズーム状態を保持するため）。
-                // layoutPageOffsetを更新し、現在のレイアウト位置が新しい論理インデックスを指すようにする。
-                let currentLayoutPos = currentLayoutPage
-                layoutPageOffset = viewModel.currentIndex - currentLayoutPos
-                currentItemCell?.index = viewModel.currentIndex
-                currentItemCell?.display(image: image, previousOrientation: viewModel.previousOrientation)
-                // 隣接セルをreloadして新しいoffset基準の論理インデックスを適用する
-                var toReload: [IndexPath] = []
-                if currentLayoutPos > 0 {
-                    toReload.append(IndexPath(item: currentLayoutPos - 1, section: 0))
-                }
-                if currentLayoutPos < viewModel.allURLs.count - 1 {
-                    toReload.append(IndexPath(item: currentLayoutPos + 1, section: 0))
-                }
-                if !toReload.isEmpty { collectionView.reloadItems(at: toReload) }
-            } else {
-                // スワイプナビゲーションまたは初回読み込み: そのままセルに表示する。
-                currentItemCell?.display(image: image, previousOrientation: viewModel.previousOrientation)
-            }
         }
+
+        // 子ページャへ現在のウィンドウ（prev/current/next）を反映する。
+        // distinct until changed により、ウィンドウが変わっていなければ何もしない。
+        // スワイプ由来は .swiped（再センタリング）、それ以外（ボタン/PiP/フィルタ/初回）は .button（ズーム維持）。
+        pageItemVC.applyWindow(
+            prevURL: viewModel.previousURL,
+            currentURL: viewModel.currentURL,
+            nextURL: viewModel.nextURL,
+            mode: viewModel.lastChangeWasSwipe ? .swiped : .button
+        )
     }
 
     // MARK: - セットアップ
@@ -322,34 +269,41 @@ public final class PhotoViewerViewController: UIViewController {
     // （別ファイル）の静的関数に切り出しており、そこでは自身のprivateプロパティを引数として渡し、
     // 戻り値を制約配列プロパティへ書き戻すだけにしている。
 
-    private func setupCollectionView() {
-        view.addSubview(collectionView)
-    }
-
-    /// コレクションビューのフレームとレイアウトをビューのサイズに合わせて更新する。
-    /// ページ間隔（interPageSpacing）を維持するため、コレクションビューを左右にはみ出させる。
-    private func updateCollectionViewFrame() {
-        let spacing = interPageSpacing
-        let targetFrame = CGRect(
-            x: -spacing / 2,
-            y: 0,
-            width: view.bounds.width + spacing,
-            height: view.bounds.height
+    /// 写真ページャ（子ViewController）を最背面に配置し、コールバックを配線する。
+    private func setupPhotoPager() {
+        let pageViewModel = PhotoPageItemViewModel(
+            prevURL: viewModel.previousURL,
+            currentURL: viewModel.currentURL,
+            nextURL: viewModel.nextURL
         )
-        guard targetFrame != collectionView.frame else { return }
-        collectionView.frame = targetFrame
-        pageLayout.itemSize = CGSize(width: view.bounds.width, height: view.bounds.height)
-        pageLayout.sectionInset = UIEdgeInsets(top: 0, left: spacing / 2, bottom: 0, right: spacing / 2)
-        pageLayout.invalidateLayout()
-        scrollToPage(viewModel.currentIndex - layoutPageOffset, animated: false)
+        let vc = PhotoPageItemViewController(viewModel: pageViewModel, imageLoader: imageLoader)
+        addChild(vc)
+        vc.view.frame = view.bounds
+        vc.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(vc.view)
+        vc.didMove(toParent: self)
+        pageItemVC = vc
+        wirePhotoPagerCallbacks()
     }
 
-    /// 指定インデックスのページへスクロールする。
-    /// コレクションビューの幅（= view.width + spacing）が1ページ分のスクロール量に相当する。
-    private func scrollToPage(_ index: Int, animated: Bool) {
-        guard collectionView.bounds.width > 0 else { return }
-        let offset = CGPoint(x: CGFloat(index) * collectionView.bounds.width, y: 0)
-        collectionView.setContentOffset(offset, animated: animated)
+    private func wirePhotoPagerCallbacks() {
+        // スワイプ移動: 移動方向からインデックスを確定し、移動先セルの画像を currentImage として渡す。
+        // ViewModel 更新後、updateProperties が applyWindow(.swiped) を呼んで子ページャを再センタリングする。
+        pageItemVC.onPageChanged = { [weak self] direction, image in
+            guard let self else { return }
+            let newIndex = viewModel.currentIndex + (direction == .next ? 1 : -1)
+            guard newIndex >= 0, newIndex < viewModel.allURLs.count else { return }
+            Task { await viewModel.didSwipeTo(index: newIndex, image: image) }
+        }
+        pageItemVC.onTap = { [weak self] in
+            self?.viewModel.toggleOverlay()
+        }
+        pageItemVC.onDoubleTap = { [weak self] locationInImage in
+            self?.handleDoubleTapZoom(at: locationInImage)
+        }
+        pageItemVC.onZoomChanged = { [weak self] in
+            self?.updateThumbnailVisibility()
+        }
     }
 
     /// 横持ち/縦持ちの切り替わりを検知し、レーティングバー・PiPボタン・保存ボタン付近の制約セットを差し替える。
@@ -421,9 +375,10 @@ public final class PhotoViewerViewController: UIViewController {
         nextLongPress.minimumPressDuration = 1.0
         nextHitAreaButton.addGestureRecognizer(nextLongPress)
 
+        // ドラッグズーム（長押し）は写真ページャの領域で検出する。
         let longPressZoom = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPressZoom(_:)))
         longPressZoom.minimumPressDuration = 0.5
-        collectionView.addGestureRecognizer(longPressZoom)
+        pageItemVC.view.addGestureRecognizer(longPressZoom)
     }
 
     // MARK: - オーバーレイ
@@ -449,7 +404,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     /// サムネイルは画像をズームしている場合のみ表示する
     private func updateThumbnailVisibility() {
-        thumbnailImageView.isHidden = !(currentItemCell?.isZoomed ?? false)
+        thumbnailImageView.isHidden = !(pageItemVC.currentCell?.isZoomed ?? false)
     }
 
     // MARK: - 保存ボタン
@@ -560,9 +515,9 @@ public final class PhotoViewerViewController: UIViewController {
     @objc private func prevLongPressed(_ gesture: UILongPressGestureRecognizer) {
         switch gesture.state {
         case .began:
-            startAutoNavigation(forward: false)
+            viewModel.startAutoNavigation(forward: false)
         case .ended, .cancelled, .failed:
-            stopAutoNavigation()
+            viewModel.stopAutoNavigation()
         default:
             break
         }
@@ -571,38 +526,35 @@ public final class PhotoViewerViewController: UIViewController {
     @objc private func nextLongPressed(_ gesture: UILongPressGestureRecognizer) {
         switch gesture.state {
         case .began:
-            startAutoNavigation(forward: true)
+            viewModel.startAutoNavigation(forward: true)
         case .ended, .cancelled, .failed:
-            stopAutoNavigation()
+            viewModel.stopAutoNavigation()
         default:
             break
         }
     }
 
-    private func startAutoNavigation(forward: Bool) {
-        stopAutoNavigation()
-        autoNavigationTask = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                if forward {
-                    guard viewModel.canGoNext else { break }
-                    await viewModel.navigateNext()
-                } else {
-                    guard viewModel.canGoPrevious else { break }
-                    await viewModel.navigatePrevious()
-                }
-                guard !Task.isCancelled else { break }
-                try? await Task.sleep(for: .seconds(0.12))
-            }
+    // MARK: - ダブルタップズーム
+
+    /// ダブルタップで、ズーム中なら最小へ、そうでなければタップ位置へズームインする（中央セルに適用）。
+    private func handleDoubleTapZoom(at locationInImage: CGPoint) {
+        guard let zoom = pageItemVC.currentCell?.zoomScrollView else { return }
+        if zoom.zoomScale > zoom.minimumZoomScale + 0.001 {
+            zoom.setZoomScale(zoom.minimumZoomScale, animated: true)
+        } else {
+            let width = zoom.bounds.width / zoom.maximumZoomScale
+            let height = zoom.bounds.height / zoom.maximumZoomScale
+            let rect = CGRect(
+                x: locationInImage.x - width / 2,
+                y: locationInImage.y - height / 2,
+                width: width,
+                height: height
+            )
+            zoom.zoom(to: rect, animated: true)
         }
     }
 
-    private func stopAutoNavigation() {
-        autoNavigationTask?.cancel()
-        autoNavigationTask = nil
-    }
-
-    // MARK: - 長押しズーム
+    // MARK: - 長押しドラッグズーム
 
     @objc private func handleLongPressZoom(_ gesture: UILongPressGestureRecognizer) {
         switch gesture.state {
@@ -620,7 +572,7 @@ public final class PhotoViewerViewController: UIViewController {
             // UIKit座標系（Y下向き）: 右上方向成分 = dx - dy
             // 右上方向で拡大、左下方向で縮小
             let multiplier = exp((dx - dy) * 0.01)
-            if let zoom = currentItemCell?.zoomScrollView {
+            if let zoom = pageItemVC.currentCell?.zoomScrollView {
                 let newScale = max(zoom.minimumZoomScale, min(zoom.maximumZoomScale, zoom.zoomScale * multiplier))
                 zoom.setZoomScale(newScale, animated: false)
                 updateThumbnailVisibility()
@@ -671,76 +623,11 @@ public final class PhotoViewerViewController: UIViewController {
 extension PhotoViewerViewController: CurrentURLProvider {}
 extension PhotoViewerViewController: DismissNotifiable {}
 
-// MARK: - PhotoPageItemCellDelegate
-
-extension PhotoViewerViewController: PhotoPageItemCellDelegate {
-    func pageItemCellDidTap(_ cell: PhotoPageItemCell) {
-        viewModel.toggleOverlay()
-    }
-
-    func pageItemCellDidDoubleTap(_ cell: PhotoPageItemCell, at locationInImage: CGPoint) {
-        let zoom = cell.zoomScrollView
-        if zoom.zoomScale > zoom.minimumZoomScale + 0.001 {
-            zoom.setZoomScale(zoom.minimumZoomScale, animated: true)
-        } else {
-            let width = zoom.bounds.width / zoom.maximumZoomScale
-            let height = zoom.bounds.height / zoom.maximumZoomScale
-            let rect = CGRect(
-                x: locationInImage.x - width / 2,
-                y: locationInImage.y - height / 2,
-                width: width,
-                height: height
-            )
-            zoom.zoom(to: rect, animated: true)
-        }
-    }
-
-    func pageItemCellDidChangeZoom(_ cell: PhotoPageItemCell) {
-        guard cell === currentItemCell else { return }
-        updateThumbnailVisibility()
-    }
-}
-
-// MARK: - UICollectionViewDataSource
-
-extension PhotoViewerViewController: UICollectionViewDataSource {
-    public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        viewModel.allURLs.count
-    }
-
-    public func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: PhotoPageItemCell.reuseIdentifier,
-            for: indexPath
-        ) as! PhotoPageItemCell
-        // layoutPageOffsetを加算して論理インデックスに変換する。境界値はクランプする。
-        let logicalIndex = max(0, min(viewModel.allURLs.count - 1, indexPath.item + layoutPageOffset))
-        cell.delegate = self
-        cell.configure(index: logicalIndex, url: viewModel.allURLs[logicalIndex], imageLoader: imageLoader)
-        return cell
-    }
-}
-
-// MARK: - UICollectionViewDelegate / UIScrollViewDelegate
-
-extension PhotoViewerViewController: UICollectionViewDelegate {
-    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        guard scrollView === collectionView else { return }
-        // currentDisplayedPageはlayoutPageOffsetを加算した論理インデックス
-        let newIndex = currentDisplayedPage
-        guard newIndex != viewModel.currentIndex,
-              newIndex >= 0, newIndex < viewModel.allURLs.count else { return }
-        // セルはレイアウト位置（currentLayoutPage）で取得する
-        let cell = collectionView.cellForItem(at: IndexPath(item: currentLayoutPage, section: 0)) as? PhotoPageItemCell
-        Task { await viewModel.didSwipeTo(index: newIndex, image: cell?.loadedImage) }
-    }
-}
-
 // MARK: - UIAdaptivePresentationControllerDelegate
 
 extension PhotoViewerViewController: UIAdaptivePresentationControllerDelegate {
     public func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
         // 画像をズーム中はスワイプで閉じる操作を無効にする
-        !(currentItemCell?.isZoomed ?? false)
+        !(pageItemVC.currentCell?.isZoomed ?? false)
     }
 }
