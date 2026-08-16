@@ -22,8 +22,10 @@ public final class PhotoViewerViewModel {
     /// フォトビューア画面のみに適用される画面回転設定
     public private(set) var orientationLock: PhotoViewerOrientationLock
 
-    /// 直近のインデックス変化がスワイプ由来か（子ページャの .swiped/.button モード判定に使う）。
-    /// スワイプ（didSwipeTo）で true、ボタン/PiP/フィルタ自動遷移/初回（navigate・loadInitial）で false。
+    /// 直近のインデックス変化がスワイプ由来か。スワイプ（`didSwipeTo`）は true、
+    /// プログラム遷移（`navigate` 経由のボタン/PiP/フィルタ自動遷移）と初回（`loadInitial`）は false。
+    /// VCはこれを見て、スワイプ時は子ページャへの `moveToIndex` を呼ばない（ページャ自身が既に移動済みで、
+    /// 呼ぶと高速スワイプ中に非同期遅延したインデックスでページャと綱引きになり引っ掛かるため）。
     public private(set) var lastChangeWasSwipe: Bool = false
 
     /// レーティング機能が有効か（星ボタン・カラーラベルの表示可否）
@@ -35,11 +37,6 @@ public final class PhotoViewerViewModel {
     public var currentFileName: String { currentURL.lastPathComponent }
     public var canGoPrevious: Bool { currentIndex > 0 }
     public var canGoNext: Bool { currentIndex < allURLs.count - 1 }
-
-    /// ページングウィンドウ用: 現在の直前・直後の写真URL（端では nil）。
-    /// PhotoPageItemViewController の prev/current/next の3枚ウィンドウに供給する。
-    public var previousURL: URL? { currentIndex > 0 ? allURLs[currentIndex - 1] : nil }
-    public var nextURL: URL? { currentIndex < allURLs.count - 1 ? allURLs[currentIndex + 1] : nil }
 
     /// PiP再生中に自動的に次の写真へ進める間隔（秒。設定Menuで変更可能）
     public var pipAutoAdvanceIntervalSeconds: Int { settings.pipAutoAdvanceIntervalSeconds }
@@ -88,6 +85,7 @@ public final class PhotoViewerViewModel {
 
     /// 初期インデックスの画像とEXIFを読み込む。VCの準備完了後に一度だけ呼ぶ。
     public func loadInitial() async {
+        lastChangeWasSwipe = false
         await loadImageAndExif(for: currentURL)
     }
 

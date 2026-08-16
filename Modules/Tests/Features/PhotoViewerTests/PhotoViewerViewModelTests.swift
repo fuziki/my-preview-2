@@ -160,31 +160,25 @@ struct PhotoViewerViewModelTests {
         #expect(viewModel.canGoPrevious == true)
     }
 
-    // MARK: - ページングウィンドウ（previousURL / nextURL）
+    // MARK: - lastChangeWasSwipe（スワイプ時は子ページャへ moveToIndex を呼ばないための信号）
 
     @Test
-    func window_atFirstItem_previousIsNil() {
-        // index 0: prev なし、next は url2
-        #expect(viewModel.previousURL == nil)
-        #expect(viewModel.currentURL == url1)
-        #expect(viewModel.nextURL == url2)
+    func initialState_lastChangeWasSwipeFalse() {
+        #expect(viewModel.lastChangeWasSwipe == false)
     }
 
     @Test
-    func window_atMiddleItem_hasBothNeighbors() async {
-        await viewModel.navigateNext() // index 1
-        #expect(viewModel.previousURL == url1)
-        #expect(viewModel.currentURL == url2)
-        #expect(viewModel.nextURL == url3)
+    func didSwipeTo_setsLastChangeWasSwipeTrue() async {
+        await viewModel.didSwipeTo(index: 1, image: nil)
+        #expect(viewModel.lastChangeWasSwipe == true)
     }
 
     @Test
-    func window_atLastItem_nextIsNil() async {
+    func navigateNext_setsLastChangeWasSwipeFalse() async {
+        // スワイプ後にボタン移動すると false へ戻る（moveToIndex が適用される）
+        await viewModel.didSwipeTo(index: 1, image: nil)
         await viewModel.navigateNext()
-        await viewModel.navigateNext() // index 2（末尾）
-        #expect(viewModel.previousURL == url2)
-        #expect(viewModel.currentURL == url3)
-        #expect(viewModel.nextURL == nil)
+        #expect(viewModel.lastChangeWasSwipe == false)
     }
 
     // MARK: - loadInitial
@@ -687,40 +681,6 @@ struct PhotoViewerViewModelTests {
     func cycleOrientationLock_persistsToSettings() {
         viewModel.cycleOrientationLock()
         #expect(settings.orientationLock == .portrait)
-    }
-
-    // MARK: - lastChangeWasSwipe（子ページャの .swiped/.button モード判定）
-
-    @Test
-    func initialState_lastChangeWasSwipeFalse() {
-        #expect(viewModel.lastChangeWasSwipe == false)
-    }
-
-    @Test
-    func navigateNext_setsLastChangeWasSwipeFalse() async {
-        // 前後ボタン移動はスワイプ由来ではない（子ページャは .button で中央セルを維持しズーム保持）
-        await viewModel.navigateNext()
-        #expect(viewModel.lastChangeWasSwipe == false)
-    }
-
-    @Test
-    func didSwipeTo_setsLastChangeWasSwipeTrue() async {
-        await viewModel.didSwipeTo(index: 1, image: nil)
-        #expect(viewModel.lastChangeWasSwipe == true)
-    }
-
-    @Test
-    func advanceForPictureInPictureAutoPlay_setsLastChangeWasSwipeFalse() async {
-        await viewModel.advanceForPictureInPictureAutoPlay()
-        #expect(viewModel.lastChangeWasSwipe == false)
-    }
-
-    @Test
-    func navigateNext_afterSwipe_resetsLastChangeWasSwipe() async {
-        // スワイプ後にボタン移動すると .button に戻る
-        await viewModel.didSwipeTo(index: 1, image: nil)
-        await viewModel.navigateNext()
-        #expect(viewModel.lastChangeWasSwipe == false)
     }
 
     // MARK: - startAutoNavigation

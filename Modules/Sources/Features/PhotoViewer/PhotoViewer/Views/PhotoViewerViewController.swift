@@ -19,7 +19,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     // MARK: - 写真ページャ（子ViewController）
 
-    /// prev/current/next の3枚ウィンドウで写真を表示する子ページャ。current を常に中央に置く。
+    /// UIPageViewController ベースの写真ページング子VC。スワイプ・プログラム遷移を担う。
     private var pageItemVC: PhotoPageItemViewController!
 
     // MARK: - ビュー
@@ -253,15 +253,12 @@ public final class PhotoViewerViewController: UIViewController {
             }
         }
 
-        // 子ページャへ現在のウィンドウ（prev/current/next）を反映する。
-        // distinct until changed により、ウィンドウが変わっていなければ何もしない。
-        // スワイプ由来は .swiped（再センタリング）、それ以外（ボタン/PiP/フィルタ/初回）は .button（ズーム維持）。
-        pageItemVC.applyWindow(
-            prevURL: viewModel.previousURL,
-            currentURL: viewModel.currentURL,
-            nextURL: viewModel.nextURL,
-            mode: viewModel.lastChangeWasSwipe ? .swiped : .button
-        )
+        // 子ページャは、プログラム遷移（ボタン/PiP/フィルタ/初回）でのみ currentIndex へ同期する。
+        // スワイプ由来ではページャ自身が既に移動済みで、ここで moveToIndex を呼ぶと高速スワイプ中に
+        // 非同期遅延したインデックスでページャと綱引きになり引っ掛かるため、呼ばない。
+        if !viewModel.lastChangeWasSwipe {
+            pageItemVC.moveToIndex(viewModel.currentIndex)
+        }
     }
 
     // MARK: - セットアップ
@@ -271,12 +268,11 @@ public final class PhotoViewerViewController: UIViewController {
 
     /// 写真ページャ（子ViewController）を最背面に配置し、コールバックを配線する。
     private func setupPhotoPager() {
-        let pageViewModel = PhotoPageItemViewModel(
-            prevURL: viewModel.previousURL,
-            currentURL: viewModel.currentURL,
-            nextURL: viewModel.nextURL
+        let vc = PhotoPageItemViewController(
+            allURLs: viewModel.allURLs,
+            initialIndex: viewModel.currentIndex,
+            imageLoader: imageLoader
         )
-        let vc = PhotoPageItemViewController(viewModel: pageViewModel, imageLoader: imageLoader)
         addChild(vc)
         vc.view.frame = view.bounds
         vc.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -287,13 +283,11 @@ public final class PhotoViewerViewController: UIViewController {
     }
 
     private func wirePhotoPagerCallbacks() {
-        // スワイプ移動: 移動方向からインデックスを確定し、移動先セルの画像を currentImage として渡す。
-        // ViewModel 更新後、updateProperties が applyWindow(.swiped) を呼んで子ページャを再センタリングする。
-        pageItemVC.onPageChanged = { [weak self] direction, image in
+        // スワイプ移動: 子ページャが移動完了した新インデックスと表示中画像を通知する。
+        // ViewModel 更新後、updateProperties が moveToIndex を呼ぶが、既に同インデックスなので冪等に無視される。
+        pageItemVC.onPageChanged = { [weak self] index, image in
             guard let self else { return }
-            let newIndex = viewModel.currentIndex + (direction == .next ? 1 : -1)
-            guard newIndex >= 0, newIndex < viewModel.allURLs.count else { return }
-            Task { await viewModel.didSwipeTo(index: newIndex, image: image) }
+            Task { await viewModel.didSwipeTo(index: index, image: image) }
         }
         pageItemVC.onTap = { [weak self] in
             self?.viewModel.toggleOverlay()
@@ -404,7 +398,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     /// サムネイルは画像をズームしている場合のみ表示する
     private func updateThumbnailVisibility() {
-        thumbnailImageView.isHidden = !(pageItemVC.currentCell?.isZoomed ?? false)
+        thumbnailImageView.isHidden = !(pageItemVC.currentContentViewController?.isZoomed ?? false)
     }
 
     // MARK: - 保存ボタン
@@ -538,7 +532,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     /// ダブルタップで、ズーム中なら最小へ、そうでなければタップ位置へズームインする（中央セルに適用）。
     private func handleDoubleTapZoom(at locationInImage: CGPoint) {
-        guard let zoom = pageItemVC.currentCell?.zoomScrollView else { return }
+        guard let zoom = pageItemVC.currentContentViewController?.zoomScrollView else { return }
         if zoom.zoomScale > zoom.minimumZoomScale + 0.001 {
             zoom.setZoomScale(zoom.minimumZoomScale, animated: true)
         } else {
@@ -572,7 +566,7 @@ public final class PhotoViewerViewController: UIViewController {
             // UIKit座標系（Y下向き）: 右上方向成分 = dx - dy
             // 右上方向で拡大、左下方向で縮小
             let multiplier = exp((dx - dy) * 0.01)
-            if let zoom = pageItemVC.currentCell?.zoomScrollView {
+            if let zoom = pageItemVC.currentContentViewController?.zoomScrollView {
                 let newScale = max(zoom.minimumZoomScale, min(zoom.maximumZoomScale, zoom.zoomScale * multiplier))
                 zoom.setZoomScale(newScale, animated: false)
                 updateThumbnailVisibility()
@@ -628,6 +622,6 @@ extension PhotoViewerViewController: DismissNotifiable {}
 extension PhotoViewerViewController: UIAdaptivePresentationControllerDelegate {
     public func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
         // 画像をズーム中はスワイプで閉じる操作を無効にする
-        !(pageItemVC.currentCell?.isZoomed ?? false)
+        !(pageItemVC.currentContentViewController?.isZoomed ?? false)
     }
 }
