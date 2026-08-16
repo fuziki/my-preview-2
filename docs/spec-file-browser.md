@@ -184,7 +184,7 @@ UINavigationController
 
 ### レイアウト（UICollectionViewCompositionalLayout）
 
-`Modules/Sources/FileBrowser/Views/UICollectionViewLayout+FileBrowser.swift` で2種類のレイアウトを構築し、`viewModel.viewMode` に応じて切り替える。両方とも `pinToVisibleBounds = true` のセクションヘッダーを持つ。
+`Modules/Sources/Features/FileBrowser/FileBrowser/Views/UICollectionViewLayout+FileBrowser.swift` で2種類のレイアウトを構築し、`viewModel.viewMode` に応じて切り替える。両方とも `pinToVisibleBounds = true` のセクションヘッダーを持つ。
 
 - **リストレイアウト**（`fileBrowserList()`）：`NSCollectionLayoutSection.list` + `UICollectionLayoutListConfiguration(appearance: .plain)`、セパレーター表示あり。
 - **グリッドレイアウト**（`fileBrowserGrid(columnCount:)`）：正方形セル。`itemSize` は幅・高さともに `fractionalWidth(1 / columnCount)`。列数は `viewModel.gridColumnCount`（2〜5、設定メニューのステッパーで変更可能）。セル間隔 1pt、セクション下余白 8pt。
@@ -204,7 +204,7 @@ UINavigationController
 - 主テキスト：ファイル名
 - 副テキスト：星評価・カラーラベル（色付き `●`）・「最後に表示」ラベルを `" · "` で連結（評価機能有効時のみ星・ラベルを表示）
 
-**グリッドモード：** `ThumbnailCell`（`Modules/Sources/FileBrowser/Views/ThumbnailCell.swift`）。
+**グリッドモード：** `ThumbnailCell`（`Modules/Sources/Features/FileBrowser/FileBrowser/Views/ThumbnailCell.swift`）。
 - サムネイル画像（`.scaleAspectFit`、黒背景）。`thumbnailService.cachedThumbnail(for:)` を同期取得できればそれを即表示（フリッカー防止）、無ければ `loadThumbnail(url:maxPixelSize:)` を非同期取得。
 - 左上：星評価バッジ（黒 0.65 透過の角丸ラベル、`★` の数を表示、評価0は非表示）
 - 右上：カラーラベルの色ドット（12×12pt円、評価機能有効時のみ）
@@ -241,12 +241,12 @@ UINavigationController
 
 - `FileBrowserViewController` は自分でViewModel・Viewを組み立てず、init時に注入された `advancedSettingsViewControllerFactory` クロージャ（`filterViewControllerFactory` と同様のパターン）を呼び出す。渡す引数は現在の `isRatingEnabled`/`pipAutoAdvanceIntervalSeconds` と、変更のたびに呼ばれる `onRatingEnabledChange: (Bool) -> Void`/`onPipAutoAdvanceIntervalSecondsChange: (Int) -> Void`、キャッシュ消去確定時に呼ばれ最新値を返す `onClearCacheRequested: () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)`。
 - `AppContainer` はこのクロージャの実体として `FileBrowserAdvancedSettingsViewController(isRatingEnabled:pipAutoAdvanceIntervalSeconds:onRatingEnabledChange:onPipAutoAdvanceIntervalSecondsChange:onClearCacheRequested:)` をそのまま呼ぶだけ。
-- `FileBrowserAdvancedSettingsViewController`（`UIHostingController<FileBrowserAdvancedSettingsView>` のサブクラス、`Modules/Sources/FileBrowser/Views/FileBrowserAdvancedSettingsViewController.swift`）が公開initでこれらの引数のみを受け取り、内部で `FileBrowserAdvancedSettingsViewModel` を生成して `FileBrowserAdvancedSettingsView` に渡し、`title` に「詳細設定」を設定する。`FileBrowserAdvancedSettingsViewModel`・`FileBrowserAdvancedSettingsView.init` はモジュール内部にのみ公開する。
+- `FileBrowserAdvancedSettingsViewController`（`UIHostingController<FileBrowserAdvancedSettingsView>` のサブクラス、`Modules/Sources/Features/FileBrowser/FileBrowserAdvancedSettings/Views/FileBrowserAdvancedSettingsViewController.swift`）が公開initでこれらの引数のみを受け取り、内部で `FileBrowserAdvancedSettingsViewModel` を生成して `FileBrowserAdvancedSettingsView` に渡し、`title` に「詳細設定」を設定する。`FileBrowserAdvancedSettingsViewModel`・`FileBrowserAdvancedSettingsView.init` はモジュール内部にのみ公開する。
 - `FileBrowserViewController.pushAdvancedSettings()` はfactoryから受け取ったViewControllerを `navigationController?.pushViewController(_:animated:)` する。各onChangeクロージャ内で `viewModel.isRatingEnabled`/`viewModel.pipAutoAdvanceIntervalSeconds` へ書き戻し、レーティングのON/OFF・キャッシュ消去時はあわせて `updateNavigationBarItems()` / `applySnapshot(reconfiguringAllItems: true)` / `refreshSettingsMenu()` を呼び、裏のファイルリストへ即座に反映する。
 
 ### FileBrowserAdvancedSettingsViewModel
 
-- `FileBrowserViewModel` とは独立した、詳細設定画面専用の `@Observable` ViewModel（`Modules/Sources/FileBrowser/ViewModels/FileBrowserAdvancedSettingsViewModel.swift`、モジュール内部限定）。
+- `FileBrowserViewModel` とは独立した、詳細設定画面専用の `@Observable` ViewModel（`Modules/Sources/Features/FileBrowser/FileBrowserAdvancedSettings/ViewModels/FileBrowserAdvancedSettingsViewModel.swift`、モジュール内部限定）。
 - `isRatingEnabled`/`pipAutoAdvanceIntervalSeconds` を保持し、`didSet` のたびに対応するonChangeクロージャを呼ぶ。
 - `clearCache()` は `onClearCacheRequested()` を呼んで `viewModel.resetToDefaults()` 後の最新値を受け取り、自身の `isRatingEnabled`/`pipAutoAdvanceIntervalSeconds` へ反映する（画面を離れず即座にUIへ反映するため）。
 
@@ -262,7 +262,7 @@ SwiftUI `Form`。`@State private var viewModel: FileBrowserAdvancedSettingsViewM
 
 - `FileBrowserViewController` は自分でViewModel・Viewを組み立てず、init時に注入された `filterViewControllerFactory` クロージャ（`photoViewerFactory` と同様のパターン）を呼び出す。渡す引数は現在の `ratingFilter`/`colorLabelFilter` と、変更のたびに呼ばれる `onChange: (RatingFilter?, Set<PhotoColorLabel>) -> Void`。
 - `AppContainer` はこのクロージャの実体として `FileBrowserFilterViewController(ratingFilter:colorLabelFilter:onChange:)` をそのまま呼ぶだけ（`FileBrowserFilterViewModel`・`FileBrowserFilterView` を直接構築しない）。
-- `FileBrowserFilterViewController`（`UIHostingController<FileBrowserFilterView>` のサブクラス、`Modules/Sources/FileBrowser/Views/FileBrowserFilterViewController.swift`）が公開initで `ratingFilter`/`colorLabelFilter`/`onChange` の3引数のみを受け取り、内部で `FileBrowserFilterViewModel` を生成して `FileBrowserFilterView` に渡す。`FileBrowserFilterViewModel`・`FileBrowserFilterView.init` はモジュール内部にのみ公開し、AppContainer側からは見えない。
+- `FileBrowserFilterViewController`（`UIHostingController<FileBrowserFilterView>` のサブクラス、`Modules/Sources/Features/FileBrowser/FileBrowserFilter/Views/FileBrowserFilterViewController.swift`）が公開initで `ratingFilter`/`colorLabelFilter`/`onChange` の3引数のみを受け取り、内部で `FileBrowserFilterViewModel` を生成して `FileBrowserFilterView` に渡す。`FileBrowserFilterViewModel`・`FileBrowserFilterView.init` はモジュール内部にのみ公開し、AppContainer側からは見えない。
   - `sizingOptions = [.preferredContentSize]` を設定し、SwiftUIコンテンツの理想サイズを `preferredContentSize` に反映させる。
   - `view.backgroundColor = .systemBackground.withAlphaComponent(0.4)` を設定し、UIHostingControllerの既定の不透明背景を外して半透明にする。
 - `FileBrowserViewController.presentFilterSheet()` はfactoryから受け取ったViewControllerに対して `UISheetPresentationController` を設定してモーダル表示する。固定の `.medium()` ではなく、`UIViewController.contentFittingSheetDetent(presentingViewWidth:)`（`Core/Extensions/UIViewController+ContentFittingSheetDetent.swift`、`public extension UIViewController`）が返すコンテンツの理想の高さにフィットするカスタムdetentを使う。
@@ -272,7 +272,7 @@ SwiftUI `Form`。`@State private var viewModel: FileBrowserAdvancedSettingsViewM
 
 ### FileBrowserFilterViewModel
 
-- `FileBrowserViewModel` とは独立した、フィルター画面専用の `@Observable` ViewModel（`Modules/Sources/FileBrowser/ViewModels/FileBrowserFilterViewModel.swift`、モジュール内部限定）。
+- `FileBrowserViewModel` とは独立した、フィルター画面専用の `@Observable` ViewModel（`Modules/Sources/Features/FileBrowser/FileBrowserFilter/ViewModels/FileBrowserFilterViewModel.swift`、モジュール内部限定）。
 - `ratingFilter`/`colorLabelFilter` をローカルに保持し、`didSet` のたびにinit時に注入された `onChange` クロージャを呼ぶ。
 - `FileBrowserViewController.presentFilterSheet()` 側の `onChange` 実装が `viewModel.ratingFilter`/`colorLabelFilter`（＝`FileBrowserViewModel`）へ書き戻すことで、変更が即座に裏のファイルリストへ反映される（`FileBrowserViewModel` の `didSet` で `updateSections()` が走るため）。
 

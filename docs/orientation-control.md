@@ -2,7 +2,7 @@
 
 特定の `UIViewController`（本アプリでは `PhotoViewerViewController`）だけ画面回転の許可範囲をユーザー操作で動的に切り替え、他の画面（`FileBrowserViewController`）は常に端末の設定に従わせたい、という要件を実装したときの知見をまとめる。iOS 26（Xcode 26 SDK）時点の挙動に基づく。
 
-対象の実装：`PhotoViewerViewController`（`Modules/Sources/PhotoViewer/Views/PhotoViewerViewController.swift`）。仕様としての詳細は [フォトビューア画面の仕様](spec-photo-viewer.md) の「画面回転ボタン」節を参照。
+対象の実装：`PhotoViewerViewController`（`Modules/Sources/Features/PhotoViewer/PhotoViewer/Views/PhotoViewerViewController.swift`）。仕様としての詳細は [フォトビューア画面の仕様](spec-photo-viewer.md) の「画面回転ボタン」節を参照。
 
 ---
 
@@ -113,4 +113,4 @@ iPadでマルチタスク（Split View / Slide Over / Stage Manager）が有効�
 ## 参照
 
 - [フォトビューア画面の仕様](spec-photo-viewer.md) の「画面回転ボタン」節（ユーザー向け仕様としての詳細）
-- `Modules/Sources/PhotoViewer/Views/PhotoViewerViewController.swift`
+- `Modules/Sources/Features/PhotoViewer/PhotoViewer/Views/PhotoViewerViewController.swift`

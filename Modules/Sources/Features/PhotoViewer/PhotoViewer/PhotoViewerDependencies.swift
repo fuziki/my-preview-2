@@ -1,7 +1,7 @@
 import Core
 import Foundation
 
-/// PhotoViewerViewController / PhotoViewerViewModel / PhotoPageContentViewController が必要とする依存関係をまとめたバンドル。
+/// PhotoViewerViewController / PhotoViewerViewModel / PhotoPageItemCell が必要とする依存関係をまとめたバンドル。
 /// AppContainer で一度生成し、フォトビューアーセッション間で再利用することで
 /// 共有状態（例: SavedDateStore）が複数回の起動をまたいで保持される。
 /// imageLoader と exifService には FileLoadingTracker 注入済みのインスタンスを渡すこと。

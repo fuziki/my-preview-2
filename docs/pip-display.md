@@ -2,7 +2,7 @@
 
 `AVSampleBufferDisplayLayer` + `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:playbackDelegate:)` は本来カメラプレビューや通話映像など「継続的にフレームが流れてくる」コンテンツ向けのAPIだが、これを静止画（写真）のスライドショー表示に転用したときの知見をまとめる。iOS 26（Xcode 26 SDK）時点の実機検証に基づく。
 
-対象の実装：`ImagePiPController`（`Modules/Sources/ImagePiPKit/ImagePiPController.swift`、依存なしの独立モジュール）。`PhotoViewerViewController`（`Modules/Sources/PhotoViewer/Views/PhotoViewerViewController.swift`）から利用する。仕様としての詳細は [フォトビューア画面の仕様](spec-photo-viewer.md) の「PiP表示」節を参照。
+対象の実装：`ImagePiPController`（`Modules/Sources/Kits/ImagePiPKit/ImagePiPController.swift`、依存なしの独立モジュール）。`PhotoViewerViewController`（`Modules/Sources/Features/PhotoViewer/PhotoViewer/Views/PhotoViewerViewController.swift`）から利用する。仕様としての詳細は [フォトビューア画面の仕様](spec-photo-viewer.md) の「PiP表示」節を参照。
 
 ---
 
@@ -165,5 +165,5 @@ PiP標準の再生/一時停止ボタンをスライドショーのON/OFFとし�
 ## 参照
 
 - [フォトビューア画面の仕様](spec-photo-viewer.md) の「PiP表示」節（ユーザー向け仕様としての詳細）
-- `Modules/Sources/ImagePiPKit/ImagePiPController.swift`
-- `Modules/Sources/PhotoViewer/Views/PhotoViewerViewController.swift`（PiP関連の配線）
+- `Modules/Sources/Kits/ImagePiPKit/ImagePiPController.swift`
+- `Modules/Sources/Features/PhotoViewer/PhotoViewer/Views/PhotoViewerViewController.swift`（PiP関連の配線）

@@ -118,8 +118,8 @@ public final class PhotoViewerViewModel {
         await loadImageAndExif(for: currentURL)
     }
 
-    /// UIPageViewControllerのスワイプ完了後に呼ばれる。
-    /// 画像はページアイテムVCで既に表示済みのため、EXIFのみ読み込む。
+    /// 写真ページャでのスワイプ完了後に呼ばれる。
+    /// 画像はページセルで既に表示済みのため、EXIFのみ読み込む。
     public func didSwipeTo(index: Int, image: UIImage?) async {
         lastChangeWasSwipe = true
         currentIndex = index

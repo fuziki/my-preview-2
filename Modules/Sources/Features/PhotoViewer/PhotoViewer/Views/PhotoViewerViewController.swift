@@ -19,7 +19,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     // MARK: - 写真ページャ（子ViewController）
 
-    /// UIPageViewController ベースの写真ページング子VC。スワイプ・プログラム遷移を担う。
+    /// UICollectionView（diffable・UUIDウィンドウ）ベースの写真ページング子VC。スワイプ・プログラム遷移を担う。
     private var pageItemVC: PhotoPageItemViewController!
 
     // MARK: - ビュー
@@ -398,7 +398,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     /// サムネイルは画像をズームしている場合のみ表示する
     private func updateThumbnailVisibility() {
-        thumbnailImageView.isHidden = !(pageItemVC.currentContentViewController?.isZoomed ?? false)
+        thumbnailImageView.isHidden = !(pageItemVC.currentPhotoCell?.isZoomed ?? false)
     }
 
     // MARK: - 保存ボタン
@@ -532,7 +532,7 @@ public final class PhotoViewerViewController: UIViewController {
 
     /// ダブルタップで、ズーム中なら最小へ、そうでなければタップ位置へズームインする（中央セルに適用）。
     private func handleDoubleTapZoom(at locationInImage: CGPoint) {
-        guard let zoom = pageItemVC.currentContentViewController?.zoomScrollView else { return }
+        guard let zoom = pageItemVC.currentPhotoCell?.zoomScrollView else { return }
         if zoom.zoomScale > zoom.minimumZoomScale + 0.001 {
             zoom.setZoomScale(zoom.minimumZoomScale, animated: true)
         } else {
@@ -566,7 +566,7 @@ public final class PhotoViewerViewController: UIViewController {
             // UIKit座標系（Y下向き）: 右上方向成分 = dx - dy
             // 右上方向で拡大、左下方向で縮小
             let multiplier = exp((dx - dy) * 0.01)
-            if let zoom = pageItemVC.currentContentViewController?.zoomScrollView {
+            if let zoom = pageItemVC.currentPhotoCell?.zoomScrollView {
                 let newScale = max(zoom.minimumZoomScale, min(zoom.maximumZoomScale, zoom.zoomScale * multiplier))
                 zoom.setZoomScale(newScale, animated: false)
                 updateThumbnailVisibility()
@@ -622,6 +622,6 @@ extension PhotoViewerViewController: DismissNotifiable {}
 extension PhotoViewerViewController: UIAdaptivePresentationControllerDelegate {
     public func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
         // 画像をズーム中はスワイプで閉じる操作を無効にする
-        !(pageItemVC.currentContentViewController?.isZoomed ?? false)
+        !(pageItemVC.currentPhotoCell?.isZoomed ?? false)
     }
 }
