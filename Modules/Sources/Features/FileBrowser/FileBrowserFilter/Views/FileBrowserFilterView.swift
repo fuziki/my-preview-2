@@ -27,6 +27,9 @@ public struct FileBrowserFilterView: View {
             sectionContainer(title: L10n.FileBrowser.colorLabel) {
                 colorLabelRow
             }
+            sectionContainer(title: L10n.FileBrowser.savedFilterTitle) {
+                savedFilterRow
+            }
 
             clearFilterButton
         }
@@ -145,6 +148,25 @@ public struct FileBrowserFilterView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.ColorLabel.name(forRawValue: label.rawValue))
+    }
+
+    // MARK: - 保存状態
+
+    private var savedFilterBinding: Binding<SavedFilter?> {
+        Binding(
+            get: { viewModel.savedFilter },
+            set: { viewModel.savedFilter = $0 }
+        )
+    }
+
+    private var savedFilterRow: some View {
+        Picker(L10n.FileBrowser.savedFilterTitle, selection: savedFilterBinding) {
+            Text(L10n.FileBrowser.savedFilterAll).tag(SavedFilter?.none)
+            Text(L10n.FileBrowser.savedFilterSavedOnly).tag(SavedFilter?.some(.savedOnly))
+            Text(L10n.FileBrowser.savedFilterUnsavedOnly).tag(SavedFilter?.some(.unsavedOnly))
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
     }
 
     // MARK: - フィルタークリア

@@ -89,6 +89,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
     public var isRatingEnabled: Bool
     public var ratingFilter: RatingFilter?
     public var colorLabelFilter: Set<PhotoColorLabel>
+    public var savedFilter: SavedFilter?
     public var lastViewedEntries: [DirectoryLastViewedEntry]
     public var orientationLock: PhotoViewerOrientationLock
     /// PiP再生中に自動的に次の写真へ進める間隔（秒）
@@ -102,6 +103,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
         isRatingEnabled: Bool,
         ratingFilter: RatingFilter?,
         colorLabelFilter: Set<PhotoColorLabel>,
+        savedFilter: SavedFilter?,
         lastViewedEntries: [DirectoryLastViewedEntry],
         orientationLock: PhotoViewerOrientationLock,
         pipAutoAdvanceIntervalSeconds: Int
@@ -113,6 +115,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
         self.isRatingEnabled = isRatingEnabled
         self.ratingFilter = ratingFilter
         self.colorLabelFilter = colorLabelFilter
+        self.savedFilter = savedFilter
         self.lastViewedEntries = lastViewedEntries
         self.orientationLock = orientationLock
         self.pipAutoAdvanceIntervalSeconds = pipAutoAdvanceIntervalSeconds
@@ -128,6 +131,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
             isRatingEnabled: true,
             ratingFilter: nil,
             colorLabelFilter: [],
+            savedFilter: nil,
             lastViewedEntries: [],
             orientationLock: .followSystem,
             pipAutoAdvanceIntervalSeconds: 5
@@ -145,6 +149,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
             \.isRatingEnabled: "UserDefaultsSettingsStore.isRatingEnabled",
             \.ratingFilter: "UserDefaultsSettingsStore.ratingFilter",
             \.colorLabelFilter: "UserDefaultsSettingsStore.colorLabelFilter",
+            \.savedFilter: "UserDefaultsSettingsStore.savedFilter",
             \.lastViewedEntries: "UserDefaultsSettingsStore.lastViewedEntries",
             \.orientationLock: "UserDefaultsSettingsStore.orientationLock",
             \.pipAutoAdvanceIntervalSeconds: "UserDefaultsSettingsStore.pipAutoAdvanceIntervalSeconds",

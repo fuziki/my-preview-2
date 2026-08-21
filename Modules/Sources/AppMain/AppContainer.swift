@@ -72,10 +72,11 @@ final class AppContainer {
                 guard let self else { return UIViewController() }
                 return self.makePhotoViewerViewController(input: input)
             },
-            filterViewControllerFactory: { ratingFilter, colorLabelFilter, onChange in
+            filterViewControllerFactory: { ratingFilter, colorLabelFilter, savedFilter, onChange in
                 FileBrowserFilterViewController(
                     ratingFilter: ratingFilter,
                     colorLabelFilter: colorLabelFilter,
+                    savedFilter: savedFilter,
                     onChange: onChange
                 )
             },

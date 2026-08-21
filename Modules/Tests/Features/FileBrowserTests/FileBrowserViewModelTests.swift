@@ -371,6 +371,13 @@ struct FileBrowserViewModelTests {
         #expect(viewModel.ratingFilter == nil)
     }
 
+    @Test
+    func resetToDefaults_clearsSavedFilter() {
+        viewModel.savedFilter = .savedOnly
+        viewModel.resetToDefaults()
+        #expect(viewModel.savedFilter == nil)
+    }
+
     // MARK: - レーティング
 
     @Test
@@ -571,6 +578,65 @@ struct FileBrowserViewModelTests {
         #expect(viewModel.items.map(\.url) == [rated3])
     }
 
+    // MARK: - 保存状態フィルター
+
+    @Test
+    func savedFilter_persistsToStorage_onChange() {
+        viewModel.savedFilter = .savedOnly
+        #expect(settings.savedFilter == .savedOnly)
+    }
+
+    @Test
+    func init_restoresSavedFilter_fromStorage() {
+        settings.savedFilter = .unsavedOnly
+        let vm = makeViewModel()
+        #expect(vm.savedFilter == .unsavedOnly)
+    }
+
+    @Test
+    func savedFilter_savedOnly_filtersItems() async {
+        let (rated3, rated1, unrated) = await loadRatedItems()
+        savedDateStore.setDate(Date(), for: rated3)
+        viewModel.isRatingEnabled = true
+        viewModel.refreshRatingsAndLabels()
+
+        viewModel.savedFilter = .savedOnly
+        #expect(viewModel.items.map(\.url) == [rated3])
+        #expect(viewModel.items.map(\.url).contains(rated1) == false)
+        #expect(viewModel.items.map(\.url).contains(unrated) == false)
+    }
+
+    @Test
+    func savedFilter_unsavedOnly_filtersItems() async {
+        let (rated3, rated1, unrated) = await loadRatedItems()
+        savedDateStore.setDate(Date(), for: rated3)
+        viewModel.isRatingEnabled = true
+        viewModel.refreshRatingsAndLabels()
+
+        viewModel.savedFilter = .unsavedOnly
+        #expect(viewModel.items.map(\.url) == [rated1, unrated])
+    }
+
+    @Test
+    func savedFilter_notApplied_whenRatingDisabled() async {
+        let (rated3, _, _) = await loadRatedItems()
+        savedDateStore.setDate(Date(), for: rated3)
+        viewModel.isRatingEnabled = false
+        viewModel.refreshRatingsAndLabels()
+        viewModel.savedFilter = .savedOnly
+        #expect(viewModel.items.count == 3)
+    }
+
+    @Test
+    func savedFilter_nil_showsAllItems() async {
+        let (rated3, _, _) = await loadRatedItems()
+        savedDateStore.setDate(Date(), for: rated3)
+        viewModel.isRatingEnabled = true
+        viewModel.refreshRatingsAndLabels()
+        viewModel.savedFilter = nil
+        #expect(viewModel.items.count == 3)
+    }
+
     @Test
     func resetToDefaults_clearsColorLabelStoreAndFilter() {
         colorLabelStore.setLabel(.green, for: URL(fileURLWithPath: "/tmp/a.jpg"))
@@ -631,6 +697,24 @@ struct RatingFilterTests {
         #expect(filter.matches(3) == true)
         #expect(filter.matches(2) == false)
         #expect(filter.matches(4) == false)
+    }
+
+}
+
+// MARK: - SavedFilterテスト
+
+struct SavedFilterTests {
+
+    @Test
+    func matches_savedOnly() {
+        #expect(SavedFilter.savedOnly.matches(savedDate: Date()) == true)
+        #expect(SavedFilter.savedOnly.matches(savedDate: nil) == false)
+    }
+
+    @Test
+    func matches_unsavedOnly() {
+        #expect(SavedFilter.unsavedOnly.matches(savedDate: nil) == true)
+        #expect(SavedFilter.unsavedOnly.matches(savedDate: Date()) == false)
     }
 
 }

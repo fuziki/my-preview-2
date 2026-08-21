@@ -13,28 +13,35 @@ import Core
 final class FileBrowserFilterViewModel {
 
     var ratingFilter: RatingFilter? {
-        didSet { onChange(ratingFilter, colorLabelFilter) }
+        didSet { onChange(ratingFilter, colorLabelFilter, savedFilter) }
     }
 
     var colorLabelFilter: Set<PhotoColorLabel> {
-        didSet { onChange(ratingFilter, colorLabelFilter) }
+        didSet { onChange(ratingFilter, colorLabelFilter, savedFilter) }
     }
 
-    private let onChange: (RatingFilter?, Set<PhotoColorLabel>) -> Void
+    var savedFilter: SavedFilter? {
+        didSet { onChange(ratingFilter, colorLabelFilter, savedFilter) }
+    }
+
+    private let onChange: (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
 
     init(
         ratingFilter: RatingFilter?,
         colorLabelFilter: Set<PhotoColorLabel>,
-        onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+        savedFilter: SavedFilter?,
+        onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
     ) {
         self.ratingFilter = ratingFilter
         self.colorLabelFilter = colorLabelFilter
+        self.savedFilter = savedFilter
         self.onChange = onChange
     }
 
-    /// 星評価・カラーラベルフィルタを両方クリアする
+    /// 星評価・カラーラベル・保存状態フィルタをすべてクリアする
     func clearFilters() {
         ratingFilter = nil
         colorLabelFilter = []
+        savedFilter = nil
     }
 }

@@ -30,6 +30,10 @@
 "file_browser.rating_filter_exactly" = "同値";
 "file_browser.filter_title" = "フィルター";
 "file_browser.color_label" = "カラーラベル";
+"file_browser.saved_filter_title" = "保存状態";
+"file_browser.saved_filter_all" = "すべて";
+"file_browser.saved_filter_saved_only" = "保存済み";
+"file_browser.saved_filter_unsaved_only" = "未保存";
 "file_browser.pip_auto_advance_interval" = "PiP自動送り間隔";
 "file_browser.pip_auto_advance_interval_value" = "%d秒";
 "file_browser.advanced_settings" = "詳細設定";

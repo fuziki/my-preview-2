@@ -40,6 +40,10 @@ public enum L10n {
         public static var ratingFilterExactly: String { tr("file_browser.rating_filter_exactly") }
         public static var filterTitle: String { tr("file_browser.filter_title") }
         public static var colorLabel: String { tr("file_browser.color_label") }
+        public static var savedFilterTitle: String { tr("file_browser.saved_filter_title") }
+        public static var savedFilterAll: String { tr("file_browser.saved_filter_all") }
+        public static var savedFilterSavedOnly: String { tr("file_browser.saved_filter_saved_only") }
+        public static var savedFilterUnsavedOnly: String { tr("file_browser.saved_filter_unsaved_only") }
         public static var pipAutoAdvanceInterval: String { tr("file_browser.pip_auto_advance_interval") }
 
         public static func pipAutoAdvanceIntervalValue(_ seconds: Int) -> String {

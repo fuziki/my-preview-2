@@ -12,11 +12,13 @@ public final class FileBrowserFilterViewController: UIHostingController<FileBrow
     public init(
         ratingFilter: RatingFilter?,
         colorLabelFilter: Set<PhotoColorLabel>,
-        onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+        savedFilter: SavedFilter?,
+        onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
     ) {
         let viewModel = FileBrowserFilterViewModel(
             ratingFilter: ratingFilter,
             colorLabelFilter: colorLabelFilter,
+            savedFilter: savedFilter,
             onChange: onChange
         )
         super.init(rootView: FileBrowserFilterView(viewModel: viewModel))

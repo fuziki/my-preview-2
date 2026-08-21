@@ -71,6 +71,14 @@ public final class FileBrowserViewModel {
         }
     }
 
+    /// 保存状態フィルター（nilはフィルターなし）。変更時にUserDefaultsへ自動保存し、セクションを再構築する
+    public var savedFilter: SavedFilter? {
+        didSet {
+            settings.savedFilter = savedFilter
+            updateSections()
+        }
+    }
+
     /// PiP自動送りの間隔（秒）の選択可能範囲
     public static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
 
@@ -93,6 +101,9 @@ public final class FileBrowserViewModel {
     /// URLごとのカラーラベルのキャッシュ（セルのドット表示とフィルタ判定に使用）
     private var labelsByURL: [URL: PhotoColorLabel] = [:]
 
+    /// URLごとの保存日時のキャッシュ（フィルタ判定に使用）
+    private var savedDatesByURL: [URL: Date] = [:]
+
     /// 指定URLのレーティング（星0〜5）を返す
     public func rating(for url: URL) -> Int {
         ratingsByURL[url] ?? 0
@@ -103,20 +114,22 @@ public final class FileBrowserViewModel {
         labelsByURL[url]
     }
 
-    /// 永続化ストアからレーティングとカラーラベルを再読み込みし、フィルタ適用済みセクションを再構築する。
+    /// 永続化ストアからレーティング・カラーラベル・保存日時を再読み込みし、フィルタ適用済みセクションを再構築する。
     /// フォトビューアーで変更された後に呼ぶ。
     public func refreshRatingsAndLabels() {
         ratingsByURL = ratingStore.allRatings()
         labelsByURL = colorLabelStore.allLabels()
+        savedDatesByURL = savedDateStore.allDates()
         updateSections()
     }
 
-    /// レーティングとカラーラベルの両フィルタに適合するかを返す
+    /// レーティング・カラーラベル・保存状態の全フィルタに適合するかを返す
     private func matchesFilters(_ url: URL) -> Bool {
         if let filter = ratingFilter, !filter.matches(rating(for: url)) { return false }
         if !colorLabelFilter.isEmpty {
             guard let label = colorLabel(for: url), colorLabelFilter.contains(label) else { return false }
         }
+        if let savedFilter, !savedFilter.matches(savedDate: savedDatesByURL[url]) { return false }
         return true
     }
 
@@ -128,9 +141,9 @@ public final class FileBrowserViewModel {
         return items.first(where: { $0.name == fileName })
     }
 
-    /// レーティング・カラーラベルフィルタが有効かどうか（updateSectionsの適用条件と同一）
+    /// レーティング・カラーラベル・保存状態フィルタが有効かどうか（updateSectionsの適用条件と同一）
     public var isFilterActive: Bool {
-        isRatingEnabled && (ratingFilter != nil || !colorLabelFilter.isEmpty)
+        isRatingEnabled && (ratingFilter != nil || !colorLabelFilter.isEmpty || savedFilter != nil)
     }
 
     // MARK: - 最後に閲覧したアイテムID
@@ -220,6 +233,7 @@ public final class FileBrowserViewModel {
         self.isRatingEnabled = settings.isRatingEnabled
         self.ratingFilter = settings.ratingFilter
         self.colorLabelFilter = settings.colorLabelFilter
+        self.savedFilter = settings.savedFilter
         self.pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
     }
 
@@ -246,10 +260,12 @@ public final class FileBrowserViewModel {
         isRatingEnabled = settings.isRatingEnabled
         ratingFilter = settings.ratingFilter
         colorLabelFilter = settings.colorLabelFilter
+        savedFilter = settings.savedFilter
         pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
         lastViewedItemID = nil
         ratingsByURL = [:]
         labelsByURL = [:]
+        savedDatesByURL = [:]
         savedDateStore.removeAll()
         ratingStore.removeAll()
         colorLabelStore.removeAll()
@@ -275,6 +291,7 @@ public final class FileBrowserViewModel {
         loadedItems = await fileSystemService.scanForJPEGs(in: url)
         ratingsByURL = ratingStore.allRatings()
         labelsByURL = colorLabelStore.allLabels()
+        savedDatesByURL = savedDateStore.allDates()
         updateSections()
         restoreLastViewedItemIDIfNeeded()
         isLoading = false

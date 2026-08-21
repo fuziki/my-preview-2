@@ -16,6 +16,10 @@ public final class MockSavedDateStore: SavedDateStoreProtocol {
         dates[url] = date
     }
 
+    public func allDates() -> [URL: Date] {
+        dates
+    }
+
     public func removeAll() {
         removeAllCallCount += 1
         dates.removeAll()

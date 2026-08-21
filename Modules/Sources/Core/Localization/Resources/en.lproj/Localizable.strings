@@ -30,6 +30,10 @@
 "file_browser.rating_filter_exactly" = "Exactly";
 "file_browser.filter_title" = "Filter";
 "file_browser.color_label" = "Color Labels";
+"file_browser.saved_filter_title" = "Saved State";
+"file_browser.saved_filter_all" = "All";
+"file_browser.saved_filter_saved_only" = "Saved Only";
+"file_browser.saved_filter_unsaved_only" = "Unsaved Only";
 "file_browser.pip_auto_advance_interval" = "PiP Auto Advance Interval";
 "file_browser.pip_auto_advance_interval_value" = "%d sec";
 "file_browser.advanced_settings" = "Advanced Settings";

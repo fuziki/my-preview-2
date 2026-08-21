@@ -58,6 +58,12 @@ struct UserDefaultsSettingsStoreTests {
     }
 
     @Test
+    func savedFilter_defaultsToNil_whenUnset() {
+        let store = makeStore(defaults: makeDefaults())
+        #expect(store.savedFilter == nil)
+    }
+
+    @Test
     func lastViewedEntries_defaultsToEmpty_whenUnset() {
         let store = makeStore(defaults: makeDefaults())
         #expect(store.lastViewedEntries.isEmpty)
@@ -94,6 +100,13 @@ struct UserDefaultsSettingsStoreTests {
         #expect(makeStore(defaults: defaults).colorLabelFilter == [.green, .red])
     }
 
+    @Test
+    func savedFilter_persistsAcrossInstances() {
+        let defaults = makeDefaults()
+        makeStore(defaults: defaults).savedFilter = .savedOnly
+        #expect(makeStore(defaults: defaults).savedFilter == .savedOnly)
+    }
+
     // MARK: - removeAll
 
     @Test
@@ -105,6 +118,7 @@ struct UserDefaultsSettingsStoreTests {
         store.isRatingEnabled = false
         store.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
         store.colorLabelFilter = [.green]
+        store.savedFilter = .savedOnly
         store.lastViewedEntries = [DirectoryLastViewedEntry(directoryPath: "/tmp", fileName: "a.jpg")]
 
         store.removeAll()
@@ -115,6 +129,7 @@ struct UserDefaultsSettingsStoreTests {
         #expect(store.isRatingEnabled == true)
         #expect(store.ratingFilter == nil)
         #expect(store.colorLabelFilter.isEmpty)
+        #expect(store.savedFilter == nil)
         #expect(store.lastViewedEntries.isEmpty)
     }
 

@@ -5,6 +5,7 @@ import SwiftData
 public protocol SavedDateStoreProtocol {
     func date(for url: URL) -> Date?
     func setDate(_ date: Date, for url: URL)
+    func allDates() -> [URL: Date]
     func removeAll()
 }
 
@@ -59,6 +60,17 @@ public final class SavedDateStore: SavedDateStoreProtocol {
             modelContext.insert(SavedDateRecord(urlString: urlString, date: date))
         }
         try? modelContext.save()
+    }
+
+    public func allDates() -> [URL: Date] {
+        let records = (try? modelContext.fetch(FetchDescriptor<SavedDateRecord>())) ?? []
+        var result: [URL: Date] = [:]
+        for record in records {
+            if let url = URL(string: record.urlString) {
+                result[url] = record.date
+            }
+        }
+        return result
     }
 
     public func removeAll() {

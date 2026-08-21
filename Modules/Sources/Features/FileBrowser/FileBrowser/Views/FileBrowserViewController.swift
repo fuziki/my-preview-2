@@ -24,7 +24,8 @@ public final class FileBrowserViewController: UIViewController {
     private let filterViewControllerFactory: (
         _ ratingFilter: RatingFilter?,
         _ colorLabelFilter: Set<PhotoColorLabel>,
-        _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+        _ savedFilter: SavedFilter?,
+        _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
     ) -> UIViewController
 
     /// 詳細設定画面を生成するファクトリ。AppMainから注入される。
@@ -53,7 +54,8 @@ public final class FileBrowserViewController: UIViewController {
         filterViewControllerFactory: @escaping (
             _ ratingFilter: RatingFilter?,
             _ colorLabelFilter: Set<PhotoColorLabel>,
-            _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>) -> Void
+            _ savedFilter: SavedFilter?,
+            _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
         ) -> UIViewController,
         advancedSettingsViewControllerFactory: @escaping (
             _ isRatingEnabled: Bool,
@@ -220,9 +222,9 @@ public final class FileBrowserViewController: UIViewController {
         updateFilterButtonAppearance()
     }
 
-    /// フィルター（レーティング・カラーラベルのいずれか）適用中はアイコンを塗りつぶし表示にする
+    /// フィルター（レーティング・カラーラベル・保存状態のいずれか）適用中はアイコンを塗りつぶし表示にする
     private func updateFilterButtonAppearance() {
-        let isActive = viewModel.ratingFilter != nil || !viewModel.colorLabelFilter.isEmpty
+        let isActive = viewModel.ratingFilter != nil || !viewModel.colorLabelFilter.isEmpty || viewModel.savedFilter != nil
         let name = isActive
             ? "line.3.horizontal.decrease.circle.fill"
             : "line.3.horizontal.decrease.circle"
@@ -241,11 +243,13 @@ public final class FileBrowserViewController: UIViewController {
     private func presentFilterSheet() {
         let filterViewController = filterViewControllerFactory(
             viewModel.ratingFilter,
-            viewModel.colorLabelFilter
-        ) { [weak self] ratingFilter, colorLabelFilter in
+            viewModel.colorLabelFilter,
+            viewModel.savedFilter
+        ) { [weak self] ratingFilter, colorLabelFilter, savedFilter in
             guard let self else { return }
             viewModel.ratingFilter = ratingFilter
             viewModel.colorLabelFilter = colorLabelFilter
+            viewModel.savedFilter = savedFilter
         }
         if let sheet = filterViewController.sheetPresentationController {
             // 固定のhalf detentではなく、コンテンツの理想の高さにフィットさせる（Core共通実装）
@@ -628,7 +632,8 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             allURLs: allURLs,
             isRatingEnabled: viewModel.isRatingEnabled,
             ratingFilter: viewModel.ratingFilter,
-            colorLabelFilter: viewModel.colorLabelFilter
+            colorLabelFilter: viewModel.colorLabelFilter,
+            savedFilter: viewModel.savedFilter
         )
         let photoViewer = photoViewerFactory(input)
 

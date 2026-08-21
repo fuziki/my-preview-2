@@ -54,4 +54,29 @@ struct SavedDateStoreTests {
 
         #expect(store.date(for: url) == nil)
     }
+
+    @Test
+    func allDates_returnsAllSetDates_keyedByURL() {
+        let store = makeStore()
+        let urlA = URL(string: "file:///a.jpg")!
+        let urlB = URL(string: "file:///b.jpg")!
+        let dateA = Date(timeIntervalSince1970: 1_700_000_000)
+        let dateB = Date(timeIntervalSince1970: 1_700_000_100)
+
+        store.setDate(dateA, for: urlA)
+        store.setDate(dateB, for: urlB)
+
+        #expect(store.allDates() == [urlA: dateA, urlB: dateB])
+    }
+
+    @Test
+    func removeAll_clearsAllDates_returnedByAllDates() {
+        let store = makeStore()
+        let url = URL(string: "file:///a.jpg")!
+        store.setDate(Date(timeIntervalSince1970: 1_700_000_000), for: url)
+
+        store.removeAll()
+
+        #expect(store.allDates().isEmpty)
+    }
 }

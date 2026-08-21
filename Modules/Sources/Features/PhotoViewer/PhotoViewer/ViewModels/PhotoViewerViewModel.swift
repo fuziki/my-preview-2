@@ -53,6 +53,7 @@ public final class PhotoViewerViewModel {
     private let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     private let ratingFilter: RatingFilter?
     private let colorLabelFilter: Set<PhotoColorLabel>
+    private let savedFilter: SavedFilter?
 
     /// 前後ボタン長押し中の連続ナビゲーション用Task
     private var autoNavigationTask: Task<Void, Never>?
@@ -67,6 +68,7 @@ public final class PhotoViewerViewModel {
         isRatingEnabled = input.isRatingEnabled
         ratingFilter = input.ratingFilter
         colorLabelFilter = input.colorLabelFilter
+        savedFilter = input.savedFilter
         imageLoader = dependencies.imageLoader
         exifService = dependencies.exifService
         photoLibrary = dependencies.photoLibrary
@@ -174,17 +176,18 @@ public final class PhotoViewerViewModel {
         await autoNavigateIfFilteredOut()
     }
 
-    /// レーティング・カラーラベルのいずれかのフィルタが有効か
+    /// レーティング・カラーラベル・保存状態のいずれかのフィルタが有効か
     private var hasActiveFilter: Bool {
-        ratingFilter != nil || !colorLabelFilter.isEmpty
+        ratingFilter != nil || !colorLabelFilter.isEmpty || savedFilter != nil
     }
 
-    /// 指定URLが現在のフィルタ（レーティング・カラーラベルの複合条件）に適合するかを返す
+    /// 指定URLが現在のフィルタ（レーティング・カラーラベル・保存状態の複合条件）に適合するかを返す
     private func matchesFilters(url: URL) -> Bool {
         if let filter = ratingFilter, !filter.matches(ratingStore.rating(for: url)) { return false }
         if !colorLabelFilter.isEmpty {
             guard let label = colorLabelStore.label(for: url), colorLabelFilter.contains(label) else { return false }
         }
+        if let savedFilter, !savedFilter.matches(savedDate: savedDateStore.date(for: url)) { return false }
         return true
     }
 
@@ -224,6 +227,7 @@ public final class PhotoViewerViewModel {
             lastSavedDate = date
             saveStatus = .success
             hapticsService.notifySuccess()
+            await autoNavigateIfFilteredOut()
             try? await Task.sleep(for: .seconds(2))
             // ナビゲーション時は即座に .idle にリセットされるため、まだ .success の場合のみリセット
             if saveStatus == .success {

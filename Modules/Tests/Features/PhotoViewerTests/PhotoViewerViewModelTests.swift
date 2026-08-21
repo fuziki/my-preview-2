@@ -57,14 +57,16 @@ struct PhotoViewerViewModelTests {
         initialURL: URL,
         isRatingEnabled: Bool = false,
         ratingFilter: RatingFilter? = nil,
-        colorLabelFilter: Set<PhotoColorLabel> = []
+        colorLabelFilter: Set<PhotoColorLabel> = [],
+        savedFilter: SavedFilter? = nil
     ) -> PhotoViewerViewModel {
         let input = PhotoViewerInput(
             initialURL: initialURL,
             allURLs: [url1, url2, url3],
             isRatingEnabled: isRatingEnabled,
             ratingFilter: ratingFilter,
-            colorLabelFilter: colorLabelFilter
+            colorLabelFilter: colorLabelFilter,
+            savedFilter: savedFilter
         )
         let dependencies = PhotoViewerDependencies(
             imageLoader: imageLoader,
@@ -77,6 +79,19 @@ struct PhotoViewerViewModelTests {
             settings: settings
         )
         return PhotoViewerViewModel(input: input, dependencies: dependencies)
+    }
+
+    /// 条件が満たされるまでポーリングして待機する（固定時間sleepによるCI環境でのフレークを避けるためのヘルパー）
+    private func waitUntil(
+        timeout: Duration = .seconds(5),
+        pollInterval: Duration = .milliseconds(20),
+        _ condition: () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while !condition() {
+            if ContinuousClock.now >= deadline { return }
+            try await Task.sleep(for: pollInterval)
+        }
     }
 
     // MARK: - 初期状態
@@ -639,6 +654,43 @@ struct PhotoViewerViewModelTests {
         #expect(vm.currentURL == url3)
     }
 
+    // MARK: - 保存状態フィルターによる自動遷移
+
+    @Test
+    func save_unsavedOnlyFilter_advancesToNextUnsavedPhoto() async {
+        // url2・url3は未保存のまま、url1のみ保存する
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, savedFilter: .unsavedOnly)
+        await vm.loadInitial()
+
+        await vm.save()
+
+        #expect(vm.currentURL == url2)
+    }
+
+    @Test
+    func save_unsavedOnlyFilter_noNextMatch_fallsBackToPreviousPhoto() async {
+        savedDateStore.setDate(Date(), for: url3)
+        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, savedFilter: .unsavedOnly)
+        await vm.loadInitial()
+
+        await vm.save()  // url2を保存 → url3も保存済みなので前方のurl1へ
+
+        #expect(vm.currentURL == url1)
+        #expect(vm.shouldDismiss == false)
+    }
+
+    @Test
+    func save_unsavedOnlyFilter_noMatchesAtAll_requestsDismiss() async {
+        savedDateStore.setDate(Date(), for: url2)
+        savedDateStore.setDate(Date(), for: url3)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, savedFilter: .unsavedOnly)
+        await vm.loadInitial()
+
+        await vm.save()
+
+        #expect(vm.shouldDismiss == true)
+    }
+
     // MARK: - toggleOverlay
 
     @Test
@@ -688,9 +740,9 @@ struct PhotoViewerViewModelTests {
     @Test
     func startAutoNavigation_forward_stopsAtLastItem() async throws {
         // 境界（末尾）に到達すると自動的にループが終了することを確認する。
-        // タイミング依存のフレークを避けるため、十分な時間待ってから停止する。
+        // 固定時間のsleepはCI環境の実行速度差でフレークするため、条件成立をポーリングで待つ。
         viewModel.startAutoNavigation(forward: true)
-        try await Task.sleep(for: .seconds(1))
+        try await waitUntil { viewModel.canGoNext == false }
         viewModel.stopAutoNavigation()
         #expect(viewModel.currentIndex == 2)
         #expect(viewModel.canGoNext == false)
