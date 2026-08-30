@@ -216,6 +216,8 @@ public final class FileBrowserViewModel {
     private let savedDateStore: any SavedDateStoreProtocol
     private let ratingStore: any PhotoRatingStoreProtocol
     private let colorLabelStore: any ColorLabelStoreProtocol
+    /// フィルター済み写真リストの唯一の真実（SSOT）。PhotoViewerと共有する
+    private let photoCollectionStore: any PhotoCollectionStoreProtocol
 
     // MARK: - 初期化
 
@@ -225,6 +227,7 @@ public final class FileBrowserViewModel {
         self.ratingStore = dependencies.ratingStore
         self.colorLabelStore = dependencies.colorLabelStore
         self.settings = dependencies.settings
+        self.photoCollectionStore = dependencies.photoCollectionStore
         // UserDefaultsSettingsStoreから復元する（デフォルト値・クランプはそちらに一元化されている）
         self.viewMode = settings.viewMode
         self.saveFormat = settings.saveFormat
@@ -297,8 +300,8 @@ public final class FileBrowserViewModel {
         isLoading = false
     }
 
-    /// loadedItemsへレーティング・カラーラベルフィルタを適用後、日付キーでグループ化し、
-    /// sortOrderに従ってセクションとアイテムを並べてsectionsを更新する
+    /// loadedItemsへレーティング・カラーラベルフィルタを適用し、sortOrderに従って並べたURL列を
+    /// photoCollectionStore（SSOT）へ公開したうえで、store.urlsの順序から日付キーでグループ化してsectionsを構築する。
     private func updateSections() {
         let visibleItems: [FileItem]
         if isFilterActive {
@@ -306,23 +309,30 @@ public final class FileBrowserViewModel {
         } else {
             visibleItems = loadedItems
         }
+        let ascending = sortOrder == .dateAscending
+        let sortedItems = visibleItems.sorted {
+            let a = $0.captureDate ?? Date.distantFuture
+            let b = $1.captureDate ?? Date.distantFuture
+            return ascending ? a < b : a > b
+        }
+        photoCollectionStore.setURLs(sortedItems.map(\.url))
+
+        // store.urls（SSOT）の順にFileItemを引き直し、日付キーでグルーピングしてsectionsを構築する
+        let itemsByURL = Dictionary(uniqueKeysWithValues: loadedItems.map { ($0.url, $0) })
+        let orderedItems = photoCollectionStore.urls.compactMap { itemsByURL[$0] }
         var sectionMap: [String: [FileItem]] = [:]
-        for item in visibleItems {
+        var sectionOrder: [String] = []
+        for item in orderedItems {
             let date = item.captureDate ?? Date.distantFuture
             let key = sectionKeyFormatter.string(from: date)
-            if sectionMap[key] == nil { sectionMap[key] = [] }
+            if sectionMap[key] == nil {
+                sectionMap[key] = []
+                sectionOrder.append(key)
+            }
             sectionMap[key]!.append(item)
         }
-        let ascending = sortOrder == .dateAscending
-        // "yyyy-MM-dd"形式は辞書順＝日付順なので文字列比較でソートできる
-        let sortedKeys = sectionMap.keys.sorted(by: ascending ? (<) : (>))
-        sections = sortedKeys.map { key in
-            let items = (sectionMap[key] ?? []).sorted {
-                let a = $0.captureDate ?? Date.distantFuture
-                let b = $1.captureDate ?? Date.distantFuture
-                return ascending ? a < b : a > b
-            }
-            return FileBrowserSection(id: .init(dateKey: key), items: items)
+        sections = sectionOrder.map { key in
+            FileBrowserSection(id: .init(dateKey: key), items: sectionMap[key] ?? [])
         }
     }
 

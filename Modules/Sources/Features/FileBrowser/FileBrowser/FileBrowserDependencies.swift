@@ -9,6 +9,8 @@ public struct FileBrowserDependencies {
     public let colorLabelStore: any ColorLabelStoreProtocol
     public let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
     public let thumbnailService: any ThumbnailServiceProtocol
+    /// フィルター済み写真リストの唯一の真実（SSOT）。PhotoViewerと同一インスタンスを共有する
+    public let photoCollectionStore: any PhotoCollectionStoreProtocol
 
     public init(
         fileSystemService: any FileSystemServiceProtocol,
@@ -16,7 +18,8 @@ public struct FileBrowserDependencies {
         ratingStore: any PhotoRatingStoreProtocol,
         colorLabelStore: any ColorLabelStoreProtocol,
         settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>,
-        thumbnailService: any ThumbnailServiceProtocol
+        thumbnailService: any ThumbnailServiceProtocol,
+        photoCollectionStore: any PhotoCollectionStoreProtocol
     ) {
         self.fileSystemService = fileSystemService
         self.savedDateStore = savedDateStore
@@ -24,5 +27,6 @@ public struct FileBrowserDependencies {
         self.colorLabelStore = colorLabelStore
         self.settings = settings
         self.thumbnailService = thumbnailService
+        self.photoCollectionStore = photoCollectionStore
     }
 }

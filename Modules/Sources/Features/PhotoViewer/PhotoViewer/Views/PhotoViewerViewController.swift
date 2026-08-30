@@ -253,10 +253,14 @@ public final class PhotoViewerViewController: UIViewController {
             }
         }
 
-        // 子ページャは、プログラム遷移（ボタン/PiP/フィルタ/初回）でのみ currentIndex へ同期する。
+        // 子ページャの写真集合は photoCollectionStore（SSOT）の縮小に追従する。
+        // フィルター外れの写真が除去されて枚数が変わった場合は setURLs で写真集合そのものを同期し、
+        // それ以外（枚数不変）はプログラム遷移（ボタン/PiP/フィルタ/初回）でのみ currentIndex へ同期する。
         // スワイプ由来ではページャ自身が既に移動済みで、ここで moveToIndex を呼ぶと高速スワイプ中に
         // 非同期遅延したインデックスでページャと綱引きになり引っ掛かるため、呼ばない。
-        if !viewModel.lastChangeWasSwipe {
+        if pageItemVC.photoCount != viewModel.allURLs.count {
+            pageItemVC.setURLs(viewModel.allURLs, currentIndex: viewModel.currentIndex)
+        } else if !viewModel.lastChangeWasSwipe {
             pageItemVC.moveToIndex(viewModel.currentIndex)
         }
     }

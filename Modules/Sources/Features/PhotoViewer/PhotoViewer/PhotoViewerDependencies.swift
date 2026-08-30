@@ -14,6 +14,8 @@ public struct PhotoViewerDependencies {
     public let colorLabelStore: any ColorLabelStoreProtocol
     public let hapticsService: any HapticsServiceProtocol
     public let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
+    /// フィルター済み写真リストの唯一の真実（SSOT）。FileBrowserと同一インスタンスを共有する
+    public let photoCollectionStore: any PhotoCollectionStoreProtocol
 
     public init(
         imageLoader: any ImageLoaderServiceProtocol,
@@ -23,7 +25,8 @@ public struct PhotoViewerDependencies {
         ratingStore: any PhotoRatingStoreProtocol,
         colorLabelStore: any ColorLabelStoreProtocol,
         hapticsService: any HapticsServiceProtocol,
-        settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
+        settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>,
+        photoCollectionStore: any PhotoCollectionStoreProtocol
     ) {
         self.imageLoader = imageLoader
         self.exifService = exifService
@@ -33,5 +36,6 @@ public struct PhotoViewerDependencies {
         self.colorLabelStore = colorLabelStore
         self.hapticsService = hapticsService
         self.settings = settings
+        self.photoCollectionStore = photoCollectionStore
     }
 }

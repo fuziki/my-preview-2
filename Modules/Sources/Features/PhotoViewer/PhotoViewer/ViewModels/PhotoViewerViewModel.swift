@@ -8,7 +8,6 @@ public final class PhotoViewerViewModel {
     // MARK: - 出力（Observationを通じてViewControllerが読み取る）
 
     public private(set) var currentIndex: Int
-    public private(set) var allURLs: [URL]
     public private(set) var currentImage: UIImage? = nil
     public private(set) var isLoading: Bool = false
     public private(set) var exifInfo: ExifInfo? = nil
@@ -33,6 +32,9 @@ public final class PhotoViewerViewModel {
 
     // MARK: - 派生状態
 
+    /// フィルター済み写真リスト（唯一の真実、SSOT）。FileBrowserが公開し、PhotoViewerがフィルター外れの写真を除去する。
+    /// 独自コピーを保持せず、常にphotoCollectionStoreへ委譲する。
+    public var allURLs: [URL] { photoCollectionStore.urls }
     public var currentURL: URL { allURLs[currentIndex] }
     public var currentFileName: String { currentURL.lastPathComponent }
     public var canGoPrevious: Bool { currentIndex > 0 }
@@ -51,6 +53,8 @@ public final class PhotoViewerViewModel {
     private let colorLabelStore: any ColorLabelStoreProtocol
     private let hapticsService: any HapticsServiceProtocol
     private let settings: any UserDefaultsSettingsStoreProtocol<UserDefaultsSettings>
+    /// フィルター済み写真リストの唯一の真実（SSOT）。FileBrowserと共有する
+    private let photoCollectionStore: any PhotoCollectionStoreProtocol
     private let ratingFilter: RatingFilter?
     private let colorLabelFilter: Set<PhotoColorLabel>
     private let savedFilter: SavedFilter?
@@ -63,8 +67,9 @@ public final class PhotoViewerViewModel {
     // MARK: - 初期化
 
     public init(input: PhotoViewerInput, dependencies: PhotoViewerDependencies) {
-        allURLs = input.allURLs
-        currentIndex = input.allURLs.firstIndex(of: input.initialURL) ?? 0
+        photoCollectionStore = dependencies.photoCollectionStore
+        let urls = photoCollectionStore.urls
+        currentIndex = urls.firstIndex(of: input.initialURL) ?? 0
         isRatingEnabled = input.isRatingEnabled
         ratingFilter = input.ratingFilter
         colorLabelFilter = input.colorLabelFilter
@@ -78,9 +83,12 @@ public final class PhotoViewerViewModel {
         hapticsService = dependencies.hapticsService
         settings = dependencies.settings
         orientationLock = dependencies.settings.orientationLock
-        lastSavedDate = dependencies.savedDateStore.date(for: input.allURLs[currentIndex])
-        currentRating = dependencies.ratingStore.rating(for: input.allURLs[currentIndex])
-        currentColorLabel = dependencies.colorLabelStore.label(for: input.allURLs[currentIndex])
+        // urlsが空（想定外）の場合はlastSavedDate/currentRating/currentColorLabelの宣言時デフォルト値のままにする
+        if let initialURL = urls.indices.contains(currentIndex) ? urls[currentIndex] : nil {
+            lastSavedDate = dependencies.savedDateStore.date(for: initialURL)
+            currentRating = dependencies.ratingStore.rating(for: initialURL)
+            currentColorLabel = dependencies.colorLabelStore.label(for: initialURL)
+        }
     }
 
     // MARK: - ライフサイクル
@@ -191,27 +199,22 @@ public final class PhotoViewerViewModel {
         return true
     }
 
-    /// 現在の写真がフィルタに合わなくなった場合、後方→前方の順で適合写真へ自動遷移し、
-    /// 適合写真が1枚も無ければshouldDismissを立てる。
+    /// 現在の写真がフィルタに合わなくなった場合、その写真をphotoCollectionStore（SSOT）から除去する。
+    /// store.urlsはもともと全件がフィルタに適合しているため、現在写真を除いた残りは全て適合しており、
+    /// 除去後に同じ位置（＝旧next。末尾だったら旧prev）へ遷移すればよい。適合写真が1枚も無くなれば
+    /// shouldDismissを立てる。
     private func autoNavigateIfFilteredOut() async {
         guard hasActiveFilter, !matchesFilters(url: currentURL) else { return }
-        if let nextIndex = firstMatchingIndex(after: currentIndex) {
-            await navigate(to: nextIndex)
-        } else if let previousIndex = firstMatchingIndex(before: currentIndex) {
-            await navigate(to: previousIndex)
-        } else {
+        let removedURL = currentURL
+        let removedIndex = currentIndex
+        photoCollectionStore.remove(url: removedURL)
+        let newCount = allURLs.count
+        guard newCount > 0 else {
             shouldDismiss = true
+            return
         }
-    }
-
-    /// 指定インデックスより後方で、フィルタに適合する最初のインデックスを返す
-    private func firstMatchingIndex(after index: Int) -> Int? {
-        ((index + 1)..<allURLs.count).first { matchesFilters(url: allURLs[$0]) }
-    }
-
-    /// 指定インデックスより前方で、フィルタに適合する直近のインデックスを返す
-    private func firstMatchingIndex(before index: Int) -> Int? {
-        (0..<index).reversed().first { matchesFilters(url: allURLs[$0]) }
+        let newIndex = min(removedIndex, newCount - 1)
+        await navigate(to: newIndex)
     }
 
     // MARK: - 保存

@@ -625,11 +625,9 @@ extension FileBrowserViewController: UICollectionViewDelegate {
 
         guard let selectedID = dataSource.itemIdentifier(for: indexPath),
               let selectedItem = viewModel.items.first(where: { $0.id == selectedID }) else { return }
-        let allURLs = viewModel.items.map(\.url)
 
         let input = PhotoViewerInput(
             initialURL: selectedItem.url,
-            allURLs: allURLs,
             isRatingEnabled: viewModel.isRatingEnabled,
             ratingFilter: viewModel.ratingFilter,
             colorLabelFilter: viewModel.colorLabelFilter,

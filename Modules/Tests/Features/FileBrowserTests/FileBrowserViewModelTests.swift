@@ -14,6 +14,8 @@ struct FileBrowserViewModelTests {
     let ratingStore: MockPhotoRatingStore
     let colorLabelStore: MockColorLabelStore
     let thumbnailService: MockThumbnailService
+    /// フィルター済み写真リストの唯一の真実（SSOT）。PhotoViewerと共有する体でFileBrowserViewModelが書き込む
+    let photoCollectionStore: PhotoCollectionStore
     let viewModel: FileBrowserViewModel
 
     init() {
@@ -23,13 +25,15 @@ struct FileBrowserViewModelTests {
         ratingStore = MockPhotoRatingStore()
         colorLabelStore = MockColorLabelStore()
         thumbnailService = MockThumbnailService()
+        photoCollectionStore = PhotoCollectionStore()
         viewModel = FileBrowserViewModel(dependencies: FileBrowserDependencies(
             fileSystemService: fileSystemService,
             savedDateStore: savedDateStore,
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
             settings: settings,
-            thumbnailService: thumbnailService
+            thumbnailService: thumbnailService,
+            photoCollectionStore: photoCollectionStore
         ))
     }
 
@@ -41,7 +45,8 @@ struct FileBrowserViewModelTests {
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
             settings: settings,
-            thumbnailService: thumbnailService
+            thumbnailService: thumbnailService,
+            photoCollectionStore: photoCollectionStore
         )
     }
 
@@ -228,6 +233,67 @@ struct FileBrowserViewModelTests {
 
         let section = try #require(viewModel.sections.first)
         #expect(section.items.count == 2)
+    }
+
+    // MARK: - photoCollectionStore（SSOT）連携
+
+    @Test
+    func selectFolder_publishesItemsToPhotoCollectionStore() async {
+        let date = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10))!
+        fileSystemService.stubbedItems = [
+            FileItem(url: URL(fileURLWithPath: "/tmp/a.jpg"), captureDate: date),
+            FileItem(url: URL(fileURLWithPath: "/tmp/b.jpg"), captureDate: date.addingTimeInterval(60)),
+        ]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        #expect(photoCollectionStore.urls == viewModel.items.map(\.url))
+    }
+
+    @Test
+    func ratingFilter_change_updatesPhotoCollectionStore() async {
+        let rated3 = URL(fileURLWithPath: "/tmp/a.jpg")
+        let rated1 = URL(fileURLWithPath: "/tmp/b.jpg")
+        ratingStore.setRating(3, for: rated3)
+        ratingStore.setRating(1, for: rated1)
+        let date = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10))!
+        fileSystemService.stubbedItems = [
+            FileItem(url: rated3, captureDate: date),
+            FileItem(url: rated1, captureDate: date.addingTimeInterval(60)),
+        ]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        #expect(photoCollectionStore.urls == [rated3, rated1])
+
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 2, comparison: .atLeast)
+
+        #expect(photoCollectionStore.urls == [rated3])
+        #expect(photoCollectionStore.urls == viewModel.items.map(\.url))
+    }
+
+    @Test
+    func refreshRatingsAndLabels_resyncsPhotoCollectionStore() async {
+        let rated3 = URL(fileURLWithPath: "/tmp/a.jpg")
+        let rated1 = URL(fileURLWithPath: "/tmp/b.jpg")
+        ratingStore.setRating(3, for: rated3)
+        let date = Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10))!
+        fileSystemService.stubbedItems = [
+            FileItem(url: rated3, captureDate: date),
+            FileItem(url: rated1, captureDate: date.addingTimeInterval(60)),
+        ]
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 2, comparison: .atLeast)
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        #expect(photoCollectionStore.urls == [rated3])
+
+        // PhotoViewer側でSSOTからrated3が除去された状況を模す（フィルター外れによる自動除去を想定）
+        photoCollectionStore.remove(url: rated3)
+        #expect(photoCollectionStore.urls.isEmpty)
+
+        // FileBrowserへ戻った際の再読み込みで、フィルタ条件から再計算した結果と一致するように再公開される
+        ratingStore.setRating(5, for: rated1)
+        viewModel.refreshRatingsAndLabels()
+
+        #expect(photoCollectionStore.urls == [rated3, rated1])
+        #expect(photoCollectionStore.urls == viewModel.items.map(\.url))
     }
 
     // MARK: - makeMenuData

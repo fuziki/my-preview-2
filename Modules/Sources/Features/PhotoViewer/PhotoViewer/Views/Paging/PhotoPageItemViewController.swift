@@ -28,9 +28,13 @@ public final class PhotoPageItemViewController: UIViewController {
 
     // MARK: - 依存
 
-    private let allURLs: [URL]
+    /// 表示中の写真URL一覧。photoCollectionStore（SSOT）の縮小に追従して減ることがあるため`var`。
+    private var allURLs: [URL]
     private let imageLoader: any ImageLoaderServiceProtocol
     private let initialIndex: Int
+
+    /// 現在保持している写真の枚数。親VCがSSOTの縮小を検知するために参照する。
+    var photoCount: Int { allURLs.count }
 
     // MARK: - ウィンドウ状態
 
@@ -205,6 +209,33 @@ public final class PhotoPageItemViewController: UIViewController {
         collectionView.layoutIfNeeded()
         // 表示セルはズーム維持（縦横比が変わる場合はリセット）で画像だけ差し替える。
         currentPhotoCell?.updateKeepingZoomIfSameAspect(url: allURLs[newIndex], imageLoader: imageLoader)
+    }
+
+    // MARK: - SSOTの縮小への追従
+
+    /// photoCollectionStore（SSOT）の縮小に追従して写真集合を更新する。想定は「除去のみ」。
+    /// `newURLs`に存在しないURLを、位置の降順で`allURLs`と`orderedIDs`から同時に取り除く。
+    /// 同じ位置から同時に削除することで「位置 p のセルは写真 p を表示する」という不変条件が保たれ、
+    /// 残りのセルのreconfigureが不要になる。
+    public func setURLs(_ newURLs: [URL], currentIndex: Int) {
+        let newURLSet = Set(newURLs)
+        let removedPositions = allURLs.indices.filter { !newURLSet.contains(allURLs[$0]) }
+        for position in removedPositions.reversed() {
+            allURLs.remove(at: position)
+            orderedIDs.remove(at: position)
+        }
+
+        // 除去以外の変化（追加・並び替えなど想定外のケース）が起きていた場合は作り直す
+        if allURLs != newURLs {
+            allURLs = newURLs
+            orderedIDs = newURLs.indices.map { _ in UUID() }
+        }
+
+        guard !orderedIDs.isEmpty else { return }
+        let clamped = min(max(currentIndex, 0), orderedIDs.count - 1)
+        currentID = orderedIDs[clamped]
+        applySnapshot(reconfigure: [], animated: false)
+        scrollToPosition(clamped, animated: false)
     }
 }
 

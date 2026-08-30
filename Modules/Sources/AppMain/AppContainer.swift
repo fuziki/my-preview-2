@@ -37,6 +37,9 @@ final class AppContainer {
         defaults: .standard
     )
 
+    /// フィルター済み写真リストの唯一の真実（SSOT）。FileBrowserとPhotoViewerへ同一インスタンスを注入する
+    private let photoCollectionStore: any PhotoCollectionStoreProtocol = PhotoCollectionStore()
+
     #if targetEnvironment(simulator)
     /// シミュレータでは実ファイルが存在しないため、ファイルIO系サービスをモックに差し替える
     private lazy var fileSystemService: any FileSystemServiceProtocol = MockFileSystemService()
@@ -62,7 +65,8 @@ final class AppContainer {
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
             settings: settingsStore,
-            thumbnailService: thumbnailService
+            thumbnailService: thumbnailService,
+            photoCollectionStore: photoCollectionStore
         )
         let viewModel = FileBrowserViewModel(dependencies: dependencies)
         return FileBrowserViewController(
@@ -102,7 +106,8 @@ final class AppContainer {
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
             hapticsService: HapticsService(),
-            settings: settingsStore
+            settings: settingsStore,
+            photoCollectionStore: photoCollectionStore
         )
         return PhotoViewerViewController(input: input, dependencies: dependencies)
     }

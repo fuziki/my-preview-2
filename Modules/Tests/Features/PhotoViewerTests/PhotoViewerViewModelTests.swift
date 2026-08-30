@@ -21,6 +21,8 @@ struct PhotoViewerViewModelTests {
     let colorLabelStore: MockColorLabelStore
     let hapticsService: MockHapticsService
     let settings: MockUserDefaultsSettingsStore
+    /// フィルター済み写真リストの唯一の真実（SSOT）。FileBrowserが公開する体でテストからsetURLsする
+    let photoCollectionStore: PhotoCollectionStore
     let viewModel: PhotoViewerViewModel
 
     init() {
@@ -32,13 +34,15 @@ struct PhotoViewerViewModelTests {
         colorLabelStore = MockColorLabelStore()
         hapticsService = MockHapticsService()
         settings = MockUserDefaultsSettingsStore()
+        photoCollectionStore = PhotoCollectionStore()
 
         let urls = [
             URL(fileURLWithPath: "/tmp/photo1.jpg"),
             URL(fileURLWithPath: "/tmp/photo2.jpg"),
             URL(fileURLWithPath: "/tmp/photo3.jpg"),
         ]
-        let input = PhotoViewerInput(initialURL: urls[0], allURLs: urls)
+        photoCollectionStore.setURLs(urls)
+        let input = PhotoViewerInput(initialURL: urls[0])
         let dependencies = PhotoViewerDependencies(
             imageLoader: imageLoader,
             exifService: exifService,
@@ -47,37 +51,45 @@ struct PhotoViewerViewModelTests {
             ratingStore: ratingStore,
             colorLabelStore: colorLabelStore,
             hapticsService: hapticsService,
-            settings: settings
+            settings: settings,
+            photoCollectionStore: photoCollectionStore
         )
         viewModel = PhotoViewerViewModel(input: input, dependencies: dependencies)
     }
 
-    /// テスト用のViewModelを指定のURL・レーティング設定で生成するヘルパー
+    /// 現在のモックと指定のphotoCollectionStoreを使ってDependenciesを組み立てるヘルパー
+    private func makeDependencies(photoCollectionStore: any PhotoCollectionStoreProtocol) -> PhotoViewerDependencies {
+        PhotoViewerDependencies(
+            imageLoader: imageLoader,
+            exifService: exifService,
+            photoLibrary: photoLibrary,
+            savedDateStore: savedDateStore,
+            ratingStore: ratingStore,
+            colorLabelStore: colorLabelStore,
+            hapticsService: hapticsService,
+            settings: settings,
+            photoCollectionStore: photoCollectionStore
+        )
+    }
+
+    /// テスト用のViewModelを指定のURL・レーティング設定で生成するヘルパー。
+    /// photoCollectionStore（SSOT）は呼び出し側のインスタンス（デフォルトはこのスイート共有のもの）を使う。
     private func makeViewModel(
         initialURL: URL,
         isRatingEnabled: Bool = false,
         ratingFilter: RatingFilter? = nil,
         colorLabelFilter: Set<PhotoColorLabel> = [],
-        savedFilter: SavedFilter? = nil
+        savedFilter: SavedFilter? = nil,
+        photoCollectionStore: (any PhotoCollectionStoreProtocol)? = nil
     ) -> PhotoViewerViewModel {
         let input = PhotoViewerInput(
             initialURL: initialURL,
-            allURLs: [url1, url2, url3],
             isRatingEnabled: isRatingEnabled,
             ratingFilter: ratingFilter,
             colorLabelFilter: colorLabelFilter,
             savedFilter: savedFilter
         )
-        let dependencies = PhotoViewerDependencies(
-            imageLoader: imageLoader,
-            exifService: exifService,
-            photoLibrary: photoLibrary,
-            savedDateStore: savedDateStore,
-            ratingStore: ratingStore,
-            colorLabelStore: colorLabelStore,
-            hapticsService: hapticsService,
-            settings: settings
-        )
+        let dependencies = makeDependencies(photoCollectionStore: photoCollectionStore ?? self.photoCollectionStore)
         return PhotoViewerViewModel(input: input, dependencies: dependencies)
     }
 
@@ -287,8 +299,10 @@ struct PhotoViewerViewModelTests {
 
     @Test
     func advanceForPictureInPictureAutoPlay_singleItemGallery_doesNothing() async {
+        let singleItemStore = PhotoCollectionStore()
+        singleItemStore.setURLs([url1])
         let vm = PhotoViewerViewModel(
-            input: PhotoViewerInput(initialURL: url1, allURLs: [url1]),
+            input: PhotoViewerInput(initialURL: url1),
             dependencies: PhotoViewerDependencies(
                 imageLoader: imageLoader,
                 exifService: exifService,
@@ -297,7 +311,8 @@ struct PhotoViewerViewModelTests {
                 ratingStore: ratingStore,
                 colorLabelStore: colorLabelStore,
                 hapticsService: hapticsService,
-                settings: settings
+                settings: settings,
+                photoCollectionStore: singleItemStore
             )
         )
         await vm.advanceForPictureInPictureAutoPlay()
@@ -474,7 +489,12 @@ struct PhotoViewerViewModelTests {
         #expect(viewModel.currentRating == 5)
     }
 
-    // MARK: - レーティングフィルターによる自動遷移
+    // MARK: - レーティングフィルターによる自動遷移（SSOT: photoCollectionStoreからの除去）
+    //
+    // photoCollectionStore.urlsは常に「全件がフィルターに適合済み」であることが前提（FileBrowserが
+    // フィルタ済みリストを公開するため）。よってこれらのテストでは、シナリオごとに適合する写真のみを
+    // 収めた専用のPhotoCollectionStoreを用意し、現在写真が不適合になった際に「除去 → 同じ位置（＝旧next。
+    // 末尾なら旧prev）へ遷移」という新しい自動遷移の挙動を検証する。
 
     @Test
     func setRating_stillMatchingFilter_staysOnCurrentPhoto() async {
@@ -483,47 +503,59 @@ struct PhotoViewerViewModelTests {
         await vm.setRating(4)
         #expect(vm.currentIndex == 0)
         #expect(vm.shouldDismiss == false)
+        #expect(photoCollectionStore.urls.count == 3)
     }
 
     @Test
-    func setRating_unmatchingFilter_advancesToNextMatchingPhoto() async {
-        // フィルター: 星3以上。url2は不適合、url3は適合
-        ratingStore.setRating(1, for: url2)
-        ratingStore.setRating(4, for: url3)
+    func setRating_unmatchingFilter_removesCurrentAndAdvancesToNextPhoto() async {
+        // フィルター: 星3以上。3枚とも初期状態で適合させておく（storeは常に全件適合が前提のため）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1, url2, url3])
+        ratingStore.setRating(3, for: url1)
+        ratingStore.setRating(3, for: url2)
+        ratingStore.setRating(3, for: url3)
         let filter = RatingFilter(stars: 3, comparison: .atLeast)
-        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter, photoCollectionStore: store)
 
         await vm.setRating(1)  // url1が星1になりフィルターに不適合
 
-        #expect(vm.currentURL == url3)
-        #expect(vm.currentRating == 4)
+        #expect(store.urls == [url2, url3])
+        #expect(vm.allURLs.count == 2)
+        #expect(vm.currentURL == url2)
+        #expect(vm.shouldDismiss == false)
     }
 
     @Test
-    func setRating_noNextMatch_fallsBackToPreviousPhoto() async {
-        // フィルター: 星3以上。前方のurl1のみ適合
+    func setRating_removingLastPhotoInStore_fallsBackToPreviousPhoto() async {
+        // フィルター: 星3以上。storeにはurl1・url2のみ（url2が末尾）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1, url2])
         ratingStore.setRating(4, for: url1)
         ratingStore.setRating(3, for: url2)
         let filter = RatingFilter(stars: 3, comparison: .atLeast)
-        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, ratingFilter: filter)
+        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, ratingFilter: filter, photoCollectionStore: store)
 
-        await vm.setRating(1)  // url2が星1になりフィルターに不適合
+        await vm.setRating(1)  // url2が星1になりフィルターに不適合。storeの末尾だったため前へ戻る
 
+        #expect(store.urls == [url1])
         #expect(vm.currentURL == url1)
         #expect(vm.shouldDismiss == false)
     }
 
     @Test
-    func setRating_noMatchesAtAll_requestsDismiss() async {
-        // フィルター: 星3以上。唯一適合していたurl1を星1に変更する
+    func setRating_onlyMatchInStore_requestsDismissAndEmptiesStore() async {
+        // フィルター: 星3以上。storeにはurl1のみ（唯一の適合写真）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1])
         ratingStore.setRating(4, for: url1)
         let filter = RatingFilter(stars: 3, comparison: .atLeast)
-        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter)
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, ratingFilter: filter, photoCollectionStore: store)
 
-        await vm.setRating(1)
+        await vm.setRating(1)  // url1が星1になりフィルターに不適合
 
         #expect(vm.shouldDismiss == true)
-        #expect(vm.currentURL == url1)
+        #expect(store.urls.isEmpty)
+        #expect(vm.allURLs.isEmpty)
     }
 
     @Test
@@ -532,6 +564,7 @@ struct PhotoViewerViewModelTests {
         await vm.setRating(1)
         #expect(vm.currentIndex == 0)
         #expect(vm.shouldDismiss == false)
+        #expect(photoCollectionStore.urls.count == 3)
     }
 
     // MARK: - カラーラベル
@@ -596,99 +629,115 @@ struct PhotoViewerViewModelTests {
     }
 
     @Test
-    func setColorLabel_unmatchingFilter_advancesToNextMatchingPhoto() async {
-        // フィルター: 緑のみ。url2は不適合（赤）、url3は適合（緑）
+    func setColorLabel_unmatchingFilter_removesCurrentAndAdvancesToNextPhoto() async {
+        // フィルター: 緑のみ。storeにはurl1・url3のみ（両方とも緑で適合）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1, url3])
         colorLabelStore.setLabel(.green, for: url1)
-        colorLabelStore.setLabel(.red, for: url2)
         colorLabelStore.setLabel(.green, for: url3)
-        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green])
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green], photoCollectionStore: store)
 
         await vm.setColorLabel(.blue)  // url1が青になりフィルターに不適合
 
+        #expect(store.urls == [url3])
         #expect(vm.currentURL == url3)
         #expect(vm.currentColorLabel == .green)
     }
 
     @Test
-    func setColorLabel_noNextMatch_fallsBackToPreviousPhoto() async {
-        // フィルター: 緑のみ。前方のurl1のみ適合
+    func setColorLabel_removingLastPhotoInStore_fallsBackToPreviousPhoto() async {
+        // フィルター: 緑のみ。storeにはurl1・url2のみ（url2が末尾）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1, url2])
         colorLabelStore.setLabel(.green, for: url1)
         colorLabelStore.setLabel(.green, for: url2)
-        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, colorLabelFilter: [.green])
+        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, colorLabelFilter: [.green], photoCollectionStore: store)
 
-        await vm.setColorLabel(.red)  // url2が赤になりフィルターに不適合
+        await vm.setColorLabel(.red)  // url2が赤になりフィルターに不適合。storeの末尾だったため前へ戻る
 
+        #expect(store.urls == [url1])
         #expect(vm.currentURL == url1)
         #expect(vm.shouldDismiss == false)
     }
 
     @Test
-    func setColorLabel_noMatchesAtAll_requestsDismiss() async {
-        // フィルター: 緑のみ。唯一適合していたurl1のラベルを解除する
+    func setColorLabel_onlyMatchInStore_requestsDismissAndEmptiesStore() async {
+        // フィルター: 緑のみ。storeにはurl1のみ（唯一の適合写真）のラベルを解除する
+        let store = PhotoCollectionStore()
+        store.setURLs([url1])
         colorLabelStore.setLabel(.green, for: url1)
-        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green])
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, colorLabelFilter: [.green], photoCollectionStore: store)
 
         await vm.setColorLabel(.green)  // 同色タップでラベル解除
 
         #expect(vm.shouldDismiss == true)
-        #expect(vm.currentURL == url1)
+        #expect(store.urls.isEmpty)
     }
 
     @Test
-    func setRating_combinedFilter_advancesWhenColorFilterUnmatched() async {
-        // 複合フィルター: 星2以上 かつ 緑。url3のみ両方適合
+    func setRating_combinedFilterUnmatched_removesCurrentAndAdvancesToNextPhoto() async {
+        // 複合フィルター: 星2以上 かつ 緑。storeにはurl1・url3のみ（両方とも適合）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1, url3])
         ratingStore.setRating(3, for: url1)
         colorLabelStore.setLabel(.green, for: url1)
-        ratingStore.setRating(5, for: url2)  // 星は適合するがラベルなし
         ratingStore.setRating(2, for: url3)
         colorLabelStore.setLabel(.green, for: url3)
         let vm = makeViewModel(
             initialURL: url1,
             isRatingEnabled: true,
             ratingFilter: RatingFilter(stars: 2, comparison: .atLeast),
-            colorLabelFilter: [.green]
+            colorLabelFilter: [.green],
+            photoCollectionStore: store
         )
 
         await vm.setRating(1)  // url1が星1になり複合フィルターに不適合
 
+        #expect(store.urls == [url3])
         #expect(vm.currentURL == url3)
     }
 
-    // MARK: - 保存状態フィルターによる自動遷移
+    // MARK: - 保存状態フィルターによる自動遷移（SSOT: photoCollectionStoreからの除去）
 
     @Test
     func save_unsavedOnlyFilter_advancesToNextUnsavedPhoto() async {
-        // url2・url3は未保存のまま、url1のみ保存する
+        // url2・url3は未保存のまま、url1のみ保存する（3枚とも未保存で開始 = 全件適合の前提を満たす）
         let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, savedFilter: .unsavedOnly)
         await vm.loadInitial()
 
         await vm.save()
 
+        #expect(photoCollectionStore.urls == [url2, url3])
         #expect(vm.currentURL == url2)
     }
 
     @Test
-    func save_unsavedOnlyFilter_noNextMatch_fallsBackToPreviousPhoto() async {
-        savedDateStore.setDate(Date(), for: url3)
-        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, savedFilter: .unsavedOnly)
+    func save_unsavedOnlyFilter_removingLastPhotoInStore_fallsBackToPreviousPhoto() async {
+        // storeにはurl1・url2のみ（url2が末尾、両方とも未保存で適合）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1, url2])
+        let vm = makeViewModel(initialURL: url2, isRatingEnabled: true, savedFilter: .unsavedOnly, photoCollectionStore: store)
         await vm.loadInitial()
 
-        await vm.save()  // url2を保存 → url3も保存済みなので前方のurl1へ
+        await vm.save()  // url2を保存 → storeの末尾だったため前方のurl1へ
 
+        #expect(store.urls == [url1])
         #expect(vm.currentURL == url1)
         #expect(vm.shouldDismiss == false)
     }
 
     @Test
-    func save_unsavedOnlyFilter_noMatchesAtAll_requestsDismiss() async {
-        savedDateStore.setDate(Date(), for: url2)
-        savedDateStore.setDate(Date(), for: url3)
-        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, savedFilter: .unsavedOnly)
+    func save_unsavedOnlyFilter_onlyMatchInStore_requestsDismissAndEmptiesStore() async {
+        // storeにはurl1のみ（唯一の未保存＝適合写真）
+        let store = PhotoCollectionStore()
+        store.setURLs([url1])
+        let vm = makeViewModel(initialURL: url1, isRatingEnabled: true, savedFilter: .unsavedOnly, photoCollectionStore: store)
         await vm.loadInitial()
 
         await vm.save()
 
         #expect(vm.shouldDismiss == true)
+        #expect(store.urls.isEmpty)
     }
 
     // MARK: - toggleOverlay
