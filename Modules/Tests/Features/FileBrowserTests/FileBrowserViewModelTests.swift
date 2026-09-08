@@ -560,6 +560,18 @@ struct FileBrowserViewModelTests {
         #expect(viewModel.items.map(\.url) == [rated3, rated1])
     }
 
+    @Test
+    func markSaved_reflectsIntoUnsavedOnlyFilter_withoutReloadingRatingStore() async {
+        let (rated3, rated1, unrated) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.savedFilter = .unsavedOnly
+        #expect(viewModel.items.map(\.url) == [rated3, rated1, unrated])
+
+        // 全て保存フローを想定し、ratingStore/colorLabelStoreには触れずmarkSavedのみ呼ぶ
+        viewModel.markSaved(url: rated3, date: Date())
+        #expect(viewModel.items.map(\.url) == [rated1, unrated])
+    }
+
     // MARK: - カラーラベルフィルター
 
     @Test

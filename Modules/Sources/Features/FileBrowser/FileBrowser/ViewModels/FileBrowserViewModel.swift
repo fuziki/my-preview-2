@@ -123,6 +123,14 @@ public final class FileBrowserViewModel {
         updateSections()
     }
 
+    /// 指定URLの保存日時キャッシュのみを更新し、フィルタ適用済みセクションを再構築する。
+    /// 全て保存フローで1枚保存するたびに呼ばれる。保存日時以外（レーティング・カラーラベル）は
+    /// 変化しないため、refreshRatingsAndLabels() のような全ストア再読み込みは行わない。
+    public func markSaved(url: URL, date: Date) {
+        savedDatesByURL[url] = date
+        updateSections()
+    }
+
     /// レーティング・カラーラベル・保存状態の全フィルタに適合するかを返す
     private func matchesFilters(_ url: URL) -> Bool {
         if let filter = ratingFilter, !filter.matches(rating(for: url)) { return false }

@@ -37,6 +37,10 @@
 "file_browser.pip_auto_advance_interval" = "PiP Auto Advance Interval";
 "file_browser.pip_auto_advance_interval_value" = "%d sec";
 "file_browser.advanced_settings" = "Advanced Settings";
+"file_browser.save_all" = "Save All";
+"file_browser.bulk_save_title" = "Saving Photos";
+"file_browser.bulk_save_progress" = "%d of %d";
+"file_browser.bulk_save_cancel" = "Cancel";
 "file_browser.section_title_with_count" = "%@ (%d photos)";
 "file_browser.empty_state.no_folder" = "Please select a folder";
 "file_browser.empty_state.loading" = "Loading...";

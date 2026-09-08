@@ -92,6 +92,15 @@ final class AppContainer {
                     onPipAutoAdvanceIntervalSecondsChange: onPipAutoAdvanceIntervalSecondsChange,
                     onClearCacheRequested: onClearCacheRequested
                 )
+            },
+            bulkSaveViewControllerFactory: { [weak self] urls, onURLSaved in
+                guard let self else { return UIViewController() }
+                let dependencies = FileBrowserBulkSaveDependencies(
+                    photoLibrary: PhotoLibraryService(settings: self.settingsStore),
+                    savedDateStore: self.savedDateStore,
+                    hapticsService: HapticsService()
+                )
+                return FileBrowserBulkSaveViewController(urls: urls, dependencies: dependencies, onURLSaved: onURLSaved)
             }
         )
     }

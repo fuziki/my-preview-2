@@ -51,6 +51,13 @@ public enum L10n {
         }
 
         public static var advancedSettings: String { tr("file_browser.advanced_settings") }
+        public static var saveAll: String { tr("file_browser.save_all") }
+        public static var bulkSaveTitle: String { tr("file_browser.bulk_save_title") }
+        public static var bulkSaveCancel: String { tr("file_browser.bulk_save_cancel") }
+
+        public static func bulkSaveProgress(_ completed: Int, _ total: Int) -> String {
+            tr("file_browser.bulk_save_progress", completed, total)
+        }
 
         public static func ratingFilterStarValue(_ stars: Int) -> String {
             tr("file_browser.rating_filter_star_value", stars)

@@ -39,6 +39,15 @@ public final class FileBrowserViewController: UIViewController {
         _ onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
     ) -> UIViewController
 
+    /// 全て保存の進捗オーバーレイを生成するファクトリ。AppMainから注入される。
+    /// AppContainer側でFileBrowserBulkSaveDependenciesを組み立ててFileBrowserBulkSaveViewControllerを生成する。
+    /// onURLSavedは1枚保存が完了するたびに保存先URLと保存日時を添えて呼ばれ、
+    /// 呼び出し側（本クラス）がFileBrowserViewModel.markSaved(url:date:)へ反映する。
+    private let bulkSaveViewControllerFactory: (
+        _ urls: [URL],
+        _ onURLSaved: @escaping (URL, Date) -> Void
+    ) -> UIViewController
+
     private let thumbnailService: any ThumbnailServiceProtocol
 
     // セル登録 — configureDataSource() で初期化する
@@ -63,6 +72,10 @@ public final class FileBrowserViewController: UIViewController {
             _ onRatingEnabledChange: @escaping (Bool) -> Void,
             _ onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
             _ onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
+        ) -> UIViewController,
+        bulkSaveViewControllerFactory: @escaping (
+            _ urls: [URL],
+            _ onURLSaved: @escaping (URL, Date) -> Void
         ) -> UIViewController
     ) {
         self.viewModel = viewModel
@@ -70,6 +83,7 @@ public final class FileBrowserViewController: UIViewController {
         self.photoViewerFactory = photoViewerFactory
         self.filterViewControllerFactory = filterViewControllerFactory
         self.advancedSettingsViewControllerFactory = advancedSettingsViewControllerFactory
+        self.bulkSaveViewControllerFactory = bulkSaveViewControllerFactory
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -120,6 +134,20 @@ public final class FileBrowserViewController: UIViewController {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.alpha = 0
         button.addTarget(self, action: #selector(jumpToBottom), for: .touchUpInside)
+        return button
+    }()
+
+    /// フィルタ有効時にフォルダボタンとジャンプボタンの間に表示する「全て保存」ボタン
+    private lazy var allSaveButton: UIButton = {
+        var config = UIButton.Configuration.glass()
+        config.image = UIImage(systemName: "square.and.arrow.down")
+        config.title = L10n.FileBrowser.saveAll
+        config.imagePlacement = .leading
+        config.imagePadding = 8
+        let button = UIButton(configuration: config)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.alpha = 0
+        button.addTarget(self, action: #selector(presentBulkSave), for: .touchUpInside)
         return button
     }()
 
@@ -186,6 +214,16 @@ public final class FileBrowserViewController: UIViewController {
             jumpToBottomButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: folderButtonSize),
             jumpToBottomButton.widthAnchor.constraint(equalToConstant: folderButtonSize),
             jumpToBottomButton.heightAnchor.constraint(equalToConstant: folderButtonSize),
+        ])
+
+        // 全て保存ボタン（フォルダボタンとジャンプボタンの間、folderButtonと同じ垂直位置）
+        view.addSubview(allSaveButton)
+        NSLayoutConstraint.activate([
+            allSaveButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            allSaveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: folderButtonSize),
+            allSaveButton.heightAnchor.constraint(equalToConstant: folderButtonSize),
+            allSaveButton.leadingAnchor.constraint(greaterThanOrEqualTo: folderButton.trailingAnchor, constant: 8),
+            allSaveButton.trailingAnchor.constraint(lessThanOrEqualTo: jumpToBottomButton.leadingAnchor, constant: -8),
         ])
     }
 
@@ -515,6 +553,15 @@ public final class FileBrowserViewController: UIViewController {
         } else {
             emptyStateView.configure(state: .noPhotos)
         }
+
+        updateAllSaveButtonVisibility()
+    }
+
+    /// フィルタ適用中かつ対象写真がある場合のみ「全て保存」ボタンを表示する
+    private func updateAllSaveButtonVisibility() {
+        let shouldShow = viewModel.hasFolder && viewModel.isFilterActive && !viewModel.items.isEmpty
+        allSaveButton.alpha = shouldShow ? 1 : 0
+        allSaveButton.isUserInteractionEnabled = shouldShow
     }
 
     private func animateFolderButton(hasFolder: Bool) {
@@ -565,6 +612,24 @@ public final class FileBrowserViewController: UIViewController {
         let lastItem = collectionView.numberOfItems(inSection: lastSection) - 1
         guard lastItem >= 0 else { return }
         collectionView.scrollToItem(at: IndexPath(item: lastItem, section: lastSection), at: .bottom, animated: true)
+    }
+
+    /// フィルタに合致する写真を順番にすべて保存する進捗オーバーレイを表示する。
+    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はAppContainer経由のfactoryへ委譲する。
+    /// isModalInPresentation = trueで中断ボタン以外での破棄を防ぎ、裏のファイルブラウザ操作もモーダルが遮る。
+    @objc private func presentBulkSave() {
+        let urls = viewModel.items.map(\.url)
+        guard !urls.isEmpty else { return }
+        let bulkSaveViewController = bulkSaveViewControllerFactory(urls) { [weak self] url, date in
+            guard let self else { return }
+            // 保存日時キャッシュのみを更新し、保存状態フィルタを含めてリアルタイムに反映する
+            viewModel.markSaved(url: url, date: date)
+            applySnapshot(reconfiguringAllItems: true)
+        }
+        bulkSaveViewController.modalPresentationStyle = .overFullScreen
+        bulkSaveViewController.modalTransitionStyle = .crossDissolve
+        bulkSaveViewController.isModalInPresentation = true
+        present(bulkSaveViewController, animated: true)
     }
 
     // MARK: - 設定同期
