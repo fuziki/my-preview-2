@@ -99,9 +99,7 @@ final class AppScreenProvider: ScreenProviding {
             thumbnailService: thumbnailService,
             photoCollectionStore: photoCollectionStore
         )
-        let viewModel = FileBrowserViewModel(dependencies: dependencies)
         return FileBrowserViewController(
-            viewModel: viewModel,
             dependencies: dependencies,
             screenProvider: self
         )

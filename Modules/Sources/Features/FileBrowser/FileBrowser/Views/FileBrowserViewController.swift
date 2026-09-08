@@ -27,11 +27,10 @@ public final class FileBrowserViewController: UIViewController {
     // MARK: - 初期化
 
     public init(
-        viewModel: FileBrowserViewModel,
         dependencies: FileBrowserDependencies,
         screenProvider: any ScreenProviding
     ) {
-        self.viewModel = viewModel
+        self.viewModel = FileBrowserViewModel(dependencies: dependencies)
         self.thumbnailService = dependencies.thumbnailService
         self.screenProvider = screenProvider
         super.init(nibName: nil, bundle: nil)

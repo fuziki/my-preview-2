@@ -4,29 +4,29 @@ import Core
 import Localization
 
 @Observable
-public final class FileBrowserViewModel {
-    public private(set) var sections: [FileBrowserSection] = []
-    public var items: [FileItem] { sections.flatMap(\.items) }
+final class FileBrowserViewModel {
+    private(set) var sections: [FileBrowserSection] = []
+    var items: [FileItem] { sections.flatMap(\.items) }
     private var loadedItems: [FileItem] = []
-    public private(set) var hasFolder: Bool = false
-    public private(set) var isLoading: Bool = false
-    public private(set) var folderName: String? = nil
+    private(set) var hasFolder: Bool = false
+    private(set) var isLoading: Bool = false
+    private(set) var folderName: String? = nil
     private var rootURL: URL? = nil
 
     // MARK: - 永続化された状態（UserDefaultsと双方向同期）
 
     /// 表示モード。変更時にUserDefaultsへ自動保存される
-    public var viewMode: ViewMode {
+    var viewMode: ViewMode {
         didSet { settings.viewMode = viewMode }
     }
 
     /// 保存形式。変更時にUserDefaultsへ自動保存される
-    public var saveFormat: SaveFormat {
+    var saveFormat: SaveFormat {
         didSet { settings.saveFormat = saveFormat }
     }
 
     /// ソート順。変更時にUserDefaultsへ自動保存し、セクションを再構築する
-    public var sortOrder: FileSortOrder {
+    var sortOrder: FileSortOrder {
         didSet {
             settings.sortOrder = sortOrder
             updateSections()
@@ -34,10 +34,10 @@ public final class FileBrowserViewModel {
     }
 
     /// グリッド表示の列数の選択可能範囲
-    public static let gridColumnCountRange = 2...5
+    static let gridColumnCountRange = 2...5
 
     /// グリッド表示の列数。変更時にUserDefaultsへ自動保存される（復元時に範囲内へクランプ）
-    public var gridColumnCount: Int {
+    var gridColumnCount: Int {
         didSet { settings.gridColumnCount = gridColumnCount }
     }
 
@@ -47,7 +47,7 @@ public final class FileBrowserViewModel {
     }
 
     /// レーティング機能のオンオフ。変更時にUserDefaultsへ自動保存し、セクションを再構築する
-    public var isRatingEnabled: Bool {
+    var isRatingEnabled: Bool {
         didSet {
             settings.isRatingEnabled = isRatingEnabled
             updateSections()
@@ -55,7 +55,7 @@ public final class FileBrowserViewModel {
     }
 
     /// レーティングフィルター（nilはフィルターなし）。変更時にUserDefaultsへ自動保存し、セクションを再構築する
-    public var ratingFilter: RatingFilter? {
+    var ratingFilter: RatingFilter? {
         didSet {
             settings.ratingFilter = ratingFilter
             updateSections()
@@ -64,7 +64,7 @@ public final class FileBrowserViewModel {
 
     /// カラーラベルフィルター（選択中ラベルの集合。空はフィルターなし）。
     /// 変更時にUserDefaultsへ自動保存し、セクションを再構築する
-    public var colorLabelFilter: Set<PhotoColorLabel> {
+    var colorLabelFilter: Set<PhotoColorLabel> {
         didSet {
             settings.colorLabelFilter = colorLabelFilter
             updateSections()
@@ -72,7 +72,7 @@ public final class FileBrowserViewModel {
     }
 
     /// 保存状態フィルター（nilはフィルターなし）。変更時にUserDefaultsへ自動保存し、セクションを再構築する
-    public var savedFilter: SavedFilter? {
+    var savedFilter: SavedFilter? {
         didSet {
             settings.savedFilter = savedFilter
             updateSections()
@@ -80,10 +80,10 @@ public final class FileBrowserViewModel {
     }
 
     /// PiP自動送りの間隔（秒）の選択可能範囲
-    public static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
+    static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
 
     /// PiP再生中に自動的に次の写真へ進める間隔（秒）。変更時にUserDefaultsへ自動保存される
-    public var pipAutoAdvanceIntervalSeconds: Int {
+    var pipAutoAdvanceIntervalSeconds: Int {
         didSet { settings.pipAutoAdvanceIntervalSeconds = pipAutoAdvanceIntervalSeconds }
     }
 
@@ -105,18 +105,18 @@ public final class FileBrowserViewModel {
     private var savedDatesByURL: [URL: Date] = [:]
 
     /// 指定URLのレーティング（星0〜5）を返す
-    public func rating(for url: URL) -> Int {
+    func rating(for url: URL) -> Int {
         ratingsByURL[url] ?? 0
     }
 
     /// 指定URLのカラーラベルを返す（未設定はnil）
-    public func colorLabel(for url: URL) -> PhotoColorLabel? {
+    func colorLabel(for url: URL) -> PhotoColorLabel? {
         labelsByURL[url]
     }
 
     /// 永続化ストアからレーティング・カラーラベル・保存日時を再読み込みし、フィルタ適用済みセクションを再構築する。
     /// フォトビューアーで変更された後に呼ぶ。
-    public func refreshRatingsAndLabels() {
+    func refreshRatingsAndLabels() {
         ratingsByURL = ratingStore.allRatings()
         labelsByURL = colorLabelStore.allLabels()
         savedDatesByURL = savedDateStore.allDates()
@@ -126,7 +126,7 @@ public final class FileBrowserViewModel {
     /// 指定URLの保存日時キャッシュのみを更新し、フィルタ適用済みセクションを再構築する。
     /// 全て保存フローで1枚保存するたびに呼ばれる。保存日時以外（レーティング・カラーラベル）は
     /// 変化しないため、refreshRatingsAndLabels() のような全ストア再読み込みは行わない。
-    public func markSaved(url: URL, date: Date) {
+    func markSaved(url: URL, date: Date) {
         savedDatesByURL[url] = date
         updateSections()
     }
@@ -144,20 +144,20 @@ public final class FileBrowserViewModel {
     // MARK: - 派生状態
 
     /// 最後に閲覧したアイテム（現在のitemsの中に該当するものがあれば返す）
-    public var lastViewedItem: FileItem? {
+    var lastViewedItem: FileItem? {
         guard let fileName = lastViewedFileName else { return nil }
         return items.first(where: { $0.name == fileName })
     }
 
     /// レーティング・カラーラベル・保存状態フィルタが有効かどうか（updateSectionsの適用条件と同一）
-    public var isFilterActive: Bool {
+    var isFilterActive: Bool {
         isRatingEnabled && (ratingFilter != nil || !colorLabelFilter.isEmpty || savedFilter != nil)
     }
 
     // MARK: - 最後に閲覧したアイテムID
 
     /// 最後に閲覧していたアイテムのID（「最後に表示」バッジ・メニュー・スクロールに使用）
-    public private(set) var lastViewedItemID: FileItem.ID?
+    private(set) var lastViewedItemID: FileItem.ID?
 
     // MARK: - hasFolder変化検出
 
@@ -165,7 +165,7 @@ public final class FileBrowserViewModel {
     private var lastKnownHasFolder: Bool = false
 
     /// hasFolderが前回から変化したかを返し、内部状態を更新する
-    public func consumeHasFolderChanged() -> Bool {
+    func consumeHasFolderChanged() -> Bool {
         let changed = hasFolder != lastKnownHasFolder
         lastKnownHasFolder = hasFolder
         return changed
@@ -189,7 +189,7 @@ public final class FileBrowserViewModel {
     }()
 
     /// Section.IDをローカライズされた日付文字列に変換する
-    public func sectionTitle(for id: FileBrowserSection.ID) -> String {
+    func sectionTitle(for id: FileBrowserSection.ID) -> String {
         if let date = sectionKeyFormatter.date(from: id.dateKey) {
             return sectionDisplayFormatter.string(from: date)
         }
@@ -197,14 +197,14 @@ public final class FileBrowserViewModel {
     }
 
     /// Section.IDからSectionの実態を引く
-    public func section(for id: FileBrowserSection.ID) -> FileBrowserSection? {
+    func section(for id: FileBrowserSection.ID) -> FileBrowserSection? {
         sections.first(where: { $0.id == id })
     }
 
     // MARK: - メニューデータ
 
     /// セクションヘッダーのメニュー用データを返す
-    public func makeMenuData() -> (showsLastViewed: Bool, sections: [(id: FileBrowserSection.ID, title: String)]) {
+    func makeMenuData() -> (showsLastViewed: Bool, sections: [(id: FileBrowserSection.ID, title: String)]) {
         let showsLastViewed: Bool
         if let itemID = lastViewedItemID {
             showsLastViewed = sections.contains(where: { $0.items.contains(where: { $0.id == itemID }) })
@@ -229,7 +229,7 @@ public final class FileBrowserViewModel {
 
     // MARK: - 初期化
 
-    public init(dependencies: FileBrowserDependencies) {
+    init(dependencies: FileBrowserDependencies) {
         self.fileSystemService = dependencies.fileSystemService
         self.savedDateStore = dependencies.savedDateStore
         self.ratingStore = dependencies.ratingStore
@@ -250,7 +250,7 @@ public final class FileBrowserViewModel {
 
     // MARK: - アクション
 
-    public func selectFolder(_ url: URL) async {
+    func selectFolder(_ url: URL) async {
         rootURL?.stopAccessingSecurityScopedResource()
         guard url.startAccessingSecurityScopedResource() else { return }
         rootURL = url
@@ -261,7 +261,7 @@ public final class FileBrowserViewModel {
 
     /// 設定と閲覧履歴を初期状態に戻し、UserDefaultsの全キーと
     /// 永続化済みの保存日時・レーティング・カラーラベルを削除する
-    public func resetToDefaults() {
+    func resetToDefaults() {
         settings.removeAll()
         // 削除後のUserDefaultsSettingsStoreから読み直すことで、デフォルト値の重複管理を避ける
         viewMode = settings.viewMode
@@ -284,7 +284,7 @@ public final class FileBrowserViewModel {
     }
 
     /// 閲覧したURLをディレクトリパスごとにUserDefaultsに保存し、lastViewedItemIDも更新する
-    public func saveLastViewed(url: URL) {
+    func saveLastViewed(url: URL) {
         guard let directoryPath = rootURL?.path else { return }
         settings.lastViewedEntries = settings.lastViewedEntries.updatingLastViewed(
             directoryPath: directoryPath,
