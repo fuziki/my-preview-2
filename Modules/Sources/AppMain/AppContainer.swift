@@ -1,14 +1,12 @@
 import UIKit
 import Core
-import FileBrowser
-import PhotoViewer
 #if targetEnvironment(simulator)
 import Mocks
 #endif
 
 /// ViewControllerの生成とサービスの依存解決を担うコンテナ。
 /// ViewControllerレイヤー（SceneDelegate）でのみ保持し、機能モジュール間の循環参照を防ぐ。
-/// FileBrowserはPhotoViewerを直接参照せず、ファクトリクロージャを介して生成する。
+/// 画面生成は screenProvider（ScreenProviding）に一元化し、AppContainer自身はサービス・ストアの所有に専念する。
 final class AppContainer {
 
     // MARK: - 共有サービス
@@ -54,70 +52,18 @@ final class AppContainer {
     private lazy var thumbnailService: any ThumbnailServiceProtocol = ThumbnailService(tracker: tracker)
     #endif
 
-    // MARK: - ファクトリ
+    // MARK: - 画面生成
 
-    /// FileBrowserViewControllerを生成する。
-    /// PhotoViewerViewControllerの生成はクロージャとして注入する。
-    func makeFileBrowserViewController() -> UIViewController {
-        let dependencies = FileBrowserDependencies(
-            fileSystemService: fileSystemService,
-            savedDateStore: savedDateStore,
-            ratingStore: ratingStore,
-            colorLabelStore: colorLabelStore,
-            settings: settingsStore,
-            thumbnailService: thumbnailService,
-            photoCollectionStore: photoCollectionStore
-        )
-        let viewModel = FileBrowserViewModel(dependencies: dependencies)
-        return FileBrowserViewController(
-            viewModel: viewModel,
-            dependencies: dependencies,
-            photoViewerFactory: { [weak self] input in
-                guard let self else { return UIViewController() }
-                return self.makePhotoViewerViewController(input: input)
-            },
-            filterViewControllerFactory: { ratingFilter, colorLabelFilter, savedFilter, onChange in
-                FileBrowserFilterViewController(
-                    ratingFilter: ratingFilter,
-                    colorLabelFilter: colorLabelFilter,
-                    savedFilter: savedFilter,
-                    onChange: onChange
-                )
-            },
-            advancedSettingsViewControllerFactory: { isRatingEnabled, pipAutoAdvanceIntervalSeconds, onRatingEnabledChange, onPipAutoAdvanceIntervalSecondsChange, onClearCacheRequested in
-                FileBrowserAdvancedSettingsViewController(
-                    isRatingEnabled: isRatingEnabled,
-                    pipAutoAdvanceIntervalSeconds: pipAutoAdvanceIntervalSeconds,
-                    onRatingEnabledChange: onRatingEnabledChange,
-                    onPipAutoAdvanceIntervalSecondsChange: onPipAutoAdvanceIntervalSecondsChange,
-                    onClearCacheRequested: onClearCacheRequested
-                )
-            },
-            bulkSaveViewControllerFactory: { [weak self] urls, onURLSaved in
-                guard let self else { return UIViewController() }
-                let dependencies = FileBrowserBulkSaveDependencies(
-                    photoLibrary: PhotoLibraryService(settings: self.settingsStore),
-                    savedDateStore: self.savedDateStore,
-                    hapticsService: HapticsService()
-                )
-                return FileBrowserBulkSaveViewController(urls: urls, dependencies: dependencies, onURLSaved: onURLSaved)
-            }
-        )
-    }
-
-    /// PhotoViewerViewControllerを生成する。
-    private func makePhotoViewerViewController(input: PhotoViewerInput) -> UIViewController {
-        let dependencies = PhotoViewerDependencies(
-            imageLoader: imageLoaderService,
-            exifService: exifService,
-            photoLibrary: PhotoLibraryService(settings: settingsStore),
-            savedDateStore: savedDateStore,
-            ratingStore: ratingStore,
-            colorLabelStore: colorLabelStore,
-            hapticsService: HapticsService(),
-            settings: settingsStore,
-            photoCollectionStore: photoCollectionStore
-        )
-        return PhotoViewerViewController(input: input, dependencies: dependencies)
-    }
+    /// 画面生成を一元管理するサービス。ViewControllerレイヤーはこれを介して画面を取得する。
+    private(set) lazy var screenProvider: any ScreenProviding = AppScreenProvider(
+        fileSystemService: fileSystemService,
+        imageLoaderService: imageLoaderService,
+        exifService: exifService,
+        thumbnailService: thumbnailService,
+        savedDateStore: savedDateStore,
+        ratingStore: ratingStore,
+        colorLabelStore: colorLabelStore,
+        settingsStore: settingsStore,
+        photoCollectionStore: photoCollectionStore
+    )
 }

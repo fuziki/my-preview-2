@@ -14,39 +14,9 @@ public final class FileBrowserViewController: UIViewController {
     private let viewModel: FileBrowserViewModel
     private var dataSource: UICollectionViewDiffableDataSource<FileBrowserSection.ID, FileItem.ID>!
 
-    /// PhotoViewerViewControllerを生成するファクトリ。AppMainから注入される。
-    /// FileBrowserモジュールはPhotoViewerモジュールに依存しないため、UIViewControllerとして受け取る。
-    private let photoViewerFactory: (PhotoViewerInput) -> UIViewController
-
-    /// フィルターのハーフモーダルを生成するファクトリ。AppMainから注入される。
-    /// AppContainer側でFileBrowserFilterViewModelとFileBrowserFilterViewを組み立ててUIHostingControllerで包む。
-    /// onChangeクロージャは呼び出し側（本クラス）で用意し、変更のたびにFileBrowserViewModelへ書き戻す。
-    private let filterViewControllerFactory: (
-        _ ratingFilter: RatingFilter?,
-        _ colorLabelFilter: Set<PhotoColorLabel>,
-        _ savedFilter: SavedFilter?,
-        _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
-    ) -> UIViewController
-
-    /// 詳細設定画面を生成するファクトリ。AppMainから注入される。
-    /// AppContainer側でFileBrowserAdvancedSettingsViewModelとFileBrowserAdvancedSettingsViewを組み立ててUIHostingControllerで包む。
-    /// 各onChangeクロージャは呼び出し側（本クラス）で用意し、変更のたびにFileBrowserViewModelへ書き戻す。
-    private let advancedSettingsViewControllerFactory: (
-        _ isRatingEnabled: Bool,
-        _ pipAutoAdvanceIntervalSeconds: Int,
-        _ onRatingEnabledChange: @escaping (Bool) -> Void,
-        _ onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
-        _ onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
-    ) -> UIViewController
-
-    /// 全て保存の進捗オーバーレイを生成するファクトリ。AppMainから注入される。
-    /// AppContainer側でFileBrowserBulkSaveDependenciesを組み立ててFileBrowserBulkSaveViewControllerを生成する。
-    /// onURLSavedは1枚保存が完了するたびに保存先URLと保存日時を添えて呼ばれ、
-    /// 呼び出し側（本クラス）がFileBrowserViewModel.markSaved(url:date:)へ反映する。
-    private let bulkSaveViewControllerFactory: (
-        _ urls: [URL],
-        _ onURLSaved: @escaping (URL, Date) -> Void
-    ) -> UIViewController
+    /// 画面遷移用のViewControllerを一元的に生成するサービス。AppMainから注入される。
+    /// FileBrowserモジュールはPhotoViewerモジュールに直接依存しないため、これを介して画面を取得する。
+    private let screenProvider: any ScreenProviding
 
     private let thumbnailService: any ThumbnailServiceProtocol
 
@@ -59,31 +29,11 @@ public final class FileBrowserViewController: UIViewController {
     public init(
         viewModel: FileBrowserViewModel,
         dependencies: FileBrowserDependencies,
-        photoViewerFactory: @escaping (PhotoViewerInput) -> UIViewController,
-        filterViewControllerFactory: @escaping (
-            _ ratingFilter: RatingFilter?,
-            _ colorLabelFilter: Set<PhotoColorLabel>,
-            _ savedFilter: SavedFilter?,
-            _ onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
-        ) -> UIViewController,
-        advancedSettingsViewControllerFactory: @escaping (
-            _ isRatingEnabled: Bool,
-            _ pipAutoAdvanceIntervalSeconds: Int,
-            _ onRatingEnabledChange: @escaping (Bool) -> Void,
-            _ onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
-            _ onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
-        ) -> UIViewController,
-        bulkSaveViewControllerFactory: @escaping (
-            _ urls: [URL],
-            _ onURLSaved: @escaping (URL, Date) -> Void
-        ) -> UIViewController
+        screenProvider: any ScreenProviding
     ) {
         self.viewModel = viewModel
         self.thumbnailService = dependencies.thumbnailService
-        self.photoViewerFactory = photoViewerFactory
-        self.filterViewControllerFactory = filterViewControllerFactory
-        self.advancedSettingsViewControllerFactory = advancedSettingsViewControllerFactory
-        self.bulkSaveViewControllerFactory = bulkSaveViewControllerFactory
+        self.screenProvider = screenProvider
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -276,19 +226,20 @@ public final class FileBrowserViewController: UIViewController {
     }
 
     /// フィルター設定をハーフモーダルで表示する。
-    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はAppContainer経由のfactoryへ委譲し、
+    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はscreenProvider（ScreenProviding）へ委譲し、
     /// 変更のたびに呼ばれるonChangeでFileBrowserViewModelへ書き戻す。
     private func presentFilterSheet() {
-        let filterViewController = filterViewControllerFactory(
-            viewModel.ratingFilter,
-            viewModel.colorLabelFilter,
-            viewModel.savedFilter
-        ) { [weak self] ratingFilter, colorLabelFilter, savedFilter in
-            guard let self else { return }
-            viewModel.ratingFilter = ratingFilter
-            viewModel.colorLabelFilter = colorLabelFilter
-            viewModel.savedFilter = savedFilter
-        }
+        let filterViewController = screenProvider.makeViewController(.fileBrowserFilter(
+            ratingFilter: viewModel.ratingFilter,
+            colorLabelFilter: viewModel.colorLabelFilter,
+            savedFilter: viewModel.savedFilter,
+            onChange: { [weak self] ratingFilter, colorLabelFilter, savedFilter in
+                guard let self else { return }
+                viewModel.ratingFilter = ratingFilter
+                viewModel.colorLabelFilter = colorLabelFilter
+                viewModel.savedFilter = savedFilter
+            }
+        ))
         if let sheet = filterViewController.sheetPresentationController {
             // 固定のhalf detentではなく、コンテンツの理想の高さにフィットさせる（Core共通実装）
             sheet.detents = [filterViewController.contentFittingSheetDetent(presentingViewWidth: view.bounds.width)]
@@ -300,23 +251,23 @@ public final class FileBrowserViewController: UIViewController {
     }
 
     /// 詳細設定画面をpushで表示する。
-    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はAppContainer経由のfactoryへ委譲し、
+    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はscreenProvider（ScreenProviding）へ委譲し、
     /// 変更のたびに呼ばれる各クロージャでFileBrowserViewModelへ書き戻す。
     private func pushAdvancedSettings() {
-        let advancedSettingsViewController = advancedSettingsViewControllerFactory(
-            viewModel.isRatingEnabled,
-            viewModel.pipAutoAdvanceIntervalSeconds,
-            { [weak self] isRatingEnabled in
+        let advancedSettingsViewController = screenProvider.makeViewController(.fileBrowserAdvancedSettings(
+            isRatingEnabled: viewModel.isRatingEnabled,
+            pipAutoAdvanceIntervalSeconds: viewModel.pipAutoAdvanceIntervalSeconds,
+            onRatingEnabledChange: { [weak self] isRatingEnabled in
                 guard let self else { return }
                 viewModel.isRatingEnabled = isRatingEnabled
                 updateNavigationBarItems()
                 applySnapshot(reconfiguringAllItems: true)
                 refreshSettingsMenu()
             },
-            { [weak self] seconds in
+            onPipAutoAdvanceIntervalSecondsChange: { [weak self] seconds in
                 self?.viewModel.pipAutoAdvanceIntervalSeconds = seconds
             },
-            { [weak self] in
+            onClearCacheRequested: { [weak self] in
                 guard let self else {
                     let defaults = UserDefaultsSettings.default()
                     return (defaults.isRatingEnabled, defaults.pipAutoAdvanceIntervalSeconds)
@@ -327,7 +278,7 @@ public final class FileBrowserViewController: UIViewController {
                 refreshSettingsMenu()
                 return (viewModel.isRatingEnabled, viewModel.pipAutoAdvanceIntervalSeconds)
             }
-        )
+        ))
         navigationController?.pushViewController(advancedSettingsViewController, animated: true)
     }
 
@@ -615,17 +566,20 @@ public final class FileBrowserViewController: UIViewController {
     }
 
     /// フィルタに合致する写真を順番にすべて保存する進捗オーバーレイを表示する。
-    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はAppContainer経由のfactoryへ委譲する。
+    /// 画面（ViewModel・SwiftUI View・UIHostingController）の生成はscreenProvider（ScreenProviding）へ委譲する。
     /// isModalInPresentation = trueで中断ボタン以外での破棄を防ぎ、裏のファイルブラウザ操作もモーダルが遮る。
     @objc private func presentBulkSave() {
         let urls = viewModel.items.map(\.url)
         guard !urls.isEmpty else { return }
-        let bulkSaveViewController = bulkSaveViewControllerFactory(urls) { [weak self] url, date in
-            guard let self else { return }
-            // 保存日時キャッシュのみを更新し、保存状態フィルタを含めてリアルタイムに反映する
-            viewModel.markSaved(url: url, date: date)
-            applySnapshot(reconfiguringAllItems: true)
-        }
+        let bulkSaveViewController = screenProvider.makeViewController(.fileBrowserBulkSave(
+            urls: urls,
+            onURLSaved: { [weak self] url, date in
+                guard let self else { return }
+                // 保存日時キャッシュのみを更新し、保存状態フィルタを含めてリアルタイムに反映する
+                viewModel.markSaved(url: url, date: date)
+                applySnapshot(reconfiguringAllItems: true)
+            }
+        ))
         bulkSaveViewController.modalPresentationStyle = .overFullScreen
         bulkSaveViewController.modalTransitionStyle = .crossDissolve
         bulkSaveViewController.isModalInPresentation = true
@@ -698,7 +652,18 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             colorLabelFilter: viewModel.colorLabelFilter,
             savedFilter: viewModel.savedFilter
         )
-        let photoViewer = photoViewerFactory(input)
+        let photoViewer = screenProvider.makeViewController(.photoViewer(
+            input: input,
+            onDismiss: { [weak self] currentURL in
+                guard let self else { return }
+                // ファイル名をViewModelを通じてUserDefaultsに永続化し、lastViewedItemIDも更新する
+                viewModel.saveLastViewed(url: currentURL)
+                // ビューアー内でレーティング・カラーラベルが変更された可能性があるため、
+                // ストアから再読み込みしてフィルタ適用済みセクションと全セルを更新する
+                viewModel.refreshRatingsAndLabels()
+                applySnapshot(reconfiguringAllItems: true)
+            }
+        ))
 
         // ステータスバーの制御をPhotoViewerViewControllerに委譲する
         photoViewer.modalPresentationCapturesStatusBarAppearance = true
@@ -710,19 +675,6 @@ extension FileBrowserViewController: UICollectionViewDelegate {
             guard let self, let photoViewer else { return nil }
             guard let currentURLProvider = photoViewer as? CurrentURLProvider else { return nil }
             return self.cellViewForURL(currentURLProvider.currentURL)
-        }
-
-        // 閉じる時: 最後に表示したアイテムを記録し、レーティング変更を反映してセルを更新する
-        if var dismissable = photoViewer as? DismissNotifiable {
-            dismissable.onDismiss = { [weak self] currentURL in
-                guard let self else { return }
-                // ファイル名をViewModelを通じてUserDefaultsに永続化し、lastViewedItemIDも更新する
-                viewModel.saveLastViewed(url: currentURL)
-                // ビューアー内でレーティング・カラーラベルが変更された可能性があるため、
-                // ストアから再読み込みしてフィルタ適用済みセクションと全セルを更新する
-                viewModel.refreshRatingsAndLabels()
-                applySnapshot(reconfiguringAllItems: true)
-            }
         }
 
         present(photoViewer, animated: true)

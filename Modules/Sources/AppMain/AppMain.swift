@@ -1,5 +1,5 @@
 import UIKit
-import FileBrowser
+import Core
 import ToastKit
 import CornerDotKit
 
@@ -15,7 +15,7 @@ public func makeWindow(windowScene: UIWindowScene) -> UIWindow {
     )
     ToastKit.setup(windowScene: windowScene)
 
-    let fileBrowserVC = container.makeFileBrowserViewController()
+    let fileBrowserVC = container.screenProvider.makeViewController(.fileBrowser)
     let navController = UINavigationController(rootViewController: fileBrowserVC)
     let window = UIWindow(windowScene: windowScene)
     window.rootViewController = navController
