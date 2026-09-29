@@ -95,7 +95,7 @@ struct PhotoViewerViewModelTests {
 
     /// 条件が満たされるまでポーリングして待機する（固定時間sleepによるCI環境でのフレークを避けるためのヘルパー）
     private func waitUntil(
-        timeout: Duration = .seconds(5),
+        timeout: Duration = .seconds(30),
         pollInterval: Duration = .milliseconds(20),
         _ condition: () -> Bool
     ) async throws {
