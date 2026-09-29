@@ -34,6 +34,17 @@ public struct FileBrowserAdvancedSettingsView: View {
             }
 
             Section {
+                Stepper(
+                    L10n.FileBrowser.buttonAutoAdvanceIntervalValue(viewModel.buttonAutoAdvanceIntervalMilliseconds),
+                    value: $viewModel.buttonAutoAdvanceIntervalMilliseconds,
+                    in: FileBrowserAdvancedSettingsViewModel.buttonAutoAdvanceIntervalMillisecondsRange,
+                    step: 10
+                )
+            } header: {
+                Text(L10n.FileBrowser.buttonAutoAdvanceInterval)
+            }
+
+            Section {
                 Button(L10n.FileBrowser.clearCache, role: .destructive) {
                     isShowingClearCacheConfirmation = true
                 }

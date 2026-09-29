@@ -25,9 +25,11 @@ public enum ScreenType {
     case fileBrowserAdvancedSettings(
         isRatingEnabled: Bool,
         pipAutoAdvanceIntervalSeconds: Int,
+        buttonAutoAdvanceIntervalMilliseconds: Int,
         onRatingEnabledChange: (Bool) -> Void,
         onPipAutoAdvanceIntervalSecondsChange: (Int) -> Void,
-        onClearCacheRequested: () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
+        onButtonAutoAdvanceIntervalMillisecondsChange: (Int) -> Void,
+        onClearCacheRequested: () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int, buttonAutoAdvanceIntervalMilliseconds: Int)
     )
 
     /// 「全て保存」の進捗オーバーレイ。onURLSaved は1枚保存完了ごとに保存先 URL と日時を通知する。

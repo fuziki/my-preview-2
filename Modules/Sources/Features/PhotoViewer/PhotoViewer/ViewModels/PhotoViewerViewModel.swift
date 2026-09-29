@@ -61,8 +61,10 @@ public final class PhotoViewerViewModel {
 
     /// 前後ボタン長押し中の連続ナビゲーション用Task
     private var autoNavigationTask: Task<Void, Never>?
-    /// 連続ナビゲーションの実行間隔（秒）
-    private let autoNavigationIntervalSeconds: Double = 0.12
+    /// 連続ナビゲーションの実行間隔（秒。設定Menuで変更可能）
+    private var autoNavigationIntervalSeconds: Double {
+        Double(settings.buttonAutoAdvanceIntervalMilliseconds) / 1000
+    }
 
     // MARK: - 初期化
 

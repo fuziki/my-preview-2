@@ -81,6 +81,8 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
     public static let maxLastViewedDirectoryCount = 10
     /// PiP自動送り間隔（秒）として設定できる範囲
     public static let pipAutoAdvanceIntervalSecondsRange = 1...30
+    /// 前後ボタン長押し中の連続ナビゲーション間隔（ミリ秒）として設定できる範囲
+    public static let buttonAutoAdvanceIntervalMillisecondsRange = 50...500
 
     public var viewMode: ViewMode
     public var saveFormat: SaveFormat
@@ -94,6 +96,8 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
     public var orientationLock: PhotoViewerOrientationLock
     /// PiP再生中に自動的に次の写真へ進める間隔（秒）
     public var pipAutoAdvanceIntervalSeconds: Int
+    /// 前後ボタン長押し中に自動的に次/前の写真へ進める間隔（ミリ秒）
+    public var buttonAutoAdvanceIntervalMilliseconds: Int
 
     init(
         viewMode: ViewMode,
@@ -106,7 +110,8 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
         savedFilter: SavedFilter?,
         lastViewedEntries: [DirectoryLastViewedEntry],
         orientationLock: PhotoViewerOrientationLock,
-        pipAutoAdvanceIntervalSeconds: Int
+        pipAutoAdvanceIntervalSeconds: Int,
+        buttonAutoAdvanceIntervalMilliseconds: Int
     ) {
         self.viewMode = viewMode
         self.saveFormat = saveFormat
@@ -119,6 +124,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
         self.lastViewedEntries = lastViewedEntries
         self.orientationLock = orientationLock
         self.pipAutoAdvanceIntervalSeconds = pipAutoAdvanceIntervalSeconds
+        self.buttonAutoAdvanceIntervalMilliseconds = buttonAutoAdvanceIntervalMilliseconds
     }
 
     /// デフォルト値の定義箇所はここのみ
@@ -134,7 +140,8 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
             savedFilter: nil,
             lastViewedEntries: [],
             orientationLock: .followSystem,
-            pipAutoAdvanceIntervalSeconds: 5
+            pipAutoAdvanceIntervalSeconds: 5,
+            buttonAutoAdvanceIntervalMilliseconds: 120
         )
     }
 
@@ -153,6 +160,7 @@ public struct UserDefaultsSettings: Codable, UserDefaultsStorableSettings {
             \.lastViewedEntries: "UserDefaultsSettingsStore.lastViewedEntries",
             \.orientationLock: "UserDefaultsSettingsStore.orientationLock",
             \.pipAutoAdvanceIntervalSeconds: "UserDefaultsSettingsStore.pipAutoAdvanceIntervalSeconds",
+            \.buttonAutoAdvanceIntervalMilliseconds: "UserDefaultsSettingsStore.buttonAutoAdvanceIntervalMilliseconds",
         ]
     }
 }

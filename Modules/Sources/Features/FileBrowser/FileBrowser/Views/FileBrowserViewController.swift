@@ -256,6 +256,7 @@ public final class FileBrowserViewController: UIViewController {
         let advancedSettingsViewController = screenProvider.makeViewController(.fileBrowserAdvancedSettings(
             isRatingEnabled: viewModel.isRatingEnabled,
             pipAutoAdvanceIntervalSeconds: viewModel.pipAutoAdvanceIntervalSeconds,
+            buttonAutoAdvanceIntervalMilliseconds: viewModel.buttonAutoAdvanceIntervalMilliseconds,
             onRatingEnabledChange: { [weak self] isRatingEnabled in
                 guard let self else { return }
                 viewModel.isRatingEnabled = isRatingEnabled
@@ -266,16 +267,19 @@ public final class FileBrowserViewController: UIViewController {
             onPipAutoAdvanceIntervalSecondsChange: { [weak self] seconds in
                 self?.viewModel.pipAutoAdvanceIntervalSeconds = seconds
             },
+            onButtonAutoAdvanceIntervalMillisecondsChange: { [weak self] milliseconds in
+                self?.viewModel.buttonAutoAdvanceIntervalMilliseconds = milliseconds
+            },
             onClearCacheRequested: { [weak self] in
                 guard let self else {
                     let defaults = UserDefaultsSettings.default()
-                    return (defaults.isRatingEnabled, defaults.pipAutoAdvanceIntervalSeconds)
+                    return (defaults.isRatingEnabled, defaults.pipAutoAdvanceIntervalSeconds, defaults.buttonAutoAdvanceIntervalMilliseconds)
                 }
                 viewModel.resetToDefaults()
                 updateNavigationBarItems()
                 applySnapshot(reconfiguringAllItems: true)
                 refreshSettingsMenu()
-                return (viewModel.isRatingEnabled, viewModel.pipAutoAdvanceIntervalSeconds)
+                return (viewModel.isRatingEnabled, viewModel.pipAutoAdvanceIntervalSeconds, viewModel.buttonAutoAdvanceIntervalMilliseconds)
             }
         ))
         navigationController?.pushViewController(advancedSettingsViewController, animated: true)

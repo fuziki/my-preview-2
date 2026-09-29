@@ -36,6 +36,8 @@
 "file_browser.saved_filter_unsaved_only" = "未保存";
 "file_browser.pip_auto_advance_interval" = "PiP自動送り間隔";
 "file_browser.pip_auto_advance_interval_value" = "%d秒";
+"file_browser.button_auto_advance_interval" = "長押し連続送り間隔";
+"file_browser.button_auto_advance_interval_value" = "%dミリ秒";
 "file_browser.advanced_settings" = "詳細設定";
 "file_browser.save_all" = "全て保存";
 "file_browser.bulk_save_title" = "写真を保存中";

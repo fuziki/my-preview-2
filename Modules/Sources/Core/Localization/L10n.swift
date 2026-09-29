@@ -50,6 +50,12 @@ public enum L10n {
             tr("file_browser.pip_auto_advance_interval_value", seconds)
         }
 
+        public static var buttonAutoAdvanceInterval: String { tr("file_browser.button_auto_advance_interval") }
+
+        public static func buttonAutoAdvanceIntervalValue(_ milliseconds: Int) -> String {
+            tr("file_browser.button_auto_advance_interval_value", milliseconds)
+        }
+
         public static var advancedSettings: String { tr("file_browser.advanced_settings") }
         public static var saveAll: String { tr("file_browser.save_all") }
         public static var bulkSaveTitle: String { tr("file_browser.bulk_save_title") }

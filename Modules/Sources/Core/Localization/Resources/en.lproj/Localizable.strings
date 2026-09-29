@@ -36,6 +36,8 @@
 "file_browser.saved_filter_unsaved_only" = "Unsaved Only";
 "file_browser.pip_auto_advance_interval" = "PiP Auto Advance Interval";
 "file_browser.pip_auto_advance_interval_value" = "%d sec";
+"file_browser.button_auto_advance_interval" = "Long Press Advance Interval";
+"file_browser.button_auto_advance_interval_value" = "%d ms";
 "file_browser.advanced_settings" = "Advanced Settings";
 "file_browser.save_all" = "Save All";
 "file_browser.bulk_save_title" = "Saving Photos";

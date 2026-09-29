@@ -14,6 +14,8 @@ final class FileBrowserAdvancedSettingsViewModel {
 
     /// PiP自動送りの間隔（秒）の選択可能範囲
     static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
+    /// 前後ボタン長押し中の連続ナビゲーション間隔（ミリ秒）の選択可能範囲
+    static let buttonAutoAdvanceIntervalMillisecondsRange = UserDefaultsSettings.buttonAutoAdvanceIntervalMillisecondsRange
 
     var isRatingEnabled: Bool {
         didSet { onRatingEnabledChange(isRatingEnabled) }
@@ -23,21 +25,30 @@ final class FileBrowserAdvancedSettingsViewModel {
         didSet { onPipAutoAdvanceIntervalSecondsChange(pipAutoAdvanceIntervalSeconds) }
     }
 
+    var buttonAutoAdvanceIntervalMilliseconds: Int {
+        didSet { onButtonAutoAdvanceIntervalMillisecondsChange(buttonAutoAdvanceIntervalMilliseconds) }
+    }
+
     private let onRatingEnabledChange: (Bool) -> Void
     private let onPipAutoAdvanceIntervalSecondsChange: (Int) -> Void
-    private let onClearCacheRequested: () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
+    private let onButtonAutoAdvanceIntervalMillisecondsChange: (Int) -> Void
+    private let onClearCacheRequested: () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int, buttonAutoAdvanceIntervalMilliseconds: Int)
 
     init(
         isRatingEnabled: Bool,
         pipAutoAdvanceIntervalSeconds: Int,
+        buttonAutoAdvanceIntervalMilliseconds: Int,
         onRatingEnabledChange: @escaping (Bool) -> Void,
         onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
-        onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
+        onButtonAutoAdvanceIntervalMillisecondsChange: @escaping (Int) -> Void,
+        onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int, buttonAutoAdvanceIntervalMilliseconds: Int)
     ) {
         self.isRatingEnabled = isRatingEnabled
         self.pipAutoAdvanceIntervalSeconds = pipAutoAdvanceIntervalSeconds
+        self.buttonAutoAdvanceIntervalMilliseconds = buttonAutoAdvanceIntervalMilliseconds
         self.onRatingEnabledChange = onRatingEnabledChange
         self.onPipAutoAdvanceIntervalSecondsChange = onPipAutoAdvanceIntervalSecondsChange
+        self.onButtonAutoAdvanceIntervalMillisecondsChange = onButtonAutoAdvanceIntervalMillisecondsChange
         self.onClearCacheRequested = onClearCacheRequested
     }
 
@@ -46,5 +57,6 @@ final class FileBrowserAdvancedSettingsViewModel {
         let defaults = onClearCacheRequested()
         isRatingEnabled = defaults.isRatingEnabled
         pipAutoAdvanceIntervalSeconds = defaults.pipAutoAdvanceIntervalSeconds
+        buttonAutoAdvanceIntervalMilliseconds = defaults.buttonAutoAdvanceIntervalMilliseconds
     }
 }

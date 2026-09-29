@@ -64,15 +64,19 @@ final class AppScreenProvider: ScreenProviding {
         case .fileBrowserAdvancedSettings(
             let isRatingEnabled,
             let pipAutoAdvanceIntervalSeconds,
+            let buttonAutoAdvanceIntervalMilliseconds,
             let onRatingEnabledChange,
             let onPipAutoAdvanceIntervalSecondsChange,
+            let onButtonAutoAdvanceIntervalMillisecondsChange,
             let onClearCacheRequested
         ):
             return FileBrowserAdvancedSettingsViewController(
                 isRatingEnabled: isRatingEnabled,
                 pipAutoAdvanceIntervalSeconds: pipAutoAdvanceIntervalSeconds,
+                buttonAutoAdvanceIntervalMilliseconds: buttonAutoAdvanceIntervalMilliseconds,
                 onRatingEnabledChange: onRatingEnabledChange,
                 onPipAutoAdvanceIntervalSecondsChange: onPipAutoAdvanceIntervalSecondsChange,
+                onButtonAutoAdvanceIntervalMillisecondsChange: onButtonAutoAdvanceIntervalMillisecondsChange,
                 onClearCacheRequested: onClearCacheRequested
             )
 

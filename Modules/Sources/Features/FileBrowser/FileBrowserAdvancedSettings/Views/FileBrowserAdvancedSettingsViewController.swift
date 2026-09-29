@@ -12,15 +12,19 @@ public final class FileBrowserAdvancedSettingsViewController: UIHostingControlle
     public init(
         isRatingEnabled: Bool,
         pipAutoAdvanceIntervalSeconds: Int,
+        buttonAutoAdvanceIntervalMilliseconds: Int,
         onRatingEnabledChange: @escaping (Bool) -> Void,
         onPipAutoAdvanceIntervalSecondsChange: @escaping (Int) -> Void,
-        onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int)
+        onButtonAutoAdvanceIntervalMillisecondsChange: @escaping (Int) -> Void,
+        onClearCacheRequested: @escaping () -> (isRatingEnabled: Bool, pipAutoAdvanceIntervalSeconds: Int, buttonAutoAdvanceIntervalMilliseconds: Int)
     ) {
         let viewModel = FileBrowserAdvancedSettingsViewModel(
             isRatingEnabled: isRatingEnabled,
             pipAutoAdvanceIntervalSeconds: pipAutoAdvanceIntervalSeconds,
+            buttonAutoAdvanceIntervalMilliseconds: buttonAutoAdvanceIntervalMilliseconds,
             onRatingEnabledChange: onRatingEnabledChange,
             onPipAutoAdvanceIntervalSecondsChange: onPipAutoAdvanceIntervalSecondsChange,
+            onButtonAutoAdvanceIntervalMillisecondsChange: onButtonAutoAdvanceIntervalMillisecondsChange,
             onClearCacheRequested: onClearCacheRequested
         )
         super.init(rootView: FileBrowserAdvancedSettingsView(viewModel: viewModel))

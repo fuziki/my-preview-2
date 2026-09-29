@@ -81,10 +81,17 @@ final class FileBrowserViewModel {
 
     /// PiP自動送りの間隔（秒）の選択可能範囲
     static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
+    /// 前後ボタン長押し中の連続ナビゲーション間隔（ミリ秒）の選択可能範囲
+    static let buttonAutoAdvanceIntervalMillisecondsRange = UserDefaultsSettings.buttonAutoAdvanceIntervalMillisecondsRange
 
     /// PiP再生中に自動的に次の写真へ進める間隔（秒）。変更時にUserDefaultsへ自動保存される
     var pipAutoAdvanceIntervalSeconds: Int {
         didSet { settings.pipAutoAdvanceIntervalSeconds = pipAutoAdvanceIntervalSeconds }
+    }
+
+    /// 前後ボタン長押し中に自動的に次/前の写真へ進める間隔（ミリ秒）。変更時にUserDefaultsへ自動保存される
+    var buttonAutoAdvanceIntervalMilliseconds: Int {
+        didSet { settings.buttonAutoAdvanceIntervalMilliseconds = buttonAutoAdvanceIntervalMilliseconds }
     }
 
     /// 現在のディレクトリで最後に閲覧したファイル名（ディレクトリパスごとに永続化されたものから引く）
@@ -246,6 +253,7 @@ final class FileBrowserViewModel {
         self.colorLabelFilter = settings.colorLabelFilter
         self.savedFilter = settings.savedFilter
         self.pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
+        self.buttonAutoAdvanceIntervalMilliseconds = settings.buttonAutoAdvanceIntervalMilliseconds
     }
 
     // MARK: - アクション
@@ -273,6 +281,7 @@ final class FileBrowserViewModel {
         colorLabelFilter = settings.colorLabelFilter
         savedFilter = settings.savedFilter
         pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
+        buttonAutoAdvanceIntervalMilliseconds = settings.buttonAutoAdvanceIntervalMilliseconds
         lastViewedItemID = nil
         ratingsByURL = [:]
         labelsByURL = [:]
