@@ -70,7 +70,7 @@ private final class CornerDotViewController: UIViewController {
     private func trackObservation(continuation: AsyncStream<Bool>.Continuation) {
         _ = withObservationTracking {
             continuation.yield(isActive())
-        } onChange: {
+        } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else {
                     continuation.finish()

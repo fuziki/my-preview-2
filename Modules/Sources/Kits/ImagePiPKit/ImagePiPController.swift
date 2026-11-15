@@ -161,11 +161,14 @@ public final class ImagePiPController: NSObject {
             return
         }
         let layer = displayView.sampleBufferDisplayLayer
-        if layer.status == .failed {
-            Self.logger.warning("レイヤーがfailed状態だったためflushする: \(String(describing: layer.error))")
-            layer.flush()
+        if layer.sampleBufferRenderer.status == .failed {
+            Self.logger
+                .warning(
+                    "レイヤーがfailed状態だったためflushする: \(String(describing: layer.sampleBufferRenderer.error))"
+                )
+            layer.sampleBufferRenderer.flush()
         }
-        layer.enqueue(sampleBuffer)
+        layer.sampleBufferRenderer.enqueue(sampleBuffer)
     }
 
     // MARK: - UIImage → CMSampleBuffer変換
