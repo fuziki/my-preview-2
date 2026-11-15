@@ -34,6 +34,9 @@
 "file_browser.saved_filter_all" = "すべて";
 "file_browser.saved_filter_saved_only" = "保存済み";
 "file_browser.saved_filter_unsaved_only" = "未保存";
+"file_browser.capture_date_filter_title" = "撮影日時";
+"file_browser.capture_date_filter_start" = "開始";
+"file_browser.capture_date_filter_end" = "終了";
 "file_browser.pip_auto_advance_interval" = "PiP自動送り間隔";
 "file_browser.pip_auto_advance_interval_value" = "%d秒";
 "file_browser.button_auto_advance_interval" = "長押し連続送り間隔";

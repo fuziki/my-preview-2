@@ -438,6 +438,13 @@ struct FileBrowserViewModelTests {
     }
 
     @Test
+    func resetToDefaults_clearsCaptureDateFilter() {
+        viewModel.captureDateFilter = CaptureDateFilter(start: Date(), end: nil)
+        viewModel.resetToDefaults()
+        #expect(viewModel.captureDateFilter == nil)
+    }
+
+    @Test
     func resetToDefaults_clearsSavedFilter() {
         viewModel.savedFilter = .savedOnly
         viewModel.resetToDefaults()
@@ -713,6 +720,94 @@ struct FileBrowserViewModelTests {
         viewModel.refreshRatingsAndLabels()
         viewModel.savedFilter = nil
         #expect(viewModel.items.count == 3)
+    }
+
+    // MARK: - 撮影日時フィルター
+
+    /// 撮影日時が10:00・10:01・10:02の3枚（loadRatedItemsと同じ並び）
+    private var baseCaptureDate: Date {
+        Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 10, hour: 10))!
+    }
+
+    @Test
+    func captureDateFilter_persistsToStorage_onChange() {
+        let filter = CaptureDateFilter(start: baseCaptureDate, end: nil)
+        viewModel.captureDateFilter = filter
+        #expect(settings.captureDateFilter == filter)
+    }
+
+    @Test
+    func init_restoresCaptureDateFilter_fromStorage() {
+        let filter = CaptureDateFilter(start: baseCaptureDate, end: baseCaptureDate.addingTimeInterval(60))
+        settings.captureDateFilter = filter
+        #expect(makeViewModel().captureDateFilter == filter)
+    }
+
+    @Test
+    func captureDateFilter_start_filtersItemsFromStartInclusive() async {
+        let (_, rated1, unrated) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.captureDateFilter = CaptureDateFilter(start: baseCaptureDate.addingTimeInterval(60), end: nil)
+        #expect(viewModel.items.map(\.url) == [rated1, unrated])
+    }
+
+    @Test
+    func captureDateFilter_end_filtersItemsUpToEndInclusive() async {
+        let (rated3, rated1, _) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.captureDateFilter = CaptureDateFilter(start: nil, end: baseCaptureDate.addingTimeInterval(60))
+        #expect(viewModel.items.map(\.url) == [rated3, rated1])
+    }
+
+    @Test
+    func captureDateFilter_range_filtersItemsWithinRange() async {
+        let (_, rated1, _) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.captureDateFilter = CaptureDateFilter(
+            start: baseCaptureDate.addingTimeInterval(30),
+            end: baseCaptureDate.addingTimeInterval(90)
+        )
+        #expect(viewModel.items.map(\.url) == [rated1])
+    }
+
+    @Test
+    func captureDateFilter_excludesItemsWithoutCaptureDate() async {
+        let withDate = URL(fileURLWithPath: "/tmp/a.jpg")
+        let withoutDate = URL(fileURLWithPath: "/tmp/b.jpg")
+        fileSystemService.stubbedItems = [
+            FileItem(url: withDate, captureDate: baseCaptureDate),
+            FileItem(url: withoutDate, captureDate: nil),
+        ]
+        await viewModel.selectFolder(URL(fileURLWithPath: "/tmp"))
+        viewModel.isRatingEnabled = true
+        viewModel.captureDateFilter = CaptureDateFilter(start: baseCaptureDate, end: nil)
+        #expect(viewModel.items.map(\.url) == [withDate])
+    }
+
+    @Test
+    func captureDateFilter_emptyFilter_showsAllItems() async {
+        _ = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.captureDateFilter = CaptureDateFilter(start: nil, end: nil)
+        #expect(viewModel.items.count == 3)
+        #expect(viewModel.isFilterActive == false)
+    }
+
+    @Test
+    func captureDateFilter_notApplied_whenRatingDisabled() async {
+        _ = await loadRatedItems()
+        viewModel.isRatingEnabled = false
+        viewModel.captureDateFilter = CaptureDateFilter(start: baseCaptureDate.addingTimeInterval(3600), end: nil)
+        #expect(viewModel.items.count == 3)
+    }
+
+    @Test
+    func captureDateFilter_combinesWithRatingFilterAsAnd() async {
+        let (rated3, _, _) = await loadRatedItems()
+        viewModel.isRatingEnabled = true
+        viewModel.ratingFilter = RatingFilter(stars: 1, comparison: .atLeast)
+        viewModel.captureDateFilter = CaptureDateFilter(start: nil, end: baseCaptureDate.addingTimeInterval(30))
+        #expect(viewModel.items.map(\.url) == [rated3])
     }
 
     @Test

@@ -53,11 +53,12 @@ final class AppScreenProvider: ScreenProviding {
         case .photoViewer(let input, let onDismiss):
             return makePhotoViewerViewController(input: input, onDismiss: onDismiss)
 
-        case .fileBrowserFilter(let ratingFilter, let colorLabelFilter, let savedFilter, let onChange):
+        case .fileBrowserFilter(let ratingFilter, let colorLabelFilter, let savedFilter, let captureDateFilter, let onChange):
             return FileBrowserFilterViewController(
                 ratingFilter: ratingFilter,
                 colorLabelFilter: colorLabelFilter,
                 savedFilter: savedFilter,
+                captureDateFilter: captureDateFilter,
                 onChange: onChange
             )
 

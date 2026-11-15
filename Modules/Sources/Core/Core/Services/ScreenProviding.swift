@@ -18,7 +18,8 @@ public enum ScreenType {
         ratingFilter: RatingFilter?,
         colorLabelFilter: Set<PhotoColorLabel>,
         savedFilter: SavedFilter?,
-        onChange: (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
+        captureDateFilter: CaptureDateFilter?,
+        onChange: (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?, CaptureDateFilter?) -> Void
     )
 
     /// 詳細設定画面。各 onChange 系クロージャで変更を呼び出し側へ通知する。

@@ -34,6 +34,9 @@
 "file_browser.saved_filter_all" = "All";
 "file_browser.saved_filter_saved_only" = "Saved Only";
 "file_browser.saved_filter_unsaved_only" = "Unsaved Only";
+"file_browser.capture_date_filter_title" = "Capture Date";
+"file_browser.capture_date_filter_start" = "From";
+"file_browser.capture_date_filter_end" = "To";
 "file_browser.pip_auto_advance_interval" = "PiP Auto Advance Interval";
 "file_browser.pip_auto_advance_interval_value" = "%d sec";
 "file_browser.button_auto_advance_interval" = "Long Press Advance Interval";

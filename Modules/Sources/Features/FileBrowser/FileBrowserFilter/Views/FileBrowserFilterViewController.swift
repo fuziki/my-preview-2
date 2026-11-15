@@ -6,19 +6,21 @@ import Core
 
 /// フィルターのハーフモーダルを表すView Controller。
 /// FileBrowserFilterViewModelの生成をこの中にカプセル化し、呼び出し側（AppContainer）は
-/// ratingFilter・colorLabelFilter・onChangeの3引数のみを意識すればよい構造にする。
+/// ratingFilter・colorLabelFilter・savedFilter・captureDateFilter・onChangeの引数のみを意識すればよい構造にする。
 public final class FileBrowserFilterViewController: UIHostingController<FileBrowserFilterView> {
 
     public init(
         ratingFilter: RatingFilter?,
         colorLabelFilter: Set<PhotoColorLabel>,
         savedFilter: SavedFilter?,
-        onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?) -> Void
+        captureDateFilter: CaptureDateFilter?,
+        onChange: @escaping (RatingFilter?, Set<PhotoColorLabel>, SavedFilter?, CaptureDateFilter?) -> Void
     ) {
         let viewModel = FileBrowserFilterViewModel(
             ratingFilter: ratingFilter,
             colorLabelFilter: colorLabelFilter,
             savedFilter: savedFilter,
+            captureDateFilter: captureDateFilter,
             onChange: onChange
         )
         super.init(rootView: FileBrowserFilterView(viewModel: viewModel))

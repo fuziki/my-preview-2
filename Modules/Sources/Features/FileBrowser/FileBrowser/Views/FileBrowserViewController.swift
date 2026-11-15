@@ -209,9 +209,9 @@ public final class FileBrowserViewController: UIViewController {
         updateFilterButtonAppearance()
     }
 
-    /// フィルター（レーティング・カラーラベル・保存状態のいずれか）適用中はアイコンを塗りつぶし表示にする
+    /// フィルター（レーティング・カラーラベル・保存状態・撮影日時のいずれか）適用中はアイコンを塗りつぶし表示にする
     private func updateFilterButtonAppearance() {
-        let isActive = viewModel.ratingFilter != nil || !viewModel.colorLabelFilter.isEmpty || viewModel.savedFilter != nil
+        let isActive = viewModel.ratingFilter != nil || !viewModel.colorLabelFilter.isEmpty || viewModel.savedFilter != nil || viewModel.isCaptureDateFilterActive
         let name = isActive
             ? "line.3.horizontal.decrease.circle.fill"
             : "line.3.horizontal.decrease.circle"
@@ -232,11 +232,13 @@ public final class FileBrowserViewController: UIViewController {
             ratingFilter: viewModel.ratingFilter,
             colorLabelFilter: viewModel.colorLabelFilter,
             savedFilter: viewModel.savedFilter,
-            onChange: { [weak self] ratingFilter, colorLabelFilter, savedFilter in
+            captureDateFilter: viewModel.captureDateFilter,
+            onChange: { [weak self] ratingFilter, colorLabelFilter, savedFilter, captureDateFilter in
                 guard let self else { return }
                 viewModel.ratingFilter = ratingFilter
                 viewModel.colorLabelFilter = colorLabelFilter
                 viewModel.savedFilter = savedFilter
+                viewModel.captureDateFilter = captureDateFilter
             }
         ))
         if let sheet = filterViewController.sheetPresentationController {

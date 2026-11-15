@@ -30,6 +30,9 @@ public struct FileBrowserFilterView: View {
             sectionContainer(title: L10n.FileBrowser.savedFilterTitle) {
                 savedFilterRow
             }
+            sectionContainer(title: L10n.FileBrowser.captureDateFilterTitle) {
+                captureDateRows
+            }
 
             clearFilterButton
         }
@@ -167,6 +170,49 @@ public struct FileBrowserFilterView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
+    }
+
+    // MARK: - 撮影日時
+
+    /// 開始・終了をそれぞれ任意に指定できる範囲フィルタ。年月日時分をDatePickerで選ぶ（秒は扱わない）
+    private var captureDateRows: some View {
+        VStack(spacing: 8) {
+            captureDateRow(
+                title: L10n.FileBrowser.captureDateFilterStart,
+                date: viewModel.captureDateStart,
+                // ONにした時点の初期値は、もう一方の端があればそれに揃え、無ければ現在日時
+                defaultDate: viewModel.captureDateEnd ?? Date(),
+                onChange: { viewModel.setCaptureDateStart($0) }
+            )
+            captureDateRow(
+                title: L10n.FileBrowser.captureDateFilterEnd,
+                date: viewModel.captureDateEnd,
+                defaultDate: viewModel.captureDateStart ?? Date(),
+                onChange: { viewModel.setCaptureDateEnd($0) }
+            )
+        }
+    }
+
+    private func captureDateRow(
+        title: String,
+        date: Date?,
+        defaultDate: Date,
+        onChange: @escaping (Date?) -> Void
+    ) -> some View {
+        HStack {
+            Toggle(title, isOn: Binding(
+                get: { date != nil },
+                set: { isOn in onChange(isOn ? defaultDate : nil) }
+            ))
+            if let date {
+                DatePicker(
+                    title,
+                    selection: Binding(get: { date }, set: { onChange($0) }),
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .labelsHidden()
+            }
+        }
     }
 
     // MARK: - フィルタークリア

@@ -107,6 +107,19 @@ struct UserDefaultsSettingsStoreTests {
         #expect(makeStore(defaults: defaults).savedFilter == .savedOnly)
     }
 
+    @Test
+    func captureDateFilter_defaultsToNil_whenUnset() {
+        #expect(makeStore(defaults: makeDefaults()).captureDateFilter == nil)
+    }
+
+    @Test
+    func captureDateFilter_persistsAcrossInstances() {
+        let defaults = makeDefaults()
+        let filter = CaptureDateFilter(start: Date(timeIntervalSince1970: 1000), end: Date(timeIntervalSince1970: 2000))
+        makeStore(defaults: defaults).captureDateFilter = filter
+        #expect(makeStore(defaults: defaults).captureDateFilter == filter)
+    }
+
     // MARK: - removeAll
 
     @Test
@@ -119,6 +132,7 @@ struct UserDefaultsSettingsStoreTests {
         store.ratingFilter = RatingFilter(stars: 3, comparison: .atLeast)
         store.colorLabelFilter = [.green]
         store.savedFilter = .savedOnly
+        store.captureDateFilter = CaptureDateFilter(start: Date(), end: nil)
         store.lastViewedEntries = [DirectoryLastViewedEntry(directoryPath: "/tmp", fileName: "a.jpg")]
 
         store.removeAll()
@@ -130,6 +144,7 @@ struct UserDefaultsSettingsStoreTests {
         #expect(store.ratingFilter == nil)
         #expect(store.colorLabelFilter.isEmpty)
         #expect(store.savedFilter == nil)
+        #expect(store.captureDateFilter == nil)
         #expect(store.lastViewedEntries.isEmpty)
     }
 

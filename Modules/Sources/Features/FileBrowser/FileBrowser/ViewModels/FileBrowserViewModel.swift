@@ -79,6 +79,14 @@ final class FileBrowserViewModel {
         }
     }
 
+    /// 撮影日時フィルター（nilはフィルターなし）。変更時にUserDefaultsへ自動保存し、セクションを再構築する
+    var captureDateFilter: CaptureDateFilter? {
+        didSet {
+            settings.captureDateFilter = captureDateFilter
+            updateSections()
+        }
+    }
+
     /// PiP自動送りの間隔（秒）の選択可能範囲
     static let pipAutoAdvanceIntervalSecondsRange = UserDefaultsSettings.pipAutoAdvanceIntervalSecondsRange
     /// 前後ボタン長押し中の連続ナビゲーション間隔（ミリ秒）の選択可能範囲
@@ -139,12 +147,14 @@ final class FileBrowserViewModel {
     }
 
     /// レーティング・カラーラベル・保存状態の全フィルタに適合するかを返す
-    private func matchesFilters(_ url: URL) -> Bool {
+    private func matchesFilters(_ item: FileItem) -> Bool {
+        let url = item.url
         if let filter = ratingFilter, !filter.matches(rating(for: url)) { return false }
         if !colorLabelFilter.isEmpty {
             guard let label = colorLabel(for: url), colorLabelFilter.contains(label) else { return false }
         }
         if let savedFilter, !savedFilter.matches(savedDate: savedDatesByURL[url]) { return false }
+        if let captureDateFilter, !captureDateFilter.matches(captureDate: item.captureDate) { return false }
         return true
     }
 
@@ -156,9 +166,14 @@ final class FileBrowserViewModel {
         return items.first(where: { $0.name == fileName })
     }
 
-    /// レーティング・カラーラベル・保存状態フィルタが有効かどうか（updateSectionsの適用条件と同一）
+    /// レーティング・カラーラベル・保存状態・撮影日時フィルタが有効かどうか（updateSectionsの適用条件と同一）
     var isFilterActive: Bool {
-        isRatingEnabled && (ratingFilter != nil || !colorLabelFilter.isEmpty || savedFilter != nil)
+        isRatingEnabled && (ratingFilter != nil || !colorLabelFilter.isEmpty || savedFilter != nil || isCaptureDateFilterActive)
+    }
+
+    /// 撮影日時フィルタに開始・終了のいずれかが設定されているか
+    var isCaptureDateFilterActive: Bool {
+        captureDateFilter.map { !$0.isEmpty } ?? false
     }
 
     // MARK: - 最後に閲覧したアイテムID
@@ -252,6 +267,7 @@ final class FileBrowserViewModel {
         self.ratingFilter = settings.ratingFilter
         self.colorLabelFilter = settings.colorLabelFilter
         self.savedFilter = settings.savedFilter
+        self.captureDateFilter = settings.captureDateFilter
         self.pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
         self.buttonAutoAdvanceIntervalMilliseconds = settings.buttonAutoAdvanceIntervalMilliseconds
     }
@@ -280,6 +296,7 @@ final class FileBrowserViewModel {
         ratingFilter = settings.ratingFilter
         colorLabelFilter = settings.colorLabelFilter
         savedFilter = settings.savedFilter
+        captureDateFilter = settings.captureDateFilter
         pipAutoAdvanceIntervalSeconds = settings.pipAutoAdvanceIntervalSeconds
         buttonAutoAdvanceIntervalMilliseconds = settings.buttonAutoAdvanceIntervalMilliseconds
         lastViewedItemID = nil
@@ -322,7 +339,7 @@ final class FileBrowserViewModel {
     private func updateSections() {
         let visibleItems: [FileItem]
         if isFilterActive {
-            visibleItems = loadedItems.filter { matchesFilters($0.url) }
+            visibleItems = loadedItems.filter { matchesFilters($0) }
         } else {
             visibleItems = loadedItems
         }
